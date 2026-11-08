@@ -6,6 +6,7 @@ members = [
     "crates/seatlock-geom",
     "crates/seatlock-catalog",
     "crates/seatlock-engine",
+    "crates/seatlock-jni",
 ]
 
 [workspace.package]
