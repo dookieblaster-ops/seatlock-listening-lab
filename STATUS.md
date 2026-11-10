@@ -59,6 +59,8 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: Graphs are plain SVG, not a chart library. Reason: the three Level 1 curves do not need another dependency.
 - 2026-11-10: `builtin()` lives in `seatlock-sim`, not `seatlock-core`. Reason: the registry type is in core, and core cannot depend on the crates that register kinds.
 - 2026-11-10: The engine does not call `Instant::now` in WebAssembly. Reason: that call panics on `wasm32-unknown-unknown` without a JavaScript clock.
+- 2026-11-10: A bad simulation request uses the code `unsupported_request`. Reason: it is not a part in the design file, so it should not share `unsupported_kind`.
+- 2026-11-10: The printable solid is built in the browser with manifold-3d. Reason: README section 6.3. The 3D view uses three.js.
 
 ## Tool versions
 

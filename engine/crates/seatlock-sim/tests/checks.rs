@@ -1,5 +1,77 @@
+use seatlock_core::constants::{C0, P_REF, RHO0};
 use seatlock_core::design_check;
+use seatlock_core::grid::log_grid;
 use seatlock_sim::{builtin, simulate, SimulateRequest};
+use std::f64::consts::PI;
+
+fn load_fixture(name: &str) -> String {
+    let path = format!(
+        "{}/tests/fixtures/{name}.seatlock.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    std::fs::read_to_string(path).unwrap()
+}
+
+fn spl_at(design_json: &str, frequencies: &[f64]) -> (f64, Vec<seatlock_sim::RadiatorCurve>) {
+    let design = serde_json::from_str(design_json).unwrap();
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            space: "half".to_string(),
+            voltage_v: 2.83,
+            frequencies_hz: Some(frequencies.to_vec()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert!(
+        (result.interior_volume_m3.unwrap() - 0.005).abs() < 1e-9,
+        "volume {}",
+        result.interior_volume_m3.unwrap()
+    );
+    (result.radiators[0].spl_db[0], result.radiators)
+}
+
+fn reference_half_space_db() -> f64 {
+    let fs: f64 = 50.0;
+    let qes: f64 = 0.45;
+    let vas: f64 = 0.010;
+    let re: f64 = 6.0;
+    let voltage: f64 = 2.83;
+    let eta0 = 4.0 * PI * PI * fs.powi(3) * vas / (C0.powi(3) * qes);
+    let power = RHO0 * C0 * eta0 * (voltage * voltage / re) / (2.0 * PI);
+    10.0 * (power / (P_REF * P_REF)).log10()
+}
+
+#[test]
+fn chk_cost_1_sealed_test_hand_calculation() {
+    // Hand calculation for designs/examples/sealed-test.seatlock.json
+    // outer = 0.160 * 0.250 * 0.180
+    // inner = (0.160 - 2*0.008) * (0.250 - 2*0.008) * (0.180 - 2*0.008)
+    // hole = pi * (0.118/2)^2 * 0.008
+    // solid = outer - inner - hole
+    // mass = solid * 1240 kg/m^3 * infill 1
+    // driver, filament, and amplifier prices are null, so the price is unknown
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let outer = 0.160 * 0.250 * 0.180;
+    let air = (0.160 - 2.0 * 0.008) * (0.250 - 2.0 * 0.008) * (0.180 - 2.0 * 0.008);
+    let hole = std::f64::consts::PI * (0.118_f64 / 2.0).powi(2) * 0.008;
+    let solid = outer - air - hole;
+    let mass = solid * 1240.0;
+    assert!((report.interior_volume_m3 - air).abs() < 1e-12);
+    assert!(
+        (report.solid_volume_m3 - solid).abs() < 1e-12,
+        "{}",
+        report.solid_volume_m3
+    );
+    assert!((report.print_mass_kg - mass).abs() < 1e-9);
+    assert_eq!(report.cost_note, "price unknown");
+    assert!(
+        (report.voxel_air_volume_m3 - report.interior_volume_m3).abs()
+            <= 0.02 * report.interior_volume_m3
+    );
+}
 
 fn read_example() -> String {
     std::fs::read_to_string(concat!(
@@ -95,4 +167,83 @@ fn sealed_test_simulates_and_reports_unknown_price() {
     assert!(result.interior_volume_m3.unwrap() > 0.0);
     assert!(result.summed_spl_db.iter().any(|value| *value > 0.0));
     eprintln!("SIM_MS {}", result.elapsed_ms);
+}
+
+#[test]
+fn chk_drv_2_and_chk_box_1_through_simulate() {
+    let design = load_fixture("chk-box-le0");
+    let level = reference_half_space_db();
+    assert!((level - 87.75).abs() < 0.02);
+    let (spl, _) = spl_at(&design, &[1_000.0]);
+    assert!((spl - level).abs() <= 0.02, "drv2 {spl} vs {level}");
+
+    let fc = 50.0 * 3.0_f64.sqrt();
+    let qts = 0.45 * 4.0 / (0.45 + 4.0);
+    let qtc = qts * 3.0_f64.sqrt();
+    assert!((fc - 86.60).abs() < 0.01);
+    assert!((qtc - 0.7006).abs() < 0.0001);
+    let freqs = log_grid(5.0, 20_000.0, 12.0);
+    let (_, curves) = spl_at(&design, &freqs);
+    for (freq, spl) in freqs.iter().zip(&curves[0].spl_db) {
+        let s = num_complex::Complex64::new(0.0, freq / fc);
+        let highpass = (s * s) / (s * s + s / qtc + 1.0);
+        let expected = level + 20.0 * highpass.norm().log10();
+        assert!(
+            (spl - expected).abs() <= 0.001,
+            "{freq} Hz {spl} vs {expected}"
+        );
+    }
+}
+
+#[test]
+fn chk_box_2_through_simulate() {
+    let design = load_fixture("chk-box-published");
+    let freqs = [40.0, 86.60, 1_000.0];
+    let (_, curves) = spl_at(&design, &freqs);
+    let curve = &curves[0];
+    let spl = [74.02_f64, 84.66, 87.12];
+    let ohms = [7.87_f64, 59.33, 6.50];
+    let travel_m = [1.381e-3_f64, 1.003e-3, 0.0100e-3];
+    for i in 0..3 {
+        assert!(
+            (curve.spl_db[i] - spl[i]).abs() <= 0.02,
+            "spl {}",
+            curve.spl_db[i]
+        );
+        let z_tol = ohms[i].abs() * 0.005;
+        assert!(
+            (curve.impedance_ohm[i] - ohms[i]).abs() <= z_tol,
+            "z {}",
+            curve.impedance_ohm[i]
+        );
+        let x_tol = travel_m[i].abs() * 0.005;
+        assert!(
+            (curve.cone_travel_m[i] - travel_m[i]).abs() <= x_tol,
+            "x {}",
+            curve.cone_travel_m[i]
+        );
+    }
+}
+
+#[test]
+fn unknown_request_space_uses_its_own_code() {
+    let design =
+        serde_json::from_str::<seatlock_core::DesignFile>(&load_fixture("chk-box-le0")).unwrap();
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            space: "sphere".to_string(),
+            frequencies_hz: Some(vec![100.0]),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert!(result
+        .issues
+        .iter()
+        .any(|issue| issue.code == "unsupported_request"));
+    assert!(result
+        .issues
+        .iter()
+        .all(|issue| issue.field != "request.space" || issue.code == "unsupported_request"));
 }

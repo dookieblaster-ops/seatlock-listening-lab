@@ -74,6 +74,14 @@ export function useEngine() {
     [call],
   );
 
+  const geometry = useCallback(
+    async (text: string) => {
+      const json = await call({ type: "geometry", text });
+      return JSON.parse(json) as GeometryReport;
+    },
+    [call],
+  );
+
   const simulate = useCallback(
     async (text: string, revision: number, frequencies: number[]) => {
       const json = await call({ type: "simulate", text, revision, frequencies });
@@ -82,8 +90,26 @@ export function useEngine() {
     [call],
   );
 
-  return { version, ready, error, designCheck, simulate };
+  return { version, ready, error, designCheck, simulate, geometry };
 }
+
+export type GeometryReport = {
+  width_m: number;
+  height_m: number;
+  depth_m: number;
+  wall_m: number;
+  interior_volume_m3: number;
+  solid_volume_m3: number;
+  voxel_air_volume_m3: number;
+  print_mass_kg: number;
+  cost_note: string;
+  mounts: Array<{
+    position_m: number[];
+    outward: number[];
+    cutout_diameter_m: number;
+  }>;
+  error?: string;
+};
 
 export type SimulateResult = {
   revision: number;

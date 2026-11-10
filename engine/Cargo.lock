@@ -190,6 +190,7 @@ name = "seatlock-wasm"
 version = "0.1.0"
 dependencies = [
  "seatlock-core",
+ "seatlock-fdtd",
  "seatlock-sim",
  "serde",
  "serde_json",

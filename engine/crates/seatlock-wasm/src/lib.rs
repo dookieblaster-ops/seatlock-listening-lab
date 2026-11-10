@@ -3,7 +3,8 @@
 #![allow(clippy::missing_safety_doc)]
 
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
-use seatlock_sim::{builtin, simulate_json};
+use seatlock_fdtd::{aperture_cells, run_grid};
+use seatlock_sim::{builtin, geometry_report, simulate_json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -93,6 +94,40 @@ fn parse_request(request: &str) -> CallRequest {
     })
 }
 
+fn fdtd_run(request: &str) -> Result<seatlock_fdtd::ImpedanceCurve, String> {
+    let value: serde_json::Value = serde_json::from_str(request).map_err(|err| err.to_string())?;
+    let depth = value
+        .get("depth_m")
+        .and_then(|v| v.as_f64())
+        .ok_or("missing depth_m")?;
+    let width = value
+        .get("width_m")
+        .and_then(|v| v.as_f64())
+        .ok_or("missing width_m")?;
+    let height = value
+        .get("height_m")
+        .and_then(|v| v.as_f64())
+        .ok_or("missing height_m")?;
+    let dx = value.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.01);
+    let center_y = value
+        .get("center_y_m")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(width * 0.5);
+    let center_z = value
+        .get("center_z_m")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(height * 0.5);
+    let radius = value
+        .get("radius_m")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.02);
+    let nx = (depth / dx).round().max(1.0) as usize;
+    let ny = (width / dx).round().max(1.0) as usize;
+    let nz = (height / dx).round().max(1.0) as usize;
+    let source = aperture_cells(ny, nz, dx, [center_y, center_z], radius);
+    Ok(run_grid(nx, ny, nz, dx, &source))
+}
+
 fn dispatch(method: &str, request: &str) -> String {
     match method {
         "version" => serde_json::to_string(&VersionReply {
@@ -134,6 +169,31 @@ fn dispatch(method: &str, request: &str) -> String {
                 Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
             }
         }
+        "geometry" => {
+            let parsed = parse_request(request);
+            let text = parsed.text.unwrap_or_default();
+            match serde_json::from_str(&text) {
+                Ok(design) => match geometry_report(&design) {
+                    Ok(report) => serde_json::to_string(&report).unwrap(),
+                    Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
+                },
+                Err(error) => serde_json::to_string(&ErrorReply {
+                    error: error.to_string(),
+                })
+                .unwrap(),
+            }
+        }
+        "fdtd.run" => match fdtd_run(request) {
+            Ok(curve) => serde_json::json!({
+                "frequencies_hz": curve.frequencies_hz,
+                "real": curve.real,
+                "imag": curve.imag,
+                "steps": curve.steps,
+                "elapsed_ms": curve.elapsed_ms,
+            })
+            .to_string(),
+            Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
+        },
         other => serde_json::to_string(&ErrorReply {
             error: format!("Unknown method: {other}"),
         })
