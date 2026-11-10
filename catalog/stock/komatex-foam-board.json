@@ -1,0 +1,26 @@
+{
+  "id": "komatex-foam-board",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "sheet",
+  "maker": "Komatex",
+  "model": "24 in. x 36 in. x 0.118 in. foam PVC board, 5-pack",
+  "width_m": 0.6096,
+  "length_m": 0.9144,
+  "thickness_m": 0.002997,
+  "pieces": 5,
+  "density_kg_m3": null,
+  "source": {
+    "url": "https://www.homedepot.com/p/Komatex-24-in-x-36-in-x-0-118-in-White-Foam-Project-Board-5-Pack-41656106/310981486",
+    "title": "Home Depot listing for Komatex foam project board 5-pack",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 57.34,
+    "currency": "USD",
+    "vendor": "Home Depot",
+    "per": "5-pack",
+    "url": "https://www.homedepot.com/p/Komatex-24-in-x-36-in-x-0-118-in-White-Foam-Project-Board-5-Pack-41656106/310981486",
+    "read_on": "2026-11-10"
+  }
+}

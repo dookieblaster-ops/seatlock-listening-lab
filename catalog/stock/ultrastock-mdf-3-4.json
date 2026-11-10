@@ -1,0 +1,25 @@
+{
+  "id": "ultrastock-mdf-3-4",
+  "status": "sourced",
+  "tier": "reference",
+  "kind": "sheet",
+  "maker": "ULTRASTOCK",
+  "model": "3/4 in. x 4 ft. x 8 ft. MDF panel",
+  "width_m": 1.2192,
+  "length_m": 2.4384,
+  "thickness_m": 0.01905,
+  "density_kg_m3": null,
+  "source": {
+    "url": "https://www.homedepot.com/b/Lumber-Composites-Plywood/MDF/N-5yc1vZbqm7Z1z11dmm",
+    "title": "Home Depot MDF listing showing the 3/4 in. x 4 ft. x 8 ft. panel",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 49.98,
+    "currency": "USD",
+    "vendor": "Home Depot",
+    "per": "sheet",
+    "url": "https://www.homedepot.com/b/Lumber-Composites-Plywood/MDF/N-5yc1vZbqm7Z1z11dmm",
+    "read_on": "2026-11-10"
+  }
+}

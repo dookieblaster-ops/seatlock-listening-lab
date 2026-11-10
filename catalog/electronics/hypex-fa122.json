@@ -1,0 +1,23 @@
+{
+  "id": "hypex-fa122",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "Hypex",
+  "model": "FusionAmp FA122",
+  "kind": "amplifier",
+  "channels": 2,
+  "power_w": 125.0,
+  "rated_load_ohm": 4.0,
+  "source": {
+    "url": "https://www.parts-express.com/Hypex-Direct-FusionAmp-FA122-Mono-2-Way-Plate-Amplifier-250W-221-006",
+    "title": "Hypex FusionAmp FA122 product page",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 422.4,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Hypex-Direct-FusionAmp-FA122-Mono-2-Way-Plate-Amplifier-250W-221-006",
+    "read_on": "2026-11-10"
+  }
+}

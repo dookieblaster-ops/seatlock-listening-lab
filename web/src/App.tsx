@@ -213,7 +213,8 @@ export default function App() {
             price === undefined
               ? "price unknown"
               : `${record.price?.vendor ?? "vendor"} $${price} as of ${readOn ?? "an unknown date"}`;
-          return `Driver ${index + 1}: ${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${stale ? ". This price is more than 90 days old." : ""}`;
+          const tier = record.tier ? `${record.tier} ` : "";
+          return `Driver ${index + 1}: ${tier}${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${stale ? ". This price is more than 90 days old." : ""}`;
         }),
       );
     });

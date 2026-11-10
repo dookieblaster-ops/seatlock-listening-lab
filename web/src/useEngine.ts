@@ -108,6 +108,7 @@ export function useEngine() {
         status?: string;
         maker?: string;
         model?: string;
+        tier?: string;
         price?: { amount?: number; currency?: string; vendor?: string; read_on?: string } | null;
         error?: string;
       };

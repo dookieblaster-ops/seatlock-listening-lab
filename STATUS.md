@@ -12,6 +12,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Level 1 milestone M3**, with the M2 browser fixes, is merged into `main` (Assignment 5, merged by Claude on 2026-11-10). The 3D air model runs in the browser, correction was reworked in Assignment 6, and bass limit, evenness, and maximum clean level are on screen. Full listening is still later.
 - **Assignment 6** (correction rework and Level 1 M4) is merged into `main` (merged by Claude on 2026-11-10). Level 1 is complete except three sourced real drivers (Assignment 7) and the laptop run. Correction skips regions it cannot fix, aims at the bass-shaped target, and keeps the filters it actually uses inside the driver's limits. Listen mode plays pink noise, a log sweep, a tone, or a file through the real-time kernel and one convolver per radiator.
 - **Assignment 7** (three sourced drivers and Level 2 M1) is merged into `main` (merged by Claude on 2026-11-10). Level 1 is complete apart from the laptop run. The catalog has three Dayton Audio drivers copied from sheets opened on 2026-11-10. A vented two-way can be simulated, graphed per driver, and compared with a second design.
+- **Assignment 8** (Level 2 M2) is on branch `cursor/level-2-m2-1286`, not merged. Waveguide checks CHK-WG-1, CHK-WG-2, and CHK-WG-3 pass. Baffle checks CHK-RAD-1 and CHK-RAD-2 pass, and a `baffle` request is about 6 dB below half-space at low frequency. The catalog has twelve sourced drivers (nine budget, three reference), two budget amplifier boards, one reference amplifier, one DSP option, and five stock materials. M3 and M4 were not started.
 - **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
@@ -30,7 +31,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Assignment 8 in `COMS.md`: Level 2 milestone M2 of `tasks/level-2.md`, with the owner's cost-first direction.
+1. Claude reviews Assignment 8 on `cursor/level-2-m2-1286`. M3 (tube shape and hybrid builds) and M4 (cheap-against-reference view) wait for that review.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -64,6 +65,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
 - CHK-PLATE-1 is the closed-form result, cross-checked with a finite-difference eigenvalue solve (within 0.1 %). CHK-RAD-1 and CHK-ROOM-1 were computed from their formulas.
 - Not validated by anything yet: the exciter and backing equations of section 5.9, the `exterior` radiation model and its reciprocity run (5.6), the `baffle` model's edge diffraction, and the `simple` room's reflection term. Treat them as starting designs.
+- 2026-11-10, Assignment 8 on a Cursor cloud agent: CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, and CHK-RAD-2 pass. A `baffle` simulation of sealed-test at 30 Hz is about 6 dB below the half-space point model. The first absolute comparison was 56 dB low because the baffle formula used `k` where the point model uses `omega`; the relative baffle checks had still passed. `./check.sh` passed on this cloud agent. It was not run on the owner's laptop, and `./start.sh` was not run there.
+- Catalog gaps for Assignment 8, all from pages opened on 2026-11-10. ND25FA-4, DC28F-8, and RST28F-4 are in the catalog, but their sheets print moving mass, compliance, force factor, Vas, and Xmax as N/A, so the engine refuses to invent a cone model and warns. Those three have no price and no mounting, because the product pages did not load. TCP115-8 and RS225-4 have full Thiele–Small numbers from their sheets and no price or mounting, because those product pages did not load. ND65-4's bolt circle was not on the page. A direct fetch of the ND65-4 product page returned an empty body; its price ($23.98) and mounting came from a search extract of that same URL. DSA135-8 ($39.98) and PC105-8 ($17.79) prices and mounting also came from search extracts of their Parts Express pages; their specification sheets were fetched directly. PC105-8 Vas is 0.12 cubic feet on the sheet (stored as 0.003398 m³). ND65-4's printed moving mass differs from the Vas derivation by more than 10 percent, so the simulation keeps the derived value and warns. KABD-430's own product page did not load: 4 × 30 W is from the KABD-4100 user guide, and $64.98 was on the KABD-4100 similar-items list. Its rated load was not printed. KABD-4100 does not print a sample rate or a biquad count. No seller page printed density or stiffness for the PVC pipe, concrete-form tube, foam board, MDF, or plywood, so those fields are empty and any result that needs them cannot be computed yet. The plywood price ($70.55) is from the Home Depot sanded-plywood category listing for the SANDEPLY 18 mm sheet; the product page gave the actual size 0.709 × 48 × 96 in and did not show the price in the extracted text. Sheets that returned no parameters and were not added: ND105-4, ND91-4, RS125-8, RS150-4, RS150-8, and RS180-8. No measured response file was copied onto a real driver.
 
 ## Decisions log
 
@@ -89,6 +92,9 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: Impulse responses use rustfft 6.4. Reason: the task list allows rustfft, and the impulse is an inverse FFT of the simulated pressure.
 - 2026-11-10: A fractional delay is a first-order Thiran allpass after the whole-sample delay. Reason: Level 2 asks for a fractional delay, and a first-order Thiran stays a single biquad with no extra dependency.
 - 2026-11-10: A port's inside end is treated as flush with the chamber wall and its outside end as free. Reason: that is the CHK-WG-3 description, and it makes the CHK-BOX-3 effective length.
+- 2026-11-10: A uniform duct with a rigid end uses the cotangent formula, not a large finite load. Reason: a finite stand-in is not small enough, so the impedance zeros of CHK-WG-1 would not land.
+- 2026-11-10: The baffle-step shelf is reported with the correction plan and is not installed by Apply correction. Reason: a +6 dB shelf would move the sealed-test scores that CHK-E2E-1 checks after that button. The shelf frequency is where on-axis edge diffraction is 3 dB below half space.
+- 2026-11-10: C4 delay is the path difference from each source to the listener, with the nearest source at zero. Polarity is the automatic flip already in the simulator. Reason: that is the delay the cabinet geometry creates, and a single front driver stays at zero so the sealed checks do not move.
 
 ## Tool versions
 

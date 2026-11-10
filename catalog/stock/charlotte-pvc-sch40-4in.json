@@ -1,0 +1,25 @@
+{
+  "id": "charlotte-pvc-sch40-4in",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "pipe",
+  "maker": "Charlotte Pipe",
+  "model": "4 in. x 10 ft. PVC Schedule 40 DWV",
+  "outside_diameter_m": 0.1143,
+  "inside_diameter_m": 0.1022604,
+  "length_m": 3.048,
+  "density_kg_m3": null,
+  "source": {
+    "url": "https://www.homedepot.com/p/Charlotte-Pipe-4-in-x-10-ft-PVC-Schedule-40-DWV-Pipe-PVC074000600/100348477",
+    "title": "Home Depot listing for Charlotte Pipe 4 in. x 10 ft. Schedule 40 PVC",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 77.13,
+    "currency": "USD",
+    "vendor": "Home Depot",
+    "per": "10 ft piece",
+    "url": "https://www.homedepot.com/p/Charlotte-Pipe-4-in-x-10-ft-PVC-Schedule-40-DWV-Pipe-PVC074000600/100348477",
+    "read_on": "2026-11-10"
+  }
+}

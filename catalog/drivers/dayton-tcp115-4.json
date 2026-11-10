@@ -3,6 +3,7 @@
   "status": "sourced",
   "maker": "Dayton Audio",
   "model": "TCP115-4",
+  "tier": "budget",
   "kind": "woofer",
   "published": {
     "fs_hz": 53.8,

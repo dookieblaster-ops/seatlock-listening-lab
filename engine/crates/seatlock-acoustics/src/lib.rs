@@ -1,14 +1,25 @@
 //! Radiators, enclosure loads, radiation models, room estimate, and clean-level limits.
 
+mod baffle;
 mod cone;
 mod point;
+mod response;
 mod sealed;
 mod vented;
+mod waveguide;
 
+pub use baffle::{
+    baffle_source_pressure, baffle_step_hz, circular_outline, diffraction_factor, outline_count,
+    piston_directivity, rectangular_outline, EdgePoint,
+};
 pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
 pub use point::{baffle_gain, pressure_from_volume_velocity};
+pub use response::blend_measured_curve;
 pub use sealed::z_ab_sealed;
 pub use vented::{effective_port_length_m, tuning_hz, vented_sample, PortSpec, VentedSample};
+pub use waveguide::{
+    closed_duct_impedance, helmholtz, ported_box, solve, AcousticNode, WaveguideResult,
+};
 
 use num_complex::Complex64;
 use seatlock_core::catalog;
@@ -23,7 +34,9 @@ use std::f64::consts::PI;
 pub fn register(registry: &mut Registry) {
     registry.register_radiator("cone", parse_cone);
     registry.register_enclosure("lumped", parse_lumped);
+    registry.register_enclosure("waveguide", parse_waveguide);
     registry.register_radiation("point", parse_point);
+    registry.register_radiation("baffle", parse_point);
     registry.register_room("free", parse_free);
 }
 
@@ -32,6 +45,8 @@ struct ConeRadiator {
     missing_displacement: bool,
     driver_id: String,
     loads_box: bool,
+    has_xmax: bool,
+    note: Option<String>,
 }
 
 impl Radiator for ConeRadiator {
@@ -50,6 +65,23 @@ impl Radiator for ConeRadiator {
             current_a.push(terminal.current_a);
         }
         let mut warnings = Vec::new();
+        if let Some(note) = &self.note {
+            warnings.push(Issue::warning(
+                "missing_field",
+                note.clone(),
+                format!("catalog/{}/published.vas_m3", self.driver_id),
+            ));
+        }
+        if !self.has_xmax {
+            warnings.push(Issue::warning(
+                "missing_field",
+                format!(
+                    "Driver {} does not publish cone travel, so the maximum clean level ignores excursion.",
+                    self.driver_id
+                ),
+                format!("catalog/{}/published.xmax_m", self.driver_id),
+            ));
+        }
         if self.missing_displacement {
             warnings.push(Issue::warning(
                 "missing_field",
@@ -68,7 +100,7 @@ impl Radiator for ConeRadiator {
             re_ohm: self.published.re_ohm,
             xmax_m: self.published.xmax_m,
             pe_w: self.published.pe_w,
-            has_excursion_limit: true,
+            has_excursion_limit: self.has_xmax,
             loads_box: self.loads_box,
             warnings,
         }
@@ -100,16 +132,33 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
         .ok_or_else(|| "missing driver_id".to_string())?;
     let record = catalog::driver(driver_id).ok_or_else(|| format!("unknown driver {driver_id}"))?;
     let published = published_from_catalog(&record)?;
+    let has_xmax = record
+        .pointer("/published/xmax_m")
+        .and_then(Value::as_f64)
+        .is_some();
     let (_displacement_m3, missing_displacement, driver_id) = cone_displacement_m3(fields);
     let loads_box = !record
         .get("sealed_back")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let mut notes = Vec::new();
+    if let Some(note) = derivation_note(&record) {
+        notes.push(note);
+    }
+    if let Some(note) = printed_disagreement(&record) {
+        notes.push(note);
+    }
     Ok(Box::new(ConeRadiator {
         published,
         missing_displacement,
         driver_id,
         loads_box,
+        has_xmax,
+        note: if notes.is_empty() {
+            None
+        } else {
+            Some(notes.join(" "))
+        },
     }))
 }
 
@@ -117,17 +166,114 @@ pub fn published_from_catalog(record: &Value) -> Result<Published, String> {
     let published = record
         .get("published")
         .ok_or_else(|| "missing published parameters".to_string())?;
+    let fs_hz = req(published, "fs_hz")?;
+    let qes = req(published, "qes")?;
+    let re_ohm = req(published, "re_ohm")?;
+    let sd_m2 = req(published, "sd_m2")?;
+    let omega = 2.0 * PI * fs_hz;
+    let vas_printed = published
+        .get("vas_m3")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let mms_printed = published
+        .get("mms_kg")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let bl_printed = published
+        .get("bl_tm")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let vas_m3 = if vas_printed > 0.0 {
+        vas_printed
+    } else if mms_printed > 0.0 {
+        let cms = 1.0 / (omega * omega * mms_printed);
+        cms * RHO0 * C0 * C0 * sd_m2 * sd_m2
+    } else if bl_printed > 0.0 {
+        let mms = bl_printed * bl_printed * qes / (omega * re_ohm);
+        let cms = 1.0 / (omega * omega * mms);
+        cms * RHO0 * C0 * C0 * sd_m2 * sd_m2
+    } else {
+        return Err(
+            "This sheet does not print Vas, moving mass, or force factor, so the cone model cannot be built."
+                .into(),
+        );
+    };
+    let xmax_m = published
+        .get("xmax_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
     Ok(Published {
-        fs_hz: req(published, "fs_hz")?,
-        qes: req(published, "qes")?,
+        fs_hz,
+        qes,
         qms: req(published, "qms")?,
-        vas_m3: req(published, "vas_m3")?,
-        re_ohm: req(published, "re_ohm")?,
+        vas_m3,
+        re_ohm,
         le_h: req(published, "le_h")?,
-        sd_m2: req(published, "sd_m2")?,
-        xmax_m: req(published, "xmax_m")?,
+        sd_m2,
+        xmax_m,
         pe_w: req(published, "pe_w")?,
     })
+}
+
+/// How the mechanical parameters were obtained, for the warning beside a driver.
+pub fn derivation_note(record: &Value) -> Option<String> {
+    let published = record.get("published")?;
+    let vas = published
+        .get("vas_m3")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    if vas > 0.0 {
+        return None;
+    }
+    if published
+        .get("mms_kg")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0)
+        > 0.0
+    {
+        return Some(
+            "Vas was not printed, so compliance was derived from the printed moving mass.".into(),
+        );
+    }
+    if published
+        .get("bl_tm")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0)
+        > 0.0
+    {
+        return Some(
+            "Vas was not printed, so moving mass was derived from the printed force factor.".into(),
+        );
+    }
+    None
+}
+
+/// The sheet printed a mechanical number more than 10% away from the Vas derivation.
+/// The model keeps the derived number and the caller warns.
+pub fn printed_disagreement(record: &Value) -> Option<String> {
+    let published = published_from_catalog(record).ok()?;
+    let mech = derive_mechanical(&published);
+    let sheet = record.get("published")?;
+    let mut names = Vec::new();
+    let mut check = |name: &str, derived: f64, key: &str| {
+        let Some(printed) = sheet.get(key).and_then(Value::as_f64) else {
+            return;
+        };
+        if printed > 0.0 && (derived - printed).abs() / printed > 0.1 {
+            names.push(name.to_string());
+        }
+    };
+    check("moving mass", mech.mms, "mms_kg");
+    check("compliance", mech.cms, "cms_m_per_n");
+    check("force factor", mech.bl, "bl_tm");
+    if names.is_empty() {
+        None
+    } else {
+        Some(format!(
+            "The sheet's {} differs from the value derived from Vas by more than 10 percent, so the simulation keeps the derived value.",
+            names.join(" and ")
+        ))
+    }
 }
 
 fn req(value: &Value, key: &str) -> Result<f64, String> {
@@ -150,6 +296,10 @@ impl EnclosureModel for LumpedSealed {
 
 fn parse_lumped(_fields: &Map<String, Value>) -> Result<Box<dyn EnclosureModel>, String> {
     Ok(Box::new(LumpedSealed))
+}
+
+fn parse_waveguide(fields: &Map<String, Value>) -> Result<Box<dyn EnclosureModel>, String> {
+    parse_lumped(fields)
 }
 
 struct PointRadiation;

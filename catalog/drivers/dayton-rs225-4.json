@@ -1,0 +1,36 @@
+{
+  "id": "dayton-rs225-4",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "Dayton Audio",
+  "model": "RS225-4",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 33.0,
+    "qes": 0.52,
+    "qms": 2.02,
+    "vas_m3": 0.0464,
+    "re_ohm": 3.2,
+    "le_h": 0.00049,
+    "sd_m2": 0.02138,
+    "xmax_m": 0.006,
+    "pe_w": 80.0,
+    "mms_kg": 0.0322,
+    "cms_m_per_n": 0.00072,
+    "bl_tm": 6.38
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.0,
+    "outer_diameter_m": 0.0,
+    "bolt_circle_m": 0.0,
+    "bolt_count": 6,
+    "depth_m": 0.0
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-376-dayton-audio-rs225-4-spec-sheet-revised.pdf",
+    "title": "Dayton Audio RS225-4 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": null
+}

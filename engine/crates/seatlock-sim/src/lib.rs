@@ -4,7 +4,9 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
-    cone_displacement_m3, effective_port_length_m, spl_db, vented_sample, PortSpec,
+    baffle_source_pressure, baffle_step_hz, blend_measured_curve, cone_displacement_m3,
+    effective_port_length_m, outline_count, pressure_from_volume_velocity, rectangular_outline,
+    solve, spl_db, vented_sample, AcousticNode, EdgePoint, PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::C0;
@@ -261,6 +263,31 @@ pub fn simulate(
         );
         (impedance, Some(samples))
     };
+    let (z_ab, vented) = if request.enclosure == "waveguide" && !ports.is_empty() {
+        let mut impedance = Vec::with_capacity(freqs.len());
+        let mut samples = Vec::with_capacity(freqs.len());
+        for freq in &freqs {
+            let wave = waveguide_box(volume, &ports, *freq);
+            let mut sample = seatlock_acoustics::VentedSample {
+                z_ab: wave.z_in,
+                h_sum: Complex64::new(0.0, 0.0),
+                h_each: [Complex64::new(0.0, 0.0); 4],
+                port_count: wave.openings.len().min(4),
+            };
+            for (index, opening) in wave.openings.iter().take(4).enumerate() {
+                sample.h_each[index] = *opening;
+                sample.h_sum += *opening;
+            }
+            impedance.push(sample.z_ab);
+            samples.push(sample);
+        }
+        fidelity.ignored.push(
+            "Bends are treated as straight tubes, and the chamber is a single compliance.".into(),
+        );
+        (impedance, Some(samples))
+    } else {
+        (z_ab, vented)
+    };
     let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
     let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
         Ok(model) => model,
@@ -314,7 +341,14 @@ pub fn simulate(
     for (index, part) in design.speaker.radiators.iter().enumerate() {
         let radiator = match registry.create_radiator(&part.kind, &part.fields) {
             Ok(radiator) => radiator,
-            Err(_) => continue,
+            Err(err) => {
+                issues.push(Issue::warning(
+                    "missing_field",
+                    err,
+                    format!("speaker.radiators[{index}]"),
+                ));
+                continue;
+            }
         };
         let loads_box = driver_loads_box(part);
         let eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
@@ -331,7 +365,7 @@ pub fn simulate(
                 &freqs,
             );
             multiply_into(&mut blocks_h, &extra);
-            let samples = chain.delay_s * sample_rate;
+            let samples = (chain.delay_s + geometric_delay_s(design, index)) * sample_rate;
             let whole = samples.floor().max(0.0);
             let fraction = samples - whole;
             let mut tail: Vec<Box<dyn DspBlock>> = vec![
@@ -373,13 +407,32 @@ pub fn simulate(
                 }
             }
         }
-        let pressure_1v = radiation.pressure(
-            &sources,
-            &freqs,
-            design.speaker.listening.distance_m,
-            &request.space,
-            baffle,
-        );
+        let mut pressure_1v = if request.radiation == "baffle" {
+            baffle_pressure(
+                design,
+                part,
+                &sources,
+                &freqs,
+                design.speaker.listening.distance_m,
+                &request.space,
+                baffle,
+                &mut fidelity,
+            )
+        } else {
+            radiation.pressure(
+                &sources,
+                &freqs,
+                design.speaker.listening.distance_m,
+                &request.space,
+                baffle,
+            )
+        };
+        let measured = measured_curve(part);
+        let label =
+            blend_measured_curve(&mut pressure_1v, &freqs, piston_radius_m(part), &measured);
+        if !fidelity.ignored.iter().any(|line| line == &label) {
+            fidelity.ignored.push(label);
+        }
         let mut pressure = Vec::with_capacity(freqs.len());
         let mut spl = Vec::with_capacity(freqs.len());
         let mut travel = Vec::with_capacity(freqs.len());
@@ -591,6 +644,332 @@ fn highest_crossover(design: &DesignFile) -> Option<(usize, f64)> {
         }
     }
     best
+}
+
+fn outer_field(design: &DesignFile, key: &str, fallback: f64) -> f64 {
+    design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get(key)
+        .and_then(Value::as_f64)
+        .unwrap_or(fallback)
+}
+
+struct PlacedSource {
+    position: [f64; 3],
+    outward: [f64; 3],
+    radius_m: f64,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn baffle_pressure(
+    design: &DesignFile,
+    part: &KindPart,
+    sources: &[Vec<Complex64>],
+    freqs: &[f64],
+    distance_m: f64,
+    space: &str,
+    baffle_width_m: f64,
+    fidelity: &mut Fidelity,
+) -> Vec<Complex64> {
+    let width = outer_field(design, "width_m", 0.2);
+    let height = outer_field(design, "height_m", 0.3);
+    let depth = outer_field(design, "depth_m", 0.2);
+    let listener = [width / 2.0, -distance_m, height / 2.0];
+    let highest = freqs.iter().copied().fold(1000.0_f64, f64::max);
+    let count = outline_count(width, height, highest);
+    let front = rectangular_outline(width, height, 0.0, count);
+    let back = rectangular_outline(width, height, depth, count);
+    let placed = placed_sources(design, part, sources.len());
+    let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
+    let mut fell_back = false;
+    for (index, velocity) in sources.iter().enumerate() {
+        let place = placed.get(index);
+        let faces = place.is_some_and(|place| faces_listener(place, listener));
+        if !faces {
+            fell_back = true;
+            for (bin, freq) in freqs.iter().enumerate() {
+                total[bin] += pressure_from_volume_velocity(
+                    velocity[bin],
+                    *freq,
+                    distance_m,
+                    space,
+                    baffle_width_m,
+                );
+            }
+            continue;
+        }
+        let place = &placed[index];
+        let outline: &[EdgePoint] = if place.outward[1] > 0.5 {
+            &back
+        } else {
+            &front
+        };
+        for (bin, freq) in freqs.iter().enumerate() {
+            total[bin] += baffle_source_pressure(
+                velocity[bin],
+                *freq,
+                place.position,
+                listener,
+                place.outward,
+                place.radius_m,
+                outline,
+            );
+        }
+    }
+    if fell_back {
+        let note = "A source that does not face the listener is treated as a point source.";
+        if !fidelity.ignored.iter().any(|line| line == note) {
+            fidelity.ignored.push(note.into());
+        }
+    }
+    let note = "Edge diffraction ignores cabinet depth and the shape of the edge.";
+    if !fidelity.ignored.iter().any(|line| line == note) {
+        fidelity.ignored.push(note.into());
+    }
+    total
+}
+
+fn placed_sources(design: &DesignFile, part: &KindPart, count: usize) -> Vec<PlacedSource> {
+    let mut placed = Vec::new();
+    let (position, outward) = mount_pose(design, part);
+    placed.push(PlacedSource {
+        position,
+        outward,
+        radius_m: piston_radius_m(part),
+    });
+    if count > 1 {
+        for port in port_poses(design) {
+            placed.push(port);
+            if placed.len() == count {
+                break;
+            }
+        }
+    }
+    placed
+}
+
+fn faces_listener(place: &PlacedSource, listener: [f64; 3]) -> bool {
+    let dx = listener[0] - place.position[0];
+    let dy = listener[1] - place.position[1];
+    let dz = listener[2] - place.position[2];
+    let range = (dx * dx + dy * dy + dz * dz).sqrt().max(1e-9);
+    (dx * place.outward[0] + dy * place.outward[1] + dz * place.outward[2]) / range > 0.0
+}
+
+fn mount_pose(design: &DesignFile, part: &KindPart) -> ([f64; 3], [f64; 3]) {
+    let width = outer_field(design, "width_m", 0.2);
+    let height = outer_field(design, "height_m", 0.3);
+    let depth = outer_field(design, "depth_m", 0.2);
+    let mount_id = part
+        .fields
+        .get("mount")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let mount = design
+        .speaker
+        .enclosure
+        .mounts
+        .iter()
+        .find(|mount| mount.id == mount_id);
+    let (u, v, surface) = mount
+        .map(|mount| (mount.at_m[0], mount.at_m[1], mount.surface.as_str()))
+        .unwrap_or((width / 2.0, height / 2.0, "front"));
+    match surface {
+        "back" => ([u, depth, v], [0.0, 1.0, 0.0]),
+        "left" => ([0.0, u, v], [-1.0, 0.0, 0.0]),
+        "right" => ([width, u, v], [1.0, 0.0, 0.0]),
+        "top" => ([u, v, height], [0.0, 0.0, 1.0]),
+        "bottom" => ([u, v, 0.0], [0.0, 0.0, -1.0]),
+        _ => ([u, 0.0, v], [0.0, -1.0, 0.0]),
+    }
+}
+
+fn port_poses(design: &DesignFile) -> Vec<PlacedSource> {
+    let depth = outer_field(design, "depth_m", 0.2);
+    let mut poses = Vec::new();
+    for duct in &design.speaker.enclosure.ducts {
+        let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
+        let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
+        let leaves = (from == "main" && to == "outside") || (from == "outside" && to == "main");
+        if !leaves {
+            continue;
+        }
+        let diameter = duct
+            .pointer("/section/start_m/0")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        if diameter <= 0.0 {
+            continue;
+        }
+        let points = duct.get("path_m").and_then(Value::as_array);
+        let (start, end) = match points {
+            Some(points) if points.len() >= 2 && to == "outside" => (
+                point3(&points[points.len() - 2]),
+                point3(points.last().unwrap()),
+            ),
+            Some(points) if points.len() >= 2 => (point3(&points[1]), point3(&points[0])),
+            _ => continue,
+        };
+        let direction = [end.0 - start.0, end.1 - start.1, end.2 - start.2];
+        let length = (direction[0] * direction[0]
+            + direction[1] * direction[1]
+            + direction[2] * direction[2])
+            .sqrt()
+            .max(1e-9);
+        let outward = [
+            direction[0] / length,
+            direction[1] / length,
+            direction[2] / length,
+        ];
+        let (position, face) = if outward[1] < -0.5 {
+            ([end.0, 0.0, end.2], [0.0, -1.0, 0.0])
+        } else if outward[1] > 0.5 {
+            ([end.0, depth, end.2], [0.0, 1.0, 0.0])
+        } else {
+            ([end.0, end.1, end.2], outward)
+        };
+        poses.push(PlacedSource {
+            position,
+            outward: face,
+            radius_m: diameter / 2.0,
+        });
+    }
+    poses
+}
+
+fn piston_radius_m(part: &KindPart) -> f64 {
+    let Some(id) = part.fields.get("driver_id").and_then(Value::as_str) else {
+        return 0.0;
+    };
+    let sd = catalog::driver(id)
+        .and_then(|record| record.pointer("/published/sd_m2").cloned())
+        .and_then(|value| value.as_f64())
+        .unwrap_or(0.0);
+    (sd / std::f64::consts::PI).sqrt()
+}
+
+fn measured_curve(part: &KindPart) -> Vec<(f64, f64)> {
+    let Some(id) = part.fields.get("driver_id").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let Some(record) = catalog::driver(id) else {
+        return Vec::new();
+    };
+    let Some(path) = record.get("response_file").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let Some(text) = catalog::embedded_file(path) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_json::from_str::<Value>(text) else {
+        return Vec::new();
+    };
+    value
+        .get("points")
+        .and_then(Value::as_array)
+        .map(|points| {
+            points
+                .iter()
+                .filter_map(|point| {
+                    let hz = point.get("hz")?.as_f64()?;
+                    let db = point.get("db")?.as_f64()?;
+                    Some((hz, db))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn geometric_delay_s(design: &DesignFile, index: usize) -> f64 {
+    let width = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("width_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.2);
+    let height = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("height_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.3);
+    let depth = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("depth_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.2);
+    let listener = [
+        width / 2.0,
+        -design.speaker.listening.distance_m,
+        height / 2.0,
+    ];
+    let distances: Vec<f64> = design
+        .speaker
+        .radiators
+        .iter()
+        .map(|radiator| {
+            let mount_id = radiator
+                .fields
+                .get("mount")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let mount = design
+                .speaker
+                .enclosure
+                .mounts
+                .iter()
+                .find(|mount| mount.id == mount_id);
+            let (u, v, surface) = mount
+                .map(|mount| (mount.at_m[0], mount.at_m[1], mount.surface.as_str()))
+                .unwrap_or((width / 2.0, height / 2.0, "front"));
+            let position = match surface {
+                "back" => [u, depth, v],
+                _ => [u, 0.0, v],
+            };
+            let dx = position[0] - listener[0];
+            let dy = position[1] - listener[1];
+            let dz = position[2] - listener[2];
+            (dx * dx + dy * dy + dz * dz).sqrt()
+        })
+        .collect();
+    let nearest = distances.iter().copied().fold(f64::MAX, f64::min);
+    distances
+        .get(index)
+        .map(|distance| ((*distance - nearest) / C0).max(0.0))
+        .unwrap_or(0.0)
+}
+
+fn waveguide_box(
+    volume_m3: f64,
+    ports: &[PortSpec],
+    freq_hz: f64,
+) -> seatlock_acoustics::WaveguideResult {
+    let mut branches = vec![AcousticNode::Compliance { volume_m3 }];
+    for port in ports {
+        let radius = (port.area_m2 / std::f64::consts::PI).sqrt();
+        let physical = (port.length_eff_m - (0.849 + 0.613) * radius).max(1.0e-3);
+        branches.push(AcousticNode::Duct {
+            length_m: physical,
+            area_in_m2: port.area_m2,
+            area_out_m2: port.area_m2,
+            added_length_m: 0.849 * radius,
+            load: Box::new(AcousticNode::Radiation {
+                area_m2: port.area_m2,
+                flush: false,
+            }),
+        });
+    }
+    solve(&AcousticNode::Parallel(branches), freq_hz)
 }
 
 fn driver_loads_box(part: &seatlock_core::design::KindPart) -> bool {
@@ -867,10 +1246,22 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
         }));
     }
     let first = plans.first().cloned().unwrap_or(serde_json::json!({}));
+    let width = outer_field(design, "width_m", 0.2);
+    let reason = "Raises the bass 6 dB to make up for sound wrapping around the cabinet edge.";
+    let message = format!("{} {reason}", first["message"].as_str().unwrap_or(""));
     serde_json::json!({
-        "message": first["message"],
+        "message": message,
         "filters": first["filters"],
         "per_radiator": plans,
+        "baffle_step": {
+            "kind": "biquad",
+            "type": "lowshelf",
+            "f_hz": baffle_step_hz(width, outer_field(design, "height_m", 0.3)),
+            "q": 0.707,
+            "gain_db": 6.0,
+            "reason": reason,
+            "correction": true
+        }
     })
 }
 

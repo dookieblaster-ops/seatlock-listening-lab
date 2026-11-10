@@ -1,0 +1,36 @@
+{
+  "id": "dayton-tcp115-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "TCP115-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 59.2,
+    "qes": 0.54,
+    "qms": 2.3,
+    "vas_m3": 0.00252,
+    "re_ohm": 7.8,
+    "le_h": 0.0019,
+    "sd_m2": 0.005,
+    "xmax_m": 0.004,
+    "pe_w": 40.0,
+    "mms_kg": 0.01016,
+    "cms_m_per_n": 0.00071,
+    "bl_tm": 7.4
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.0,
+    "outer_diameter_m": 0.0,
+    "bolt_circle_m": 0.0,
+    "bolt_count": 4,
+    "depth_m": 0.0
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-416--dayton-audio-tcp115-8-specification-sheet.pdf",
+    "title": "Dayton Audio TCP115-8 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": null
+}
