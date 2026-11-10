@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-09
+Updated: 2026-11-10
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -11,6 +11,12 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
 - An earlier browser prototype existed outside this repository. It is not a reference for this build.
+
+## How the work is done
+
+- Cursor cloud agents do the building, to conserve the owner's Claude usage. Claude launches them, checks their results, and merges into `main`. An agent works on its own branch and opens a pull request.
+- The owner's laptop (Linux Mint, 32 GB RAM) runs the app. Claude can view the running app there, but cannot type into a terminal or into Cursor on it. The owner starts the app with `./start.sh`, or asks Cursor on the laptop to.
+- Claude's own cloud workspace cannot download Rust's WebAssembly target, because the host `static.rust-lang.org` is blocked there. It can run the native tests only. Cursor's machines and the laptop have no such limit.
 
 ## Next steps
 
@@ -30,7 +36,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 One line per decision: date, decision, reason. Decisions that define the product live in the README, not here.
 
-- 2026-11-09: No entries yet. The starting decisions are in README section 3 with their reasons.
+- 2026-11-09: The starting decisions are in README section 3 with their reasons.
+- 2026-11-10: Both WebAssembly modules use a plain C ABI, and `wasm-bindgen` is not used. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version. README section 3 was updated to match.
 
 ## Tool versions
 

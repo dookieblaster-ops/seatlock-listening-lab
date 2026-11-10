@@ -116,10 +116,10 @@ These decisions are fixed. Each has a reason. If a reason stops holding, raise i
 
 Build and tooling rules:
 
-- Build the engine with `cargo build --target wasm32-unknown-unknown --release`, then the `wasm-bindgen` command-line tool with `--target web`. Pin the tool to the same version as the `wasm-bindgen` crate. Do not depend on `wasm-pack`: the organization that maintained it was archived in 2025, while `wasm-bindgen` moved to its own organization and is maintained.
+- Build both WebAssembly modules with `cargo build --target wasm32-unknown-unknown --release` and no other build tool. Both expose a plain C ABI (`extern "C"`): allocate, free, and one call that takes a method name and a JSON request and returns a JSON reply, with raw buffers for large arrays. Do not use `wasm-bindgen` or `wasm-pack`. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version, and the workers and the worklet load their modules the same way.
 - Engine dependencies must be pure Rust. The `wasm32-unknown-unknown` target cannot link C or C++ libraries without extra toolchains.
-- The real-time crate exposes a plain C ABI (`extern "C"`, no `wasm-bindgen`). The page fetches the `.wasm` bytes and posts them to the worklet, which instantiates them there. Reason: the worklet scope has no `fetch` and may lack the text-decoding APIs that `wasm-bindgen` glue expects.
-- Use the current stable release of each tool when you scaffold. Pin versions with `rust-toolchain.toml`, `Cargo.lock`, and `package-lock.json`, and record them in `STATUS.md`.
+- The page fetches the real-time module's `.wasm` bytes and posts them to the worklet, which instantiates them there, because the worklet scope has no `fetch`. Only numbers and sample buffers cross that boundary, never text, because the worklet scope may lack the text-decoding APIs.
+- Use the current stable release of each tool when you scaffold. Pin versions with `rust-toolchain.toml`, `Cargo.lock`, and `package-lock.json`, and record them in `STATUS.md`. List the `wasm32-unknown-unknown` target in `rust-toolchain.toml` so that rustup installs it by itself.
 - Define the design types once, in Rust. Generate the TypeScript types from them. Do not maintain two hand-written copies.
 
 ### 3.1 Repository layout (target)
@@ -139,7 +139,7 @@ engine/            Rust workspace
     seatlock-dsp         filters, delay, FIR, limiter; frequency response and sample processing of each block
     seatlock-correct     targets, auto EQ, physics limits
     seatlock-sim         design -> results; score; cost; optimizer
-    seatlock-wasm        wasm-bindgen wrapper used by the workers
+    seatlock-wasm        C-ABI wrapper used by the workers
     seatlock-rt          C-ABI real-time kernel used by the AudioWorklet
 web/               TypeScript and React app
 catalog/           drivers/, electronics/, materials.json
