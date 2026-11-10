@@ -7,7 +7,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 ## Where things stand
 
 - **Level 0 is on `main`, including Assignment 2, merged by Claude on 2026-11-10.** The layout, worker, design load and save, and scripts exist. The test tone now comes from a fixed buffer inside the real-time kernel, and an offline audio check covers it.
-- **Level 1 milestone M1** is merged into `main` (Assignment 3, merged by Claude on 2026-11-10). One sealed driver can be simulated and graphed. Cabinet drawing, the 3D solver, correction, and full listening are still later milestones.
+- **Level 1 milestone M1** is merged into `main` (Assignment 3, merged by Claude on 2026-11-10). One sealed driver can be simulated and graphed.
+- **Level 1 milestone M2** is on `cursor/level-1-m2-1286` (Assignment 4). The cabinet can be viewed and exported for printing, the closed-box 3D air model runs, and cost says the price is unknown until prices are filled in. Correction and full listening are still later milestones.
 - **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
@@ -26,7 +27,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Level 1 milestone M2 of `tasks/level-1.md` (Assignment 4 in `COMS.md`). M3 and M4 follow, one assignment each, after review.
+1. Claude reviews Level 1 milestone M2 on `cursor/level-1-m2-1286`. M3 and M4 follow, one assignment each, after that review.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -38,6 +39,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - 2026-11-10, before the tone fix, on a Cursor cloud agent: the new worklet check rendered 0.5 s and measured RMS 0.
 - 2026-11-10, after the fix, same machine: that check passed (RMS above 0.05, dominant frequency within 2 Hz of 440 Hz). `./check.sh` was run here, not on the owner's laptop.
 - 2026-11-10, Level 1 M1 on a Cursor cloud agent: CHK-DRV-1, CHK-DRV-2, CHK-BOX-1, CHK-BOX-2, CHK-DSP-1, CHK-DSP-3, CHK-EXT-1, and CHK-EXT-2 pass. `simulate` of sealed-test takes about 1 ms natively. WebAssembly has no clock here, so the engine reports 0 ms in the browser; the native timing is the one recorded.
+- 2026-11-10, Level 1 M2 on the same cloud agent: CHK-DRV-2, CHK-BOX-1, and CHK-BOX-2 also pass through `simulate` on 5.000 L fixtures. CHK-FDTD-1, CHK-FDTD-2, CHK-GEO-1, CHK-GEO-2, and CHK-COST-1 pass. The sealed-test box at 10 mm cells took 2.2 s.
 - Claude reran all engine tests, clippy, and rustfmt on the M1 branch in its own workspace on 2026-11-10: all pass. Review note: the section 13 checks call physics helpers directly, not `simulate`; Assignment 4 adds the same checks through `simulate`.
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
