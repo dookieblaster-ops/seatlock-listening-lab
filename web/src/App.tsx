@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { CabinetView } from "./CabinetView";
 import type { Issue } from "./generated/Issue";
@@ -51,10 +51,11 @@ function fidelityText(label: SimulateResult["fidelity"]) {
 }
 
 export default function App() {
-  const { version, ready, error: engineError, designCheck, simulate, geometry, correct, listen } = useEngine();
+  const { version, ready, error: engineError, designCheck, simulate, geometry, correct, listen, driverRecord } = useEngine();
   const playback = useListen();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioFileRef = useRef<HTMLInputElement>(null);
+  const compareInputRef = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
 
   const [designName, setDesignName] = useState("No design loaded");
@@ -75,6 +76,10 @@ export default function App() {
   const [volts, setVolts] = useState(2.83);
   const [hearCorrection, setHearCorrection] = useState(true);
   const [audioFile, setAudioFile] = useState<ArrayBuffer | null>(null);
+  const [driverLines, setDriverLines] = useState<string[]>([]);
+  const [simB, setSimB] = useState<SimulateResult | null>(null);
+  const [nameB, setNameB] = useState("");
+  const [canonicalB, setCanonicalB] = useState<string | null>(null);
   const [fdtdCurve, setFdtdCurve] = useState<{
     freq: number[];
     mag: number[];
@@ -184,6 +189,39 @@ export default function App() {
   const radiator = design?.speaker.radiators[0];
   const chain = design?.dsp.per_radiator[0];
   const block = chain?.blocks[0];
+  useEffect(() => {
+    const ids = design?.speaker.radiators.map((item) => String(item.driver_id ?? "")) ?? [];
+    if (ids.length === 0) {
+      setDriverLines([]);
+      return;
+    }
+    let cancel = false;
+    void Promise.all(ids.map((id) => driverRecord(id).catch(() => ({ error: id })))).then((records) => {
+      if (cancel) {
+        return;
+      }
+      setDriverLines(
+        records.map((record, index) => {
+          if ("error" in record || record.status === "synthetic" || String(ids[index]).startsWith("test-")) {
+            return `Driver ${index + 1}: Test driver, not a real product`;
+          }
+          const readOn = record.price?.read_on;
+          const stale =
+            readOn !== undefined && Date.now() - Date.parse(readOn) > 90 * 24 * 60 * 60 * 1000;
+          const price = record.price?.amount;
+          const money =
+            price === undefined
+              ? "price unknown"
+              : `${record.price?.vendor ?? "vendor"} $${price} as of ${readOn ?? "an unknown date"}`;
+          return `Driver ${index + 1}: ${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${stale ? ". This price is more than 90 days old." : ""}`;
+        }),
+      );
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [design, driverRecord]);
+
   const curve = sim?.radiators[0];
   const spl40 = curve ? nearestValue(sim.frequencies_hz, curve.spl_db, 40) : Number.NaN;
   const voltageDb = 20 * Math.log10(volts / 2.83);
@@ -314,6 +352,23 @@ export default function App() {
               void publish(next, designName);
             }} />
           </div>
+          {design.speaker.radiators.map((item, index) => (
+            <label key={`driver-${index}`}>
+              Driver {index + 1} catalog id
+              <input
+                data-testid={`driver-id-${index}`}
+                value={String(item.driver_id ?? "")}
+                onChange={(event) => {
+                  const next = structuredClone(design);
+                  next.speaker.radiators[index].driver_id = event.target.value;
+                  void publish(next, designName);
+                }}
+              />
+            </label>
+          ))}
+          {driverLines.map((line) => (
+            <p key={line} data-testid="driver-note">{line}</p>
+          ))}
           <h3>Processing</h3>
           <div className="grid">
             <NumberField label="Sample rate (Hz)" value={design.dsp.sample_rate_hz} onChange={(value) => updateNumber("dsp.sample_rate_hz", value)} />
@@ -339,10 +394,10 @@ export default function App() {
             <input type="checkbox" checked={design.dsp.correction.enabled} onChange={(event) => {
               const next = structuredClone(design);
               next.dsp.correction.enabled = event.target.checked;
-              if (!event.target.checked && next.dsp.per_radiator[0]) {
-                next.dsp.per_radiator[0].blocks = next.dsp.per_radiator[0].blocks.filter(
-                  (block) => block.correction !== true,
-                );
+              if (!event.target.checked) {
+                for (const chain of next.dsp.per_radiator) {
+                  chain.blocks = chain.blocks.filter((block) => block.correction !== true);
+                }
               }
               void publish(next, designName);
             }} />
@@ -553,6 +608,38 @@ export default function App() {
             clean level {sim.max_spl_metric_db.toFixed(0)} dB. Price: {sim.cost_note}.
           </p>
           <div className="row">
+            <button type="button" onClick={() => compareInputRef.current?.click()}>
+              Compare with another design
+            </button>
+            <input
+              ref={compareInputRef}
+              data-testid="compare-file"
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) {
+                  return;
+                }
+                void (async () => {
+                  const text = await file.text();
+                  const checked = await designCheck(text);
+                  const result = await simulate(checked.canonical_json, revision.current, grid);
+                  setSimB(result);
+                  setNameB(file.name);
+                  setCanonicalB(checked.canonical_json);
+                })();
+              }}
+            />
+          </div>
+          {simB && (
+            <p data-testid="scores-b">
+              {nameB}: bass limit {simB.f6_hz.toFixed(0)} Hz. Evenness {simB.flatness_db.toFixed(1)} dB.
+              Maximum clean level {simB.max_spl_metric_db.toFixed(0)} dB. Price: {simB.cost_note}.
+            </p>
+          )}
+          <div className="row">
             <button
               type="button"
               onClick={() => {
@@ -566,8 +653,15 @@ export default function App() {
                     return;
                   }
                   const next = structuredClone(design);
-                  const kept = next.dsp.per_radiator[0].blocks.filter((block) => block.correction !== true);
-                  next.dsp.per_radiator[0].blocks = [...kept, ...plan.filters];
+                  const plans = plan.per_radiator ?? [{ filters: plan.filters, message: plan.message }];
+                  plans.forEach((entry, index) => {
+                    const chain = next.dsp.per_radiator[index];
+                    if (!chain) {
+                      return;
+                    }
+                    const kept = chain.blocks.filter((block) => block.correction !== true);
+                    chain.blocks = [...kept, ...entry.filters];
+                  });
                   next.dsp.correction.enabled = true;
                   setCorrectionNote(plan.message);
                   await publish(next, designName);
@@ -664,13 +758,38 @@ export default function App() {
           )}
           <Graph
             title="Loudness"
-            explanation="How loud this speaker is at each frequency, on axis."
+            explanation="How loud this speaker is at each frequency, on axis. A second design, if loaded, is drawn in brown."
             freqs={sim.frequencies_hz}
-            values={curve.spl_db}
+            values={sim.summed_spl_db}
+            overlay={simB?.summed_spl_db}
             unit="dB SPL"
             testId="response-graph"
             fidelity={fidelityText(curve.fidelity)}
           />
+          {sim.radiators.map((radiatorCurve, index) => (
+            <Graph
+              key={`driver-graph-${index}`}
+              title={`Driver ${index + 1}`}
+              explanation="This driver's own contribution, including its port if it has one."
+              freqs={sim.frequencies_hz}
+              values={radiatorCurve.spl_db}
+              overlay={simB?.radiators[index]?.spl_db}
+              unit="dB SPL"
+              testId={`response-radiator-${index}`}
+              fidelity={fidelityText(radiatorCurve.fidelity)}
+            />
+          ))}
+          {curve.port_speed_m?.some((speed) => speed > 0) && (
+            <Graph
+              title="Port air speed"
+              explanation="How fast air moves in the port. It gets noisy above about 17 m/s."
+              freqs={sim.frequencies_hz}
+              values={curve.port_speed_m}
+              unit="m/s"
+              testId="port-speed-graph"
+              fidelity={fidelityText(curve.fidelity)}
+            />
+          )}
           <Graph
             title="Impedance"
             explanation="How hard the driver is for the amplifier to drive."
@@ -740,6 +859,16 @@ export default function App() {
             {limitHot ? "Limit exceeded" : "Within limits"}
           </span>
         </p>
+        {sim?.radiators.map((radiatorCurve, index) => {
+          const hot = radiatorCurve.spl_db.some(
+            (level, bin) => level + voltageDb > (radiatorCurve.max_spl_db[bin] ?? Infinity) + 0.05,
+          );
+          return (
+            <span key={index} data-testid={`cone-limit-${index}`} className={hot ? "limit-light lit" : "limit-light"}>
+              Driver {index + 1}: {hot ? "Limit exceeded" : "Within limits"}
+            </span>
+          );
+        })}
         <label className="check">
           <input
             data-testid="hear-correction"
@@ -793,6 +922,28 @@ export default function App() {
           <button type="button" data-testid="listen-stop" onClick={() => void playback.stop()} disabled={!playback.playing}>
             Stop
           </button>
+          <button
+            type="button"
+            data-testid="listen-ab"
+            disabled={!canonicalB || !playback.playing}
+            onClick={() => {
+              if (!canonicalB || !sim || !simB) {
+                return;
+              }
+              const match = 0.25 * 10 ** ((bandMean(sim) - bandMean(simB)) / 20);
+              void playback
+                .armOther(async (sampleRate) => {
+                  const pack = await listen(canonicalB, hearCorrection, 2048, sampleRate);
+                  if (pack.error) {
+                    throw new Error(pack.error);
+                  }
+                  return { channels: pack.channels, impulses: pack.impulses };
+                })
+                .then(() => playback.crossfade(true, match));
+            }}
+          >
+            Hear the other design
+          </button>
           <button type="button" onClick={() => audioFileRef.current?.click()}>
             Open audio file
           </button>
@@ -818,6 +969,16 @@ export default function App() {
       </section>
     </main>
   );
+}
+
+function bandMean(result: SimulateResult) {
+  const values = result.summed_spl_db.filter(
+    (_, index) => result.frequencies_hz[index] >= 300 && result.frequencies_hz[index] <= 3000,
+  );
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function NumberField({

@@ -73,9 +73,12 @@ pub fn correct(
     sample_rate_hz: f64,
     box_fc_hz: f64,
     box_qtc: f64,
+    vented: bool,
+    tuning_hz: f64,
+    fixed_db: &[f64],
 ) -> CorrectionOutcome {
     let (natural_f6, _, _) = metrics(freqs, response_db, max_spl_db);
-    let (bass, f_low, bass_message) = c2(
+    let (bass, f_low, _) = c2(
         freqs,
         response_db,
         max_spl_db,
@@ -84,15 +87,30 @@ pub fn correct(
         box_qtc,
         natural_f6,
         sample_rate_hz,
+        vented,
+        tuning_hz,
     );
     let mut with_bass = response_db.to_vec();
     for filter in &bass {
         add_filter(&mut with_bass, freqs, filter, sample_rate_hz);
     }
     let anchor = mean_db(freqs, &with_bass);
+    let (f6_after, _, _) = metrics(freqs, &with_bass, max_spl_db);
+    let bass_message = if f6_after + 1.0 < natural_f6 {
+        format!("Bass extended from {natural_f6:.0} Hz to {f6_after:.0} Hz, staying inside the driver's limits.")
+    } else {
+        format!(
+            "Bass now starts at {f6_after:.0} Hz instead of {natural_f6:.0} Hz, so a {design_level_db:.0} dB note never exceeds the cone's travel."
+        )
+    };
     let target: Vec<f64> = freqs
         .iter()
-        .map(|freq| anchor + target_shape_db(*freq, f_low))
+        .enumerate()
+        .map(|(index, freq)| {
+            anchor
+                + target_shape_db(*freq, f_low, vented, tuning_hz)
+                + fixed_db.get(index).copied().unwrap_or(0.0)
+        })
         .collect();
     let headroom: Vec<f64> = max_spl_db
         .iter()
@@ -107,6 +125,7 @@ pub fn correct(
         protected_hz,
         max_filters,
         sample_rate_hz,
+        f_low,
     );
     trim_to_headroom(&mut fit, freqs, &bass, &headroom, sample_rate_hz);
     let mut after_curve = with_bass.clone();
@@ -151,18 +170,22 @@ fn c2(
     box_qtc: f64,
     natural_f6_hz: f64,
     sample_rate_hz: f64,
+    vented: bool,
+    tuning_hz: f64,
 ) -> (Vec<CorrectionFilter>, f64, String) {
+    let _ = natural_f6_hz;
     // The analog shape can fit while the Linkwitz biquad still boosts the bass.
     // Keep walking up until the filters that will actually be used stay inside the limits.
     let mut f_low = freqs.last().copied().unwrap_or(80.0);
+    let floor = if vented { tuning_hz.max(20.0) } else { 20.0 };
     for freq in freqs {
-        if *freq < 20.0 {
+        if *freq < floor {
             continue;
         }
-        if !shape_fits(freqs, max_spl_db, design_level_db, *freq) {
+        if !shape_fits(freqs, max_spl_db, design_level_db, *freq, vented, tuning_hz) {
             continue;
         }
-        let trial = bass_filters(*freq, box_fc_hz, box_qtc);
+        let trial = bass_filters(*freq, box_fc_hz, box_qtc, vented, tuning_hz);
         if filters_stay_inside(
             freqs,
             response_db,
@@ -175,18 +198,50 @@ fn c2(
             break;
         }
     }
-    let natural = natural_f6_hz;
-    let message = if f_low + 1.0 < natural {
-        format!("Bass extended from {natural:.0} Hz to {f_low:.0} Hz, staying inside the driver's limits.")
-    } else {
-        format!(
-            "Bass now starts at {f_low:.0} Hz instead of {natural:.0} Hz, so a {design_level_db:.0} dB note never exceeds the cone's travel."
-        )
-    };
-    (bass_filters(f_low, box_fc_hz, box_qtc), f_low, message)
+    (
+        bass_filters(f_low, box_fc_hz, box_qtc, vented, tuning_hz),
+        f_low,
+        String::new(),
+    )
 }
 
-fn bass_filters(f_low: f64, box_fc_hz: f64, box_qtc: f64) -> Vec<CorrectionFilter> {
+fn bass_filters(
+    f_low: f64,
+    box_fc_hz: f64,
+    box_qtc: f64,
+    vented: bool,
+    tuning_hz: f64,
+) -> Vec<CorrectionFilter> {
+    if vented {
+        let mut filters = vec![CorrectionFilter {
+            filter_type: "highpass".into(),
+            f_hz: tuning_hz.max(15.0),
+            q: 0.707,
+            gain_db: 0.0,
+            from_hz: 0.0,
+            from_q: 0.0,
+            reason: format!(
+                "Protective high-pass at {:.0} Hz, because below the port tuning the cone is unloaded.",
+                tuning_hz.max(15.0)
+            ),
+        }];
+        if f_low > tuning_hz * 1.2 {
+            for q in [0.5412_f64, 1.3066] {
+                filters.push(CorrectionFilter {
+                    filter_type: "highpass".into(),
+                    f_hz: f_low,
+                    q,
+                    gain_db: 0.0,
+                    from_hz: 0.0,
+                    from_q: 0.0,
+                    reason: format!(
+                        "Raises the bass corner to {f_low:.0} Hz with part of a fourth-order slope."
+                    ),
+                });
+            }
+        }
+        return filters;
+    }
     let protect = (f_low / 2.0).max(15.0);
     vec![
         CorrectionFilter {
@@ -245,7 +300,14 @@ fn filters_stay_inside(
     })
 }
 
-fn target_shape_db(freq: f64, f_low: f64) -> f64 {
+fn target_shape_db(freq: f64, f_low: f64, vented: bool, tuning_hz: f64) -> f64 {
+    if vented {
+        let ratio = f_low / freq.max(1e-6);
+        let fourth = 1.0 / (1.0 + ratio.powi(8)).sqrt();
+        let fourth_db = 20.0 * fourth.max(1e-12).log10();
+        let protect = tuning_hz.max(f_low / 2.0).max(10.0);
+        return fourth_db + highpass_db(freq, protect, 0.707);
+    }
     highpass_db(freq, f_low, 0.707) + highpass_db(freq, (f_low / 2.0).max(10.0), 0.707)
 }
 
@@ -256,15 +318,23 @@ fn highpass_db(freq: f64, fc: f64, q: f64) -> f64 {
     20.0 * mag.max(1e-12).log10()
 }
 
-fn shape_fits(freqs: &[f64], max_spl_db: &[f64], design_level_db: f64, f_low: f64) -> bool {
+fn shape_fits(
+    freqs: &[f64],
+    max_spl_db: &[f64],
+    design_level_db: f64,
+    f_low: f64,
+    vented: bool,
+    tuning_hz: f64,
+) -> bool {
     freqs.iter().zip(max_spl_db).all(|(freq, limit)| {
         // Above a few kilohertz the coil inductance, not the bass shape, sets the clean level.
         *freq < 10.0
             || *freq > 3_000.0
-            || design_level_db + target_shape_db(*freq, f_low) <= *limit + 0.2
+            || design_level_db + target_shape_db(*freq, f_low, vented, tuning_hz) <= *limit + 0.2
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn c1(
     freqs: &[f64],
     response_db: &[f64],
@@ -273,6 +343,7 @@ pub fn c1(
     protected_hz: [f64; 2],
     max_filters: usize,
     sample_rate_hz: f64,
+    f_low_hz: f64,
 ) -> (Vec<CorrectionFilter>, String) {
     let initial = rms_error(freqs, &smooth(freqs, response_db), target_db);
     if initial < 0.2 {
@@ -285,7 +356,7 @@ pub fn c1(
     let mut current = response_db.to_vec();
     let mut excluded = vec![false; freqs.len()];
     let mut previous = initial;
-    let mut notes = Vec::new();
+    let mut notes: Vec<(f64, String)> = Vec::new();
     for _ in 0..max_filters.max(8) * 2 {
         if filters.len() >= max_filters {
             break;
@@ -331,16 +402,22 @@ pub fn c1(
         let mut gain = peak.clamp(-12.0, 6.0);
         if gain > 0.0 {
             if center >= protected_hz[0] && center <= protected_hz[1] {
-                notes.push(format!(
-                    "The region near {center:.0} Hz was left alone: no boost between 3 kHz and 5 kHz."
+                notes.push((
+                    center,
+                    format!(
+                        "The region near {center:.0} Hz was left alone: no boost between 3 kHz and 5 kHz."
+                    ),
                 ));
                 exclude_region(&mut excluded, left, right);
                 previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
                 continue;
             }
             if q > 4.0 {
-                notes.push(format!(
-                    "A narrow dip near {center:.0} Hz was left alone. That is a cancellation, not something EQ can fill."
+                notes.push((
+                    center,
+                    format!(
+                        "A narrow dip near {center:.0} Hz was left alone. That is a cancellation, not something EQ can fill."
+                    ),
                 ));
                 exclude_region(&mut excluded, left, right);
                 previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
@@ -349,8 +426,11 @@ pub fn c1(
             q = q.min(4.0);
             let room = headroom_db.get(index).copied().unwrap_or(0.0);
             if room <= 0.0 {
-                notes.push(format!(
-                    "The region near {center:.0} Hz was left alone: boosting it would exceed what the driver can do."
+                notes.push((
+                    center,
+                    format!(
+                        "The region near {center:.0} Hz was left alone: boosting it would exceed what the driver can do."
+                    ),
                 ));
                 exclude_region(&mut excluded, left, right);
                 previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
@@ -403,7 +483,7 @@ pub fn c1(
         let message = if notes.is_empty() {
             "No filter improved the response enough to keep.".into()
         } else {
-            notes.join(" ")
+            render_notes(&notes, f_low_hz)
         };
         return (Vec::new(), message);
     }
@@ -414,13 +494,36 @@ pub fn c1(
                 .into(),
         );
     }
-    let message = filters
+    let mut parts: Vec<String> = filters.iter().map(|filter| filter.reason.clone()).collect();
+    let notes_text = render_notes(&notes, f_low_hz);
+    if !notes_text.is_empty() {
+        parts.push(notes_text);
+    }
+    (filters, parts.join(" "))
+}
+
+fn render_notes(notes: &[(f64, String)], f_low_hz: f64) -> String {
+    let eligible: Vec<&str> = notes
         .iter()
-        .map(|filter| filter.reason.clone())
-        .chain(notes)
+        .filter(|(hz, _)| *hz + 0.5 >= f_low_hz)
+        .map(|(_, text)| text.as_str())
+        .collect();
+    let hidden = notes.len().saturating_sub(eligible.len());
+    let extra = eligible.len().saturating_sub(3);
+    let mut text = eligible
+        .iter()
+        .take(3)
+        .copied()
         .collect::<Vec<_>>()
         .join(" ");
-    (filters, message)
+    let rest = hidden + extra;
+    if rest > 0 {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        text.push_str(&format!("{rest} more regions were left alone."));
+    }
+    text
 }
 
 #[allow(clippy::too_many_arguments)]

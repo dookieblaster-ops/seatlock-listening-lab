@@ -52,7 +52,7 @@ test("numeric coefficients change the kernel output", async ({ page }) => {
     const ctx = new OfflineAudioContext(1, frames, sampleRate);
     await ctx.audioWorklet.addModule("/rt-worklet.js");
     const node = new AudioWorkletNode(ctx, "seatlock-rt", {
-      processorOptions: { wasmBytes },
+      processorOptions: { wasmBytes, coeffs: [3, 1, 0, 0.25, 0] },
     });
     node.port.postMessage(new Float64Array([3, 1, 0, 0.25, 0]));
     node.connect(ctx.destination);

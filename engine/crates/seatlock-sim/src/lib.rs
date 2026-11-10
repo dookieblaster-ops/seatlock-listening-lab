@@ -3,14 +3,17 @@
 use std::time::Instant;
 
 use num_complex::Complex64;
-use seatlock_acoustics::{cone_displacement_m3, spl_db};
+use seatlock_acoustics::{
+    cone_displacement_m3, effective_port_length_m, spl_db, vented_sample, PortSpec,
+};
 use seatlock_core::catalog;
+use seatlock_core::constants::C0;
 use seatlock_core::design::{DesignFile, KindPart};
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
 use seatlock_core::registry::{DspBlock, OuterShape, Registry};
 use seatlock_correct::metrics;
-use seatlock_dsp::{delay_block, gain_block, polarity_block};
+use seatlock_dsp::{delay_block, gain_block, polarity_block, prefer_inverted_high, ThiranDelay};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -85,6 +88,7 @@ pub struct RadiatorCurve {
     pub spl_db: Vec<f64>,
     pub impedance_ohm: Vec<f64>,
     pub cone_travel_m: Vec<f64>,
+    pub port_speed_m: Vec<f64>,
     pub max_spl_db: Vec<f64>,
     pub pressure: ComplexCurve,
     pub fidelity: Fidelity,
@@ -163,7 +167,7 @@ pub fn simulate(
         ));
     }
 
-    let fidelity = Fidelity {
+    let mut fidelity = Fidelity {
         enclosure: request.enclosure.clone(),
         radiation: request.radiation.clone(),
         room: design
@@ -240,7 +244,24 @@ pub fn simulate(
             return fail(issues, fidelity);
         }
     };
-    let z_ab = enclosure.z_ab(volume, &freqs);
+    let ports = design_ports(design);
+    let (z_ab, vented) = if ports.is_empty() {
+        (enclosure.z_ab(volume, &freqs), None)
+    } else {
+        let mut impedance = Vec::with_capacity(freqs.len());
+        let mut samples = Vec::with_capacity(freqs.len());
+        for freq in &freqs {
+            let sample = vented_sample(volume, &ports, *freq, false);
+            impedance.push(sample.z_ab);
+            samples.push(sample);
+        }
+        fidelity.ignored.push(
+            "The quick model ignores resonances inside the port, and treats a bend as a straight tube."
+                .into(),
+        );
+        (impedance, Some(samples))
+    };
+    let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
     let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
         Ok(model) => model,
         Err(err) => {
@@ -295,7 +316,8 @@ pub fn simulate(
             Ok(radiator) => radiator,
             Err(_) => continue,
         };
-        let eval = radiator.evaluate(&freqs, &z_ab);
+        let loads_box = driver_loads_box(part);
+        let eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
         issues.extend(eval.warnings);
         let chain = design.dsp.per_radiator.get(index);
         let mut blocks_h = whole.clone();
@@ -309,15 +331,48 @@ pub fn simulate(
                 &freqs,
             );
             multiply_into(&mut blocks_h, &extra);
+            let samples = chain.delay_s * sample_rate;
+            let whole = samples.floor().max(0.0);
+            let fraction = samples - whole;
             let mut tail: Vec<Box<dyn DspBlock>> = vec![
-                delay_block(chain.delay_s, sample_rate),
+                delay_block(whole / sample_rate, sample_rate),
                 gain_block(chain.gain_db),
                 polarity_block(chain.invert),
             ];
+            if fraction > 1e-4 {
+                tail.push(Box::new(ThiranDelay::new(fraction)));
+            }
+            if let Some(volts) = amp_limit {
+                let mut fields = Map::new();
+                fields.insert("threshold_v".into(), serde_json::json!(volts));
+                if let Ok(block) = registry.create_dsp("limiter", &fields) {
+                    tail.push(block);
+                }
+            }
             let tail_h = product(&mut tail, &freqs, sample_rate);
             multiply_into(&mut blocks_h, &tail_h);
         }
-        let sources = [eval.volume_velocity.clone()];
+        let mut sources = vec![eval.volume_velocity.clone()];
+        let mut port_speed_1v: Vec<f64> = vec![0.0; freqs.len()];
+        if loads_box {
+            if let Some(samples) = &vented {
+                for (port_index, port) in ports.iter().enumerate() {
+                    let mut velocity = Vec::with_capacity(freqs.len());
+                    for (bin, sample) in samples.iter().enumerate() {
+                        let transfer = sample
+                            .h_each
+                            .get(port_index)
+                            .copied()
+                            .unwrap_or(Complex64::new(0.0, 0.0));
+                        let outward = -transfer * eval.volume_velocity[bin];
+                        let peak = std::f64::consts::SQRT_2 * outward.norm() / port.area_m2;
+                        port_speed_1v[bin] = port_speed_1v[bin].max(peak);
+                        velocity.push(outward);
+                    }
+                    sources.push(velocity);
+                }
+            }
+        }
         let pressure_1v = radiation.pressure(
             &sources,
             &freqs,
@@ -328,6 +383,7 @@ pub fn simulate(
         let mut pressure = Vec::with_capacity(freqs.len());
         let mut spl = Vec::with_capacity(freqs.len());
         let mut travel = Vec::with_capacity(freqs.len());
+        let mut port_speed = Vec::with_capacity(freqs.len());
         let mut max_spl = Vec::with_capacity(freqs.len());
         let mut impedance = Vec::with_capacity(freqs.len());
         for i in 0..freqs.len() {
@@ -336,8 +392,9 @@ pub fn simulate(
             pressure.push(p);
             spl.push(spl_db(p));
             travel.push(eval.excursion_m[i] * drive.norm());
+            port_speed.push(port_speed_1v[i] * drive.norm());
             impedance.push(eval.impedance[i].norm());
-            max_spl.push(max_spl_db(SplLimit {
+            let mut clean = max_spl_db(SplLimit {
                 spl_1v: spl_db(pressure_1v[i]),
                 excursion_1v: eval.excursion_m[i],
                 current_1v: eval.current_a[i].norm(),
@@ -346,7 +403,12 @@ pub fn simulate(
                 pe_w: eval.pe_w,
                 has_excursion_limit: eval.has_excursion_limit,
                 amp_limit,
-            }));
+            });
+            if port_speed_1v[i] > 1e-9 {
+                let volts = (0.05 * C0) / port_speed_1v[i];
+                clean = clean.min(spl_db(pressure_1v[i]) + 20.0 * volts.max(1e-12).log10());
+            }
+            max_spl.push(clean);
         }
         let listened = room.at_listener(&pressure);
         let listened_spl: Vec<f64> = listened.iter().copied().map(spl_db).collect();
@@ -356,10 +418,61 @@ pub fn simulate(
             spl_db: listened_spl,
             impedance_ohm: impedance,
             cone_travel_m: travel,
+            port_speed_m: port_speed,
             max_spl_db: max_spl,
             pressure: curve_from(&listened),
             fidelity: fidelity.clone(),
         });
+    }
+
+    if let Some((index, crossover_hz)) = highest_crossover(design) {
+        if let Some(branch) = radiators.get(index) {
+            let mut others = vec![Complex64::new(0.0, 0.0); freqs.len()];
+            for (other_index, other) in radiators.iter().enumerate() {
+                if other_index == index {
+                    continue;
+                }
+                for (slot, (re, im)) in others
+                    .iter_mut()
+                    .zip(other.pressure.re.iter().zip(&other.pressure.im))
+                {
+                    *slot += Complex64::new(*re, *im);
+                }
+            }
+            let branch_h: Vec<Complex64> = branch
+                .pressure
+                .re
+                .iter()
+                .zip(&branch.pressure.im)
+                .map(|(re, im)| Complex64::new(*re, *im))
+                .collect();
+            if prefer_inverted_high(&others, &branch_h, &freqs, crossover_hz) {
+                if let Some(branch) = radiators.get_mut(index) {
+                    for value in branch
+                        .pressure
+                        .re
+                        .iter_mut()
+                        .chain(branch.pressure.im.iter_mut())
+                    {
+                        *value = -*value;
+                    }
+                    branch.spl_db = branch
+                        .pressure
+                        .re
+                        .iter()
+                        .zip(&branch.pressure.im)
+                        .map(|(re, im)| spl_db(Complex64::new(*re, *im)))
+                        .collect();
+                }
+                issues.push(Issue::warning(
+                    "polarity",
+                    format!(
+                        "The driver on branch {index} was flipped so the crossover near {crossover_hz:.0} Hz adds instead of cancelling."
+                    ),
+                    format!("dsp.per_radiator[{index}].invert"),
+                ));
+            }
+        }
     }
 
     // Sum the per-radiator listener pressures so a room model stays linear.
@@ -459,6 +572,82 @@ fn max_spl_db(input: SplLimit) -> f64 {
         return spl_1v;
     }
     spl_1v + 20.0 * limit.log10()
+}
+
+fn highest_crossover(design: &DesignFile) -> Option<(usize, f64)> {
+    let mut best: Option<(usize, f64)> = None;
+    for (index, chain) in design.dsp.per_radiator.iter().enumerate() {
+        for block in &chain.blocks {
+            if block.kind != "crossover" {
+                continue;
+            }
+            if block.fields.get("band").and_then(Value::as_str) != Some("high") {
+                continue;
+            }
+            let freq = block.fields.get("f_hz").and_then(Value::as_f64)?;
+            if best.is_none_or(|(_, current)| freq >= current) {
+                best = Some((index, freq));
+            }
+        }
+    }
+    best
+}
+
+fn driver_loads_box(part: &seatlock_core::design::KindPart) -> bool {
+    let Some(id) = part.fields.get("driver_id").and_then(Value::as_str) else {
+        return true;
+    };
+    let sealed = catalog::driver(id)
+        .and_then(|record| record.get("sealed_back").and_then(Value::as_bool))
+        .unwrap_or(false);
+    !sealed
+}
+
+fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
+    let mut ports = Vec::new();
+    for duct in &design.speaker.enclosure.ducts {
+        let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
+        let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
+        let leaves = (from == "main" && to == "outside") || (from == "outside" && to == "main");
+        if !leaves {
+            continue;
+        }
+        let diameter = duct
+            .pointer("/section/start_m/0")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        if diameter <= 0.0 {
+            continue;
+        }
+        let mut length = 0.0;
+        if let Some(points) = duct.get("path_m").and_then(Value::as_array) {
+            for pair in points.windows(2) {
+                let a = point3(&pair[0]);
+                let b = point3(&pair[1]);
+                let dx = a.0 - b.0;
+                let dy = a.1 - b.1;
+                let dz = a.2 - b.2;
+                length += (dx * dx + dy * dy + dz * dz).sqrt();
+            }
+        }
+        let radius = diameter / 2.0;
+        ports.push(PortSpec {
+            area_m2: std::f64::consts::PI * radius * radius,
+            length_eff_m: effective_port_length_m(length, radius),
+        });
+    }
+    ports
+}
+
+fn point3(value: &Value) -> (f64, f64, f64) {
+    let coord = |index: usize| {
+        value
+            .as_array()
+            .and_then(|point| point.get(index))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    (coord(0), coord(1), coord(2))
 }
 
 fn chain_response(
@@ -644,37 +833,110 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
         },
         registry,
     );
-    let Some(curve) = result.radiators.first() else {
+    if result.radiators.is_empty() {
         return serde_json::json!({ "filters": [], "message": "There is no driver to correct." });
-    };
+    }
     let alignment = box_alignment(design, result.interior_volume_m3.unwrap_or(0.01));
+    let ports = design_ports(design);
+    let tuning = if ports.is_empty() {
+        0.0
+    } else {
+        seatlock_acoustics::tuning_hz(result.interior_volume_m3.unwrap_or(0.01), &ports)
+    };
     let protected = design.dsp.correction.protected_band_hz;
-    let outcome = seatlock_correct::correct(
-        &freqs,
-        &curve.spl_db,
-        &curve.max_spl_db,
-        level,
-        protected,
-        design.dsp.correction.max_filters as usize,
-        design.dsp.sample_rate_hz as f64,
-        alignment.0,
-        alignment.1,
-    );
-    let _ = result.interior_volume_m3;
+    let mut plans = Vec::new();
+    for (index, curve) in result.radiators.iter().enumerate() {
+        let fixed = fixed_block_shape(design, registry, &freqs, index);
+        let outcome = seatlock_correct::correct(
+            &freqs,
+            &curve.spl_db,
+            &curve.max_spl_db,
+            level,
+            protected,
+            design.dsp.correction.max_filters as usize,
+            design.dsp.sample_rate_hz as f64,
+            alignment.0,
+            alignment.1,
+            !ports.is_empty(),
+            tuning,
+            &fixed,
+        );
+        plans.push(serde_json::json!({
+            "message": outcome.message,
+            "filters": outcome.filters.iter().map(filter_json).collect::<Vec<_>>(),
+        }));
+    }
+    let first = plans.first().cloned().unwrap_or(serde_json::json!({}));
     serde_json::json!({
-        "message": outcome.message,
-        "filters": outcome.filters.iter().map(|filter| serde_json::json!({
-            "kind": "biquad",
-            "type": filter.filter_type,
-            "f_hz": filter.f_hz,
-            "q": filter.q,
-            "gain_db": filter.gain_db,
-            "from_hz": filter.from_hz,
-            "from_q": filter.from_q,
-            "reason": filter.reason,
-            "correction": true
-        })).collect::<Vec<_>>(),
+        "message": first["message"],
+        "filters": first["filters"],
+        "per_radiator": plans,
     })
+}
+
+fn filter_json(filter: &seatlock_correct::CorrectionFilter) -> Value {
+    serde_json::json!({
+        "kind": "biquad",
+        "type": filter.filter_type,
+        "f_hz": filter.f_hz,
+        "q": filter.q,
+        "gain_db": filter.gain_db,
+        "from_hz": filter.from_hz,
+        "from_q": filter.from_q,
+        "reason": filter.reason,
+        "correction": true
+    })
+}
+
+fn fixed_block_shape(
+    design: &DesignFile,
+    registry: &Registry,
+    freqs: &[f64],
+    radiator: usize,
+) -> Vec<f64> {
+    let mut parts = design.dsp.whole_speaker.clone();
+    if let Some(chain) = design.dsp.per_radiator.get(radiator) {
+        for block in &chain.blocks {
+            let correction = block
+                .fields
+                .get("correction")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !correction {
+                parts.push(block.clone());
+            }
+        }
+    }
+    if parts.is_empty() {
+        return vec![0.0; freqs.len()];
+    }
+    let response = chain_response(
+        &parts,
+        design.dsp.sample_rate_hz as f64,
+        registry,
+        "dsp",
+        &mut Vec::new(),
+        freqs,
+    );
+    let mut db: Vec<f64> = response
+        .iter()
+        .map(|value| 20.0 * value.norm().max(1e-12).log10())
+        .collect();
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for (freq, level) in freqs.iter().zip(&db) {
+        if *freq >= 300.0 && *freq <= 3_000.0 {
+            sum += *level;
+            count += 1.0;
+        }
+    }
+    if count > 0.0 {
+        let mean = sum / count;
+        for level in &mut db {
+            *level -= mean;
+        }
+    }
+    db
 }
 
 /// Coefficients, plain-language filter text, and optional impulse responses for listen mode.

@@ -54,6 +54,7 @@ impl Radiator for ConstantSource {
             xmax_m: 1.0,
             pe_w: 1.0,
             has_excursion_limit: false,
+            loads_box: false,
             warnings: Vec::new(),
         }
     }

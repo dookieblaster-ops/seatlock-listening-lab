@@ -1,0 +1,29 @@
+{
+  "id": "test-tweeter-a",
+  "status": "synthetic",
+  "maker": "Test",
+  "model": "Tweeter A",
+  "kind": "tweeter",
+  "sealed_back": true,
+  "published": {
+    "fs_hz": 900.0,
+    "qes": 0.8,
+    "qms": 2.5,
+    "vas_m3": 0.00005,
+    "re_ohm": 4.8,
+    "le_h": 0.00005,
+    "sd_m2": 0.0008,
+    "xmax_m": 0.0003,
+    "pe_w": 20.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.04,
+    "outer_diameter_m": 0.06,
+    "bolt_circle_m": 0.05,
+    "bolt_count": 4,
+    "depth_m": 0.02
+  },
+  "response_file": null,
+  "source": null,
+  "price": null
+}

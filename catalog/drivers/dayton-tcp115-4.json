@@ -1,0 +1,41 @@
+{
+  "id": "dayton-tcp115-4",
+  "status": "sourced",
+  "maker": "Dayton Audio",
+  "model": "TCP115-4",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 53.8,
+    "qes": 0.4,
+    "qms": 3.14,
+    "vas_m3": 0.0031,
+    "re_ohm": 3.2,
+    "le_h": 0.00097,
+    "sd_m2": 0.00503,
+    "xmax_m": 0.004,
+    "pe_w": 40.0,
+    "mms_kg": 0.0099,
+    "cms_m_per_n": 0.00088,
+    "bl_tm": 5.2
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.095758,
+    "outer_diameter_m": 0.116078,
+    "bolt_circle_m": 0.10795,
+    "bolt_count": 4,
+    "depth_m": 0.058928
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-415--dayton-audio-tcp115-4-spec-sheet.pdf",
+    "title": "Dayton Audio TCP115-4 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 15.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-TCP115-4-4-Treated-Paper-Cone-Midbass-Woofer-4-Ohm-295-415",
+    "read_on": "2026-11-10"
+  }
+}

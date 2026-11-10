@@ -31,6 +31,8 @@ pub struct RadiatorEval {
     pub xmax_m: f64,
     pub pe_w: f64,
     pub has_excursion_limit: bool,
+    /// False for a driver with a sealed back: the box does not load it, and it has no port.
+    pub loads_box: bool,
     pub warnings: Vec<Issue>,
 }
 

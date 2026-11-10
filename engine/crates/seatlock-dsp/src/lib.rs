@@ -5,11 +5,17 @@ use seatlock_core::registry::{DspBlock, Registry};
 use serde_json::{Map, Value};
 use std::f64::consts::PI;
 
+mod crossover;
+
+pub use crossover::{crossover_block, prefer_inverted_high};
+
 pub fn register(registry: &mut Registry) {
     registry.register_dsp("biquad", parse_biquad);
     registry.register_dsp("gain", parse_gain);
     registry.register_dsp("delay", parse_delay);
     registry.register_dsp("polarity", parse_polarity);
+    registry.register_dsp("crossover", crossover::parse_crossover);
+    registry.register_dsp("limiter", parse_limiter);
 }
 
 #[derive(Clone)]
@@ -375,6 +381,90 @@ impl DspBlock for Polarity {
     }
 
     fn reset(&mut self) {}
+}
+
+struct Limiter {
+    threshold: f64,
+}
+
+impl DspBlock for Limiter {
+    fn frequency_response(&self, freqs_hz: &[f64], _sample_rate_hz: f64) -> Vec<Complex64> {
+        vec![Complex64::new(1.0, 0.0); freqs_hz.len()]
+    }
+
+    fn process(&mut self, input: &[f64], output: &mut [f64]) {
+        for (sample, slot) in input.iter().zip(output.iter_mut()) {
+            *slot = sample.clamp(-self.threshold, self.threshold);
+        }
+    }
+
+    fn reset(&mut self) {}
+}
+
+fn parse_limiter(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>, String> {
+    let threshold = fields
+        .get("threshold_v")
+        .and_then(Value::as_f64)
+        .unwrap_or(100.0);
+    Ok(Box::new(Limiter { threshold }))
+}
+
+/// First-order Thiran allpass for a fractional delay between 0 and 1 sample.
+pub struct ThiranDelay {
+    fraction: f64,
+    coeff: f64,
+    x1: f64,
+    y1: f64,
+}
+
+impl ThiranDelay {
+    pub fn new(fraction: f64) -> Self {
+        let fraction = fraction.clamp(0.0, 0.999);
+        let coeff = if fraction < 1e-6 {
+            0.0
+        } else {
+            (1.0 - fraction) / (1.0 + fraction)
+        };
+        Self {
+            fraction,
+            coeff,
+            x1: 0.0,
+            y1: 0.0,
+        }
+    }
+}
+
+impl DspBlock for ThiranDelay {
+    fn frequency_response(&self, freqs_hz: &[f64], sample_rate_hz: f64) -> Vec<Complex64> {
+        freqs_hz
+            .iter()
+            .map(|freq| {
+                if self.fraction < 1e-6 {
+                    return Complex64::new(1.0, 0.0);
+                }
+                let zm1 = Complex64::from_polar(1.0, -2.0 * PI * freq / sample_rate_hz);
+                (self.coeff + zm1) / (Complex64::new(1.0, 0.0) + self.coeff * zm1)
+            })
+            .collect()
+    }
+
+    fn process(&mut self, input: &[f64], output: &mut [f64]) {
+        for (sample, slot) in input.iter().zip(output.iter_mut()) {
+            if self.fraction < 1e-6 {
+                *slot = *sample;
+                continue;
+            }
+            let y = self.coeff * sample + self.x1 - self.coeff * self.y1;
+            self.x1 = *sample;
+            self.y1 = y;
+            *slot = y;
+        }
+    }
+
+    fn reset(&mut self) {
+        self.x1 = 0.0;
+        self.y1 = 0.0;
+    }
 }
 
 fn parse_polarity(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>, String> {
