@@ -9,7 +9,15 @@ export type WorkerRequest =
   | { type: "design.check"; id: number; text: string }
   | { type: "simulate"; id: number; text: string; revision: number; frequencies: number[] }
   | { type: "geometry"; id: number; text: string }
-  | { type: "correct"; id: number; text: string };
+  | { type: "correct"; id: number; text: string }
+  | {
+      type: "listen";
+      id: number;
+      text: string;
+      correction: boolean;
+      impulseLen: number;
+      sampleRate: number;
+    };
 
 export type WorkerResponse =
   | { type: "ready"; version: string }
@@ -55,6 +63,21 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     if (msg.type === "correct") {
       const eng = await ensureEngine();
       const json = eng.call("correct", JSON.stringify({ text: msg.text }));
+      self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
+      return;
+    }
+
+    if (msg.type === "listen") {
+      const eng = await ensureEngine();
+      const json = eng.call(
+        "listen",
+        JSON.stringify({
+          text: msg.text,
+          correction: msg.correction,
+          impulse_len: msg.impulseLen,
+          sample_rate_hz: msg.sampleRate,
+        }),
+      );
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
       return;
     }

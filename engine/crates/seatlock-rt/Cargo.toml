@@ -4,5 +4,8 @@ description = "Real-time audio kernel exposed as a plain C ABI for the AudioWork
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+seatlock-dsp = { path = "../seatlock-dsp" }
+
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -5,7 +5,7 @@ use std::time::Instant;
 use num_complex::Complex64;
 use seatlock_acoustics::{cone_displacement_m3, spl_db};
 use seatlock_core::catalog;
-use seatlock_core::design::DesignFile;
+use seatlock_core::design::{DesignFile, KindPart};
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
 use seatlock_core::registry::{DspBlock, OuterShape, Registry};
@@ -598,6 +598,35 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     })
 }
 
+fn box_alignment(design: &DesignFile, volume_m3: f64) -> (f64, f64) {
+    let Some(id) = design
+        .speaker
+        .radiators
+        .first()
+        .and_then(|radiator| radiator.fields.get("driver_id"))
+        .and_then(|value| value.as_str())
+    else {
+        return (50.0, 0.7);
+    };
+    let Some(driver) = catalog::driver(id) else {
+        return (50.0, 0.7);
+    };
+    let published = driver.get("published");
+    let number = |key: &str| {
+        published
+            .and_then(|item| item.get(key))
+            .and_then(|value| value.as_f64())
+            .unwrap_or(0.0)
+    };
+    let fs = number("fs_hz");
+    let qes = number("qes");
+    let qms = number("qms");
+    let vas = number("vas_m3");
+    let qts = qes * qms / (qes + qms).max(1e-9);
+    let ratio = (1.0 + vas / volume_m3.max(1e-6)).sqrt();
+    (fs * ratio, qts * ratio)
+}
+
 pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
     let level = catalog::target(&design.target)
         .and_then(|target| {
@@ -618,6 +647,7 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
     let Some(curve) = result.radiators.first() else {
         return serde_json::json!({ "filters": [], "message": "There is no driver to correct." });
     };
+    let alignment = box_alignment(design, result.interior_volume_m3.unwrap_or(0.01));
     let protected = design.dsp.correction.protected_band_hz;
     let outcome = seatlock_correct::correct(
         &freqs,
@@ -627,7 +657,10 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
         protected,
         design.dsp.correction.max_filters as usize,
         design.dsp.sample_rate_hz as f64,
+        alignment.0,
+        alignment.1,
     );
+    let _ = result.interior_volume_m3;
     serde_json::json!({
         "message": outcome.message,
         "filters": outcome.filters.iter().map(|filter| serde_json::json!({
@@ -636,10 +669,305 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
             "f_hz": filter.f_hz,
             "q": filter.q,
             "gain_db": filter.gain_db,
+            "from_hz": filter.from_hz,
+            "from_q": filter.from_q,
             "reason": filter.reason,
             "correction": true
         })).collect::<Vec<_>>(),
     })
+}
+
+/// Coefficients, plain-language filter text, and optional impulse responses for listen mode.
+///
+/// `impulse_len` is the FFT length. Pass 0 to skip the impulse (filter export only).
+pub fn listen_package(
+    design: &DesignFile,
+    registry: &Registry,
+    sample_rate_hz: f64,
+    correction_on: bool,
+    impulse_len: usize,
+) -> Value {
+    let sample_rate_hz = if sample_rate_hz > 1.0 {
+        sample_rate_hz
+    } else {
+        design.dsp.sample_rate_hz as f64
+    };
+    let mut channels = Vec::new();
+    let mut lines = Vec::new();
+    let radiators = design.speaker.radiators.len().max(1);
+    for index in 0..radiators {
+        let mut stages = Vec::new();
+        let mut gain = 1.0;
+        let mut delay = 0usize;
+        lines.push(format!("Radiator {}", index + 1));
+        append_parts(
+            &design.dsp.whole_speaker,
+            sample_rate_hz,
+            correction_on,
+            &mut stages,
+            &mut gain,
+            &mut delay,
+            &mut lines,
+        );
+        if let Some(chain) = design.dsp.per_radiator.get(index) {
+            append_parts(
+                &chain.blocks,
+                sample_rate_hz,
+                correction_on,
+                &mut stages,
+                &mut gain,
+                &mut delay,
+                &mut lines,
+            );
+            if chain.delay_s.abs() > 1e-9 {
+                let samples = (chain.delay_s * sample_rate_hz).round().max(0.0) as usize;
+                delay += samples;
+                lines.push(format!("Delay of {samples} samples."));
+            }
+            if chain.gain_db.abs() > 1e-9 {
+                gain *= 10_f64.powf(chain.gain_db / 20.0);
+                lines.push(format!("Level change of {:.1} dB.", chain.gain_db));
+            }
+            if chain.invert {
+                gain = -gain;
+                lines.push("Polarity inverted.".to_string());
+            }
+        }
+        if stages.is_empty() && (gain - 1.0).abs() < 1e-9 && delay == 0 {
+            lines.push("No filters on this radiator. The signal reaches it unchanged.".to_string());
+        }
+        channels.push(serde_json::json!({
+            "coeffs": stages,
+            "gain": gain,
+            "delay_samples": delay,
+        }));
+    }
+    let impulses = if impulse_len >= 32 {
+        impulse_responses(design, registry, sample_rate_hz, impulse_len)
+    } else {
+        Vec::new()
+    };
+    let level = simulate(
+        design,
+        &SimulateRequest {
+            voltage_v: 2.83,
+            ..SimulateRequest::default()
+        },
+        registry,
+    );
+    let spl_1k = level
+        .radiators
+        .first()
+        .and_then(|curve| {
+            curve
+                .spl_db
+                .iter()
+                .zip(&level.frequencies_hz)
+                .min_by(|(_, a), (_, b)| {
+                    (*a - 1000.0)
+                        .abs()
+                        .partial_cmp(&(*b - 1000.0).abs())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(spl, _)| *spl)
+        })
+        .unwrap_or(0.0);
+    serde_json::json!({
+        "sample_rate_hz": sample_rate_hz,
+        "channels": channels,
+        "impulses": impulses,
+        "filter_text": lines.join("\n"),
+        "spl_1k_db": spl_1k,
+        "correction_on": correction_on,
+    })
+}
+
+fn append_parts(
+    parts: &[KindPart],
+    sample_rate_hz: f64,
+    correction_on: bool,
+    stages: &mut Vec<[f64; 5]>,
+    gain: &mut f64,
+    delay: &mut usize,
+    lines: &mut Vec<String>,
+) {
+    for part in parts {
+        let is_correction = part
+            .fields
+            .get("correction")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if is_correction && !correction_on {
+            continue;
+        }
+        match part.kind.as_str() {
+            "biquad" => {
+                let kind = part
+                    .fields
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("peaking");
+                let freq = part
+                    .fields
+                    .get("f_hz")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(1_000.0);
+                let q = part
+                    .fields
+                    .get("q")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.707);
+                let gain_db = part
+                    .fields
+                    .get("gain_db")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                let from_hz = part
+                    .fields
+                    .get("from_hz")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(freq);
+                let from_q = part
+                    .fields
+                    .get("from_q")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(q);
+                match seatlock_dsp::biquad_coefficients(
+                    kind,
+                    freq,
+                    q,
+                    gain_db,
+                    from_hz,
+                    from_q,
+                    sample_rate_hz,
+                ) {
+                    Ok((b0, b1, b2, a1, a2)) => {
+                        stages.push([b0, b1, b2, a1, a2]);
+                        let reason = part
+                            .fields
+                            .get("reason")
+                            .and_then(Value::as_str)
+                            .unwrap_or("");
+                        if reason.is_empty() {
+                            lines.push(format!(
+                                "biquad {kind} at {freq:.1} Hz, Q {q:.3}, gain {gain_db:.1} dB."
+                            ));
+                        } else {
+                            lines.push(format!(
+                                "biquad {kind} at {freq:.1} Hz, Q {q:.3}, gain {gain_db:.1} dB. {reason}"
+                            ));
+                        }
+                        lines.push(format!("{b0:.8} {b1:.8} {b2:.8} {a1:.8} {a2:.8}"));
+                    }
+                    Err(err) => lines.push(format!("A {kind} filter was left out: {err}")),
+                }
+            }
+            "gain" => {
+                let gain_db = part
+                    .fields
+                    .get("gain_db")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                *gain *= 10_f64.powf(gain_db / 20.0);
+                lines.push(format!("Gain of {gain_db:.1} dB."));
+            }
+            "polarity" => {
+                let invert = part
+                    .fields
+                    .get("invert")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true);
+                if invert {
+                    *gain = -*gain;
+                    lines.push("Polarity inverted.".to_string());
+                }
+            }
+            "delay" => {
+                let samples =
+                    if let Some(samples) = part.fields.get("samples").and_then(Value::as_u64) {
+                        samples as usize
+                    } else {
+                        let seconds = part
+                            .fields
+                            .get("delay_s")
+                            .and_then(Value::as_f64)
+                            .unwrap_or(0.0);
+                        (seconds * sample_rate_hz).round().max(0.0) as usize
+                    };
+                *delay += samples;
+                lines.push(format!("Delay of {samples} samples."));
+            }
+            other => lines.push(format!("A {other} block was left out of playback.")),
+        }
+    }
+}
+
+fn impulse_responses(
+    design: &DesignFile,
+    registry: &Registry,
+    sample_rate_hz: f64,
+    n: usize,
+) -> Vec<Vec<f64>> {
+    let n = n.next_power_of_two().clamp(32, 4096);
+    let mut freqs = Vec::with_capacity(n / 2 + 1);
+    freqs.push(1.0);
+    for bin in 1..=n / 2 {
+        freqs.push(bin as f64 * sample_rate_hz / n as f64);
+    }
+    // The impulse is from amplifier voltage to pressure. The DSP chain runs in the
+    // real-time kernel, so it is not part of this response.
+    let mut acoustic = design.clone();
+    acoustic.dsp.whole_speaker.clear();
+    for chain in &mut acoustic.dsp.per_radiator {
+        chain.blocks.clear();
+        chain.gain_db = 0.0;
+        chain.delay_s = 0.0;
+        chain.invert = false;
+    }
+    let result = simulate(
+        &acoustic,
+        &SimulateRequest {
+            voltage_v: 1.0,
+            frequencies_hz: Some(freqs),
+            ..SimulateRequest::default()
+        },
+        registry,
+    );
+    let mut planner = rustfft::FftPlanner::<f64>::new();
+    let ifft = planner.plan_fft_inverse(n);
+    result
+        .radiators
+        .iter()
+        .map(|curve| {
+            let mut spectrum = vec![num_complex::Complex64::new(0.0, 0.0); n];
+            for bin in 1..n / 2 {
+                let re = curve.pressure.re.get(bin).copied().unwrap_or(0.0);
+                let im = curve.pressure.im.get(bin).copied().unwrap_or(0.0);
+                if !re.is_finite() || !im.is_finite() {
+                    continue;
+                }
+                spectrum[bin] = num_complex::Complex64::new(re, im);
+                spectrum[n - bin] = num_complex::Complex64::new(re, -im);
+            }
+            if let Some(re) = curve.pressure.re.get(n / 2).copied() {
+                if re.is_finite() {
+                    spectrum[n / 2] = num_complex::Complex64::new(re, 0.0);
+                }
+            }
+            ifft.process(&mut spectrum);
+            spectrum
+                .iter()
+                .map(|sample| {
+                    let value = sample.re / n as f64;
+                    if value.is_finite() {
+                        value
+                    } else {
+                        0.0
+                    }
+                })
+                .collect()
+        })
+        .collect()
 }
 
 pub fn simulate_json(text: &str, request_json: &str, registry: &Registry) -> Result<Value, String> {

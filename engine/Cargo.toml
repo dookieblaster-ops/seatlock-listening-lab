@@ -11,3 +11,4 @@ version = "0.1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.145", features = ["preserve_order"] }
 num-complex = "0.4"
+rustfft = "6.4"

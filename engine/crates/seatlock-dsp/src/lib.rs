@@ -52,10 +52,16 @@ impl DspBlock for Biquad {
 
     fn process(&mut self, input: &[f64], output: &mut [f64]) {
         for (sample, slot) in input.iter().zip(output.iter_mut()) {
-            let y = self.b0 * sample + self.s1;
-            self.s1 = self.b1 * sample - self.a1 * y + self.s2;
-            self.s2 = self.b2 * sample - self.a2 * y;
-            *slot = y;
+            *slot = biquad_step(
+                self.b0,
+                self.b1,
+                self.b2,
+                self.a1,
+                self.a2,
+                &mut self.s1,
+                &mut self.s2,
+                *sample,
+            );
         }
     }
 
@@ -140,6 +146,33 @@ fn rbj(
     Ok(Biquad::from_coeffs(b0, b1, b2, a0, a1, a2))
 }
 
+fn make_biquad(
+    kind: &str,
+    freq_hz: f64,
+    q: f64,
+    gain_db: f64,
+    from_hz: f64,
+    from_q: f64,
+    sample_rate_hz: f64,
+) -> Result<Biquad, String> {
+    if kind == "linkwitz" {
+        let w0 = 2.0 * sample_rate_hz * (std::f64::consts::PI * from_hz / sample_rate_hz).tan();
+        let w1 = 2.0 * sample_rate_hz * (std::f64::consts::PI * freq_hz / sample_rate_hz).tan();
+        let c = 2.0 * sample_rate_hz;
+        let coef = |omega: f64, quality: f64| {
+            (
+                c * c + (omega / quality) * c + omega * omega,
+                -2.0 * c * c + 2.0 * omega * omega,
+                c * c - (omega / quality) * c + omega * omega,
+            )
+        };
+        let (b0, b1, b2) = coef(w0, from_q.max(0.2));
+        let (a0, a1, a2) = coef(w1, q.max(0.2));
+        return Ok(Biquad::from_coeffs(b0, b1, b2, a0, a1, a2));
+    }
+    rbj(kind, freq_hz, q, gain_db, sample_rate_hz)
+}
+
 fn parse_biquad(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>, String> {
     let kind = fields
         .get("type")
@@ -157,6 +190,11 @@ fn parse_biquad(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>, String
         freq_hz: freq,
         q,
         gain_db,
+        from_hz: fields
+            .get("from_hz")
+            .and_then(Value::as_f64)
+            .unwrap_or(freq),
+        from_q: fields.get("from_q").and_then(Value::as_f64).unwrap_or(q),
         state: None,
     }))
 }
@@ -166,6 +204,8 @@ struct RateBiquad {
     freq_hz: f64,
     q: f64,
     gain_db: f64,
+    from_hz: f64,
+    from_q: f64,
     state: Option<(f64, Biquad)>,
 }
 
@@ -178,11 +218,13 @@ impl RateBiquad {
         if rebuild {
             self.state = Some((
                 sample_rate_hz,
-                rbj(
+                make_biquad(
                     &self.kind,
                     self.freq_hz,
                     self.q,
                     self.gain_db,
+                    self.from_hz,
+                    self.from_q,
                     sample_rate_hz,
                 )?,
             ));
@@ -193,11 +235,13 @@ impl RateBiquad {
 
 impl DspBlock for RateBiquad {
     fn frequency_response(&self, freqs_hz: &[f64], sample_rate_hz: f64) -> Vec<Complex64> {
-        let biquad = rbj(
+        let biquad = make_biquad(
             &self.kind,
             self.freq_hz,
             self.q,
             self.gain_db,
+            self.from_hz,
+            self.from_q,
             sample_rate_hz,
         )
         .expect("biquad");
@@ -339,6 +383,39 @@ fn parse_polarity(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>, Stri
         .and_then(Value::as_bool)
         .unwrap_or(true);
     Ok(polarity_block(invert))
+}
+
+/// One sample of the direct-form biquad. The real-time kernel calls this, and so does `process`.
+#[allow(clippy::too_many_arguments)]
+#[inline]
+pub fn biquad_step(
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a1: f64,
+    a2: f64,
+    s1: &mut f64,
+    s2: &mut f64,
+    x: f64,
+) -> f64 {
+    let y = b0 * x + *s1;
+    *s1 = b1 * x - a1 * y + *s2;
+    *s2 = b2 * x - a2 * y;
+    y
+}
+
+/// Normalized coefficients `(b0, b1, b2, a1, a2)` for a biquad at `sample_rate_hz`.
+pub fn biquad_coefficients(
+    kind: &str,
+    freq_hz: f64,
+    q: f64,
+    gain_db: f64,
+    from_hz: f64,
+    from_q: f64,
+    sample_rate_hz: f64,
+) -> Result<(f64, f64, f64, f64, f64), String> {
+    let filter = make_biquad(kind, freq_hz, q, gain_db, from_hz, from_q, sample_rate_hz)?;
+    Ok((filter.b0, filter.b1, filter.b2, filter.a1, filter.a2))
 }
 
 /// Biquad used by CHK-DSP. The sample rate is fixed so process and the response share one filter.
