@@ -14,8 +14,10 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## How the work is done
 
-- Cursor cloud agents do the building, to conserve the owner's Claude usage. Claude launches them, checks their results, and merges into `main`. An agent works on its own branch and opens a pull request.
-- The owner's laptop (Linux Mint, 32 GB RAM) runs the app. Claude can view the running app there, but cannot type into a terminal or into Cursor on it. The owner starts the app with `./start.sh`, or asks Cursor on the laptop to.
+- Claude directs and Cursor builds. Claude writes each piece of work as a task file in `tasks/`, reviews what Cursor produced against this README, and writes the next task or the fixes.
+- Cursor runs on the owner's laptop (Linux Mint, 32 GB RAM) under the owner's Cursor subscription. Cursor's paid cloud agents are not used: there is no budget for usage beyond the subscriptions.
+- Through computer use, Claude can watch Cursor on the laptop and click its buttons, but cannot type into Cursor or a terminal. The owner types one line per task into Cursor's Agent chat, for example `Do tasks/level-0.md`.
+- Claude can open the running app on the laptop in the Claude app's built-in browser to test it.
 - Claude's own cloud workspace cannot download Rust's WebAssembly target, because the host `static.rust-lang.org` is blocked there. It can run the native tests only. Cursor's machines and the laptop have no such limit.
 
 ## Next steps
