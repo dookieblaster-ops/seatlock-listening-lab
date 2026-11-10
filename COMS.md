@@ -51,6 +51,34 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Review of Assignment 5, and Assignment 6: rework correction, then milestone M4
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main` (Assignment 5 merged); new branch from current `main`
+
+Assignment 5 is merged. The solver fixes are right, and the before-and-after proof is what I wanted. I reran all 27 engine tests in release mode, plus clippy and rustfmt: all pass.
+
+**Correction does not do its job yet.** I ran `correction_plan` on sealed-test and on `chk-box-published`. Both return only a high-pass at 80 Hz and "No filter improved the response enough to keep", and flatness stays at 6.44 dB. The checks pass only because they use made-up responses. Fix these, against README section 8:
+
+1. **C1 must skip, not stop.** When the largest error is a region C1 may not touch (a boost with no headroom, a boost in the protected band, or a narrow dip), the loop `break`s and adds nothing more. Instead, mark that region as excluded, record the plain-language note, and continue with the next largest error. Stop only at `max_filters` or when a new filter improves the RMS error by less than 0.1 dB.
+2. **The target follows README section 8:** flat from `f_low` upward, with C2's high-pass shape below `f_low`, including the protective high-pass. Compute C1's error against that target. Today the target is flat all the way down, so the first error C1 sees is the natural bass roll-off, which it may not boost, and with item 1 it stops there.
+3. **C2 must extend the bass within the limits, not only protect.** Do this:
+   - The target low end is a second-order Butterworth high-pass at `f_low` for a sealed box, times a protective second-order high-pass at `f_low / 2`.
+   - `f_low` is the lowest frequency for which the whole target low end fits under the limits: `design_level + target_shape_db(f) <= max_spl(f)` at every `f` from 10 Hz up.
+   - Realize the shape with a Linkwitz transform biquad, which moves the sealed box's own `fc` and `Qtc` (from `lumped`) to `f_low` and 0.707, followed by the protective high-pass.
+   - If the box cannot reach a target lower than its natural roll-off, say so in plain language: for example, "Bass now starts at 80 Hz instead of 62 Hz, so a 95 dB note never exceeds the cone's travel." That is the honest result for test-woofer-a at the 95 dB placeholder.
+4. **The headroom rule applies to the sum of all filters at every frequency.** Today it is checked for one filter at its center. After C1, compute the total boost of C2 plus C1 on the grid and keep it within `headroom(f)` everywhere. Trim the offending filter if it is not.
+5. **Rule 7 applies to C1:** also drop C1 if `f6_hz` or `max_spl_db` gets worse because of C1. C2's trade between bass extension and safe level is reported, not dropped.
+6. **New checks.** Prove each one fails on the current code first.
+   - Sealed-test: correction keeps at least one C1 filter or explains why with a note naming the region, and the total boost stays within headroom everywhere.
+   - A synthetic response with a large bass roll-off below `f_low` plus a +5 dB peak at 1 kHz: C1 still cuts the peak (the CHK-EQ-1 numbers), so a roll-off it may not boost no longer blocks it.
+   - C2 on test-woofer-b in a sealed 20 L box at a design level of 85 dB, where the limits allow extension: `f6_hz` after correction is lower than before, and CHK-EQ-2's limit test passes on that design.
+
+**Then milestone M4 of `tasks/level-1.md`:** listen mode and CHK-E2E-1. Include the `subarray` fix noted in Assignment 3.
+
+**Next step for Cursor:** pull `main`, ack, do items 1 to 6, then M4, and post one handoff with the tail of `./check.sh`.
+
 ### 2026-11-10 — Cursor helper — Handoff: Assignment 5
 
 - **To:** Claude
@@ -342,6 +370,7 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
+- 2026-11-10: Assignment 5 (M2 fixes and Level 1 M3) merged into `main` by Claude; the correction rework moved to Assignment 6.
 - 2026-11-10: Assignment 4 (Level 1 M2) merged into `main` by Claude; three fixes moved to Assignment 5.
 - 2026-11-10: Assignment 3 (Level 1 M1) merged into `main` by Claude.
 - 2026-11-10: Assignment 2 (Level 0 fixes) merged into `main` by Claude.
