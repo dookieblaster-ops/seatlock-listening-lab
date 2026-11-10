@@ -2,7 +2,7 @@
 
 Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a 3D-printable cabinet, both its outer form and its internal geometry, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them.
 
-The goal is hi-fi sound for the least money. Cheap digital processing and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. The simulator's job is to show which of those trades work before any money is spent.
+The goal is hi-fi sound for the least money. Anyone can build a hi-fi system from expensive components; this lab is for doing it cheaply. Cheap off-the-shelf drivers and materials, digital processing, and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. Quality components and conventional materials stay in the catalog as a reference, so every cheap design can be compared with a conventional build of the same speaker. The simulator's job is to show which trades work before any money is spent.
 
 **This README is the specification. It is written for the AI coding agents that build the program.** Read all of it before your first change in a session, then read `STATUS.md`, which records what exists today, what was decided along the way, and what to do next. If your context is too small for the whole file, always read sections 1 to 4 and 12, plus the sections for the part you are working on.
 
@@ -105,6 +105,8 @@ The stages depend on each other in a line. Cabinet shape sets the air load on th
 - Digital processing replaces passive crossover parts and corrects response errors that would otherwise need better drivers.
 - Printed geometry replaces woodworking and makes internal shapes possible that improve a cheap driver's result.
 - Drivers are chosen by simulated result per dollar, not by price or reputation.
+- Cheap off-the-shelf materials such as PVC pipe, cardboard tubes, and foam board replace cabinet-grade wood where the physics allows, and printing is kept to the parts that need it.
+- Every part is new, off the shelf, and has public data. Used, salvaged, or untested parts are out of scope.
 
 The lab must also show the limits of these trades: what correction cannot fix, and where money has to go into hardware.
 
@@ -186,7 +188,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 
 | Family | A member must provide | First members (level) |
 | --- | --- | --- |
-| Outer shape | The print solid; an inside test, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism` (2), `revolved` and `loft` (3), imported mesh (4) |
+| Outer shape | The print solid or stock parts; an inside test, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism` and `tube` (2), `revolved`, `loft`, and `sheet_box` (3), imported mesh (4) |
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6); its limits; what it needs from its mount; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
@@ -194,7 +196,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | Room model | The path from the speaker's radiation to the listening position (section 5.10). | `free` (1), `simple` (3) |
 | DSP block | Its frequency response, its sample process function, its parameters. | biquad, crossover, delay, gain, limiter (1 to 2), FIR, dynamic bass (3) |
 | Correction feature | Blocks with reasons, from responses, limits, and target, under the keep-only-if-it-helps rule. | C1 to C10 (section 8) |
-| Catalog kind | Record shape, sourcing rule, price. | driver, amplifier, DSP device, material (1 to 2), exciter, panel material (3) |
+| Catalog kind | Record shape, sourcing rule, tier, price. | driver, amplifier, DSP device, print material, stock material (1 to 2), exciter, panel material (3) |
 | Exporter and importer | Files out and files in. | STL, filter text (1), 3MF (2), FIR WAV (3), measurements and hardware formats (4) |
 | Metric and target | A number computed from results, and its threshold. | section 11 |
 | Optimizer strategy | A search over a declared set of variables. | section 11.3 |
@@ -495,6 +497,8 @@ A parametric model of the cabinet. The user edits numbers and drags handles, and
 
 **Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. Level 4 adds an imported mesh. The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
 
+**Build method.** Each part of the cabinet is either printed or a stock part from `catalog/stock/`, such as a length of PVC pipe or a cut sheet. A hybrid build combines them: for example, a stock pipe for the body with printed end caps, baffle, and port. The outer-shape member `tube` (Level 2) is a stock pipe or tube cut to length, whose diameter and wall come from its stock record. The member `sheet_box` (Level 3) is a box cut from sheet stock, with a cut list. Printed parts and stock parts both feed the air network, the voxel grid, the cost, and the export: print files for printed parts, and a cut list for stock parts.
+
 **Mounts.** A mount names one of the outer shape's surfaces and a position on it. The outer shape returns the mount's position and outward direction, so a radiator can sit on any surface and face any way: front, back, side, top, or along a curve.
 
 **Inside.** Section 4.1 shows the Level 1 enclosure. From Level 2 the same fields describe ports, extra chambers, and internal ducts:
@@ -595,6 +599,8 @@ Rules:
 
 - A `sourced` record is written with the manufacturer's data sheet open in the same session. Copy the numbers as printed and convert them to SI. Do not fill a field from memory, from a forum, or from another tool's database. If a field is not printed, leave it out and let the engine warn.
 - If you cannot open the source, do not add the driver. Note the gap in `STATUS.md`.
+- Every real record has a `tier`: `budget` or `reference`. Budget parts are the point of the lab: inexpensive drivers, full-range units, amplifier boards, and DSP options sold new today. Reference parts are a small set of well-regarded quality components, kept so that designs can be compared with a conventional build. When choosing what to add, budget parts come first.
+- Only new, off-the-shelf parts with published data. Used, salvaged, or self-measured parts are not catalog records.
 - `synthetic` records exist for checks and demos. Their ids start with `test-`. The interface shows them as "Test driver, not a real product". The optimizer never proposes them.
 - Prices go stale. Show `read_on` beside every price, and warn when a price is more than 90 days old. Prices are in USD.
 
@@ -604,6 +610,8 @@ Exciters, from Level 3, are records like drivers. They hold what an exciter's da
 
 `catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram and the printer's build volume and flow rate come from the owner.
 
+`catalog/stock/` holds off-the-shelf building materials, one record each, with the same sourcing rules as drivers: a `tier` (`budget` such as PVC pipe, cardboard concrete-form tube, foam board, coroplast, or plant pots; `reference` such as MDF and cabinet plywood), the published sizes it is sold in, its price per piece, per meter, or per sheet with a `read_on` date, its density, and any published stiffness (`E`) and loss factor. A field the seller or maker does not publish stays empty, and the engine says which results depend on it.
+
 ### 9.2 Cost
 
 ```
@@ -612,11 +620,16 @@ cabinet             = print_mass_kg * price_per_kg
 print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
 print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600
 panels              = printed like the cabinet, or bought sheet area * price_per_m2
+stock parts         = whole pieces bought: pipe by the length sold, sheets by the sheet, including offcuts
 cost of the system  = (2 if stereo_pair else 1) * cost of one speaker + electronics
 electronics         = the amplifiers and DSP devices needed to give every radiator its own channel
 ```
 
 Cost is shown beside performance at all times. Every figure in it traces to a catalog record with a source and a date.
+
+**Cheap against reference.** Any design can be paired with its reference build: the same layout with the closest `reference` drivers and amplifier, and a conventional MDF or plywood box of the same internal volume. The lab shows both scores and both costs side by side, so the owner sees how close the cheap build gets and what the difference costs.
+
+**Where the money matters.** For each part of a design (each driver, the amplifier, the DSP, and the cabinet material), the lab finds the next catalog option up and the next one down. It reports the change in score and the change in cost for each swap, sorted by score gained per dollar. That shows which single part limits the sound and what it would cost to fix it.
 
 ## 10. Listen mode
 
@@ -711,14 +724,14 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 **Level 2, a two-way vented speaker from real parts.**
 
 - A: several radiators per design; two designs side by side.
-- B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data; sourced amplifiers and DSP devices; cost with electronics and stereo pairs; price dates shown.
+- B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data, at least nine of them `budget` and at least three `reference`; sourced `budget` amplifier boards and DSP options and one `reference` amplifier; stock materials (PVC pipe, cardboard tube, foam board, MDF, plywood); cost with electronics, stock parts, and stereo pairs; price dates shown.
 - C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
-- E: outer shapes with rounded and chamfered edges, a sloped baffle, and `prism`; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
+- E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, and `tube` with printed end caps (a hybrid build); round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
 - F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter. CHK-DSP-2.
 - G: C3 and C4; EQ per radiator and for the whole speaker.
 - H: all radiators playing; A/B between two designs at matched level; live limit indicators.
-- I: optimizer over continuous variables for chosen drivers; cost-against-quality plot.
+- I: optimizer over continuous variables for chosen drivers; cost-against-quality plot; cost beside every score; the cheap-against-reference comparison of section 9.2.
 - End to end, CHK-E2E-2: the example design `two-way-vented` passes the same sequence as CHK-E2E-1, and its three enclosure models agree within 1.5 dB below 200 Hz.
 
 **Level 3, novel geometry and advanced correction.**
@@ -727,11 +740,11 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - B: exciters and panel materials; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing.
-- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
+- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved`, `loft`, and `sheet_box` outer shapes with cut lists; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.
 - H: audible limit behavior and the room estimate in the virtual speaker.
-- I: optimizer chooses drivers from the catalog as well as geometry and DSP; finalists verified with `fdtd`; designs with a room scored on the in-room response.
+- I: optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
 - End to end, CHK-E2E-3: the example design `folded-line` runs in all three enclosure models, and the report lists what each model ignored. The example design `rear-panel`, a rear-facing DML panel on an outer shape that is not a box, runs with `exterior` radiation and the `simple` room, and its in-room response differs from its direct response.
 
 **Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, imported meshes as outer shapes, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.
@@ -800,7 +813,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 
 Say so in the interface wherever it matters.
 
-- Cabinet wall vibration. Printed walls flex. Until this is modeled, the builder enforces minimum wall thickness and offers bracing.
+- Cabinet wall vibration. Printed walls flex, and cheap stock materials such as cardboard and foam board flex more. Until this is modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
 - DML panels until Level 3. After that, a panel's result still depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
@@ -825,5 +838,8 @@ Say so in the interface wherever it matters.
 | Tuning | `f_b` | The frequency at which a port takes over from the cone. |
 | Crossover | Digital isolated crossover | The split of the signal between radiators, done digitally, one channel per radiator. |
 | Correction | Auto EQ and the features of section 8 | Digital processing that improves the response within the hardware's limits. |
+| Budget part, reference part | `tier` | A budget part is the cheap option the lab is built around. A reference part is a quality component kept for comparison. |
+| Stock material | `catalog/stock/` | An off-the-shelf building material such as PVC pipe, a cardboard tube, foam board, or plywood. |
+| Hybrid build | Build method | A cabinet that combines stock parts with printed parts. |
 | Quick, Detailed, Full 3D | `lumped`, `waveguide`, `fdtd` | The three enclosure models, from fastest to most complete. |
 | Thiele–Small parameters | `fs_hz`, `qes`, `qms`, `qts`, `vas_m3`, `re_ohm`, `le_h`, `sd_m2`, `bl`, `mms`, `cms`, `rms` | The published numbers that describe a driver: resonance frequency, electrical, mechanical, and total Q, equivalent air volume, coil resistance and inductance, cone area, force factor, moving mass, suspension compliance, mechanical resistance. |
