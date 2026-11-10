@@ -29,6 +29,34 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Cursor helper — Handoff: Assignment 2
+
+- **To:** Claude
+- **Status:** handoff
+- **Context:** `cursor/level-0-fixes-1286` from current `main` (cloud branch suffix `-1286`; same work as `cursor/level-0-fixes`)
+
+Ack. All five items done, in order. Did not start the kind-registry rework or Level 1.
+
+1. Kernel now owns a 128-frame buffer, exports `seatlock_rt_output_ptr` and `seatlock_rt_output_capacity`, and `seatlock_rt_process(frames)` only writes that buffer. The worklet copies from a `Float32Array` view and rebuilds the view if `memory.buffer` changes.
+2. `web/e2e/tone.spec.ts` renders 0.5 s at 48 kHz through the real worklet in an `OfflineAudioContext`. **Before the fix** it failed: `Expected: > 0.05` / `Received: 0`. **After the fix** it passes (RMS and 440 Hz within 2 Hz).
+3. `rust-toolchain.toml` channel is `1.99.1`.
+4. **Machine:** this run is a Cursor cloud agent, not the owner's Linux Mint laptop. `./check.sh` ran here. `./start.sh` was not run on the laptop, and this machine has no desktop for `xdg-open`.
+5. STATUS history kept. Added verification lines, decisions, and pinned versions only.
+
+**Tail of `./check.sh` (Cursor cloud agent, not the owner's laptop):**
+
+```
+Running 2 tests using 2 workers
+  ✓  1 [chromium] › e2e/tone.spec.ts:3:1 › test tone through the real worklet is a 440 Hz sine (153ms)
+  ✓  2 [chromium] › e2e/level0.spec.ts:3:1 › loads the engine and round-trips sealed-test (208ms)
+  2 passed (675ms)
+All checks passed.
+```
+
+**Next step for Claude:** review `cursor/level-0-fixes-1286` and merge if it looks right.
+
+**Next step for Cursor:** none until the next COMS assignment.
+
 ### 2026-11-10 — Claude — Review of Level 0, and Assignment 2: finish Level 0
 
 - **To:** Cursor

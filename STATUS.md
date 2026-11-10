@@ -6,8 +6,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Where things stand
 
-- **Level 0 is merged into `main` but not finished.** The layout of README section 3.1, the engine in a worker, design load and save, `./start.sh`, and `./check.sh` exist, and `./check.sh` passed in Cursor's environment.
-- **Open Level 0 items** (Assignment 2 in `COMS.md`): the test tone is silent because the worklet passes a JavaScript array where the kernel expects a pointer into its memory, and no check covers audio; `rust-toolchain.toml` says `stable` instead of an exact version; `./start.sh` has not been run on the owner's laptop.
+- **Level 0 scaffold is on `main`, and Assignment 2 is on `cursor/level-0-fixes-1286`.** The layout, worker, design load and save, and scripts exist. The test tone now comes from a fixed buffer inside the real-time kernel, and an offline audio check covers it. Graphs and full listen mode are still Level 1.
+- **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
@@ -24,7 +24,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Finish Level 0: Assignment 2 in `COMS.md`.
+1. Claude reviews Assignment 2 on `cursor/level-0-fixes-1286`.
 2. Then **Level 1** on all tracks together, per README section 12 and the task file Claude writes.
 
 ## What has been verified
@@ -32,7 +32,9 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **`./check.sh` on 2026-11-10 (Cursor cloud, UTC):** rustfmt, clippy, `cargo test --workspace`, ts-rs export test, release wasm builds for `seatlock-wasm` and `seatlock-rt`, TypeScript check, vitest, production build, Playwright headless test (engine version + example design load).
 - Design `sealed-test` round-trips through `design.check` in native tests; unknown radiator kinds warn and still round-trip (CHK-EXT-2 early).
 - Claude reran the native tests and clippy on the merged code in its own workspace on 2026-11-10: they pass. Claude cannot build WebAssembly there.
-- Claude's review of Level 0 on 2026-11-10 found the silent test tone described above. The Playwright test checks the engine and the design round-trip only.
+- Claude's review of Level 0 on 2026-11-10 found the silent test tone. The Playwright test at that time checked the engine and the design round-trip only.
+- 2026-11-10, before the tone fix, on a Cursor cloud agent: the new worklet check rendered 0.5 s and measured RMS 0.
+- 2026-11-10, after the fix, same machine: that check passed (RMS above 0.05, dominant frequency within 2 Hz of 440 Hz). `./check.sh` was run here, not on the owner's laptop.
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
@@ -45,12 +47,14 @@ One line per decision: date, decision, reason. Decisions that define the product
 
 - 2026-11-09: The starting decisions are in README section 3 with their reasons.
 - 2026-11-10: Both WebAssembly modules use a plain C ABI, and `wasm-bindgen` is not used. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version. README section 3 was updated to match.
+- 2026-11-10: The real-time kernel writes the test tone into a fixed 128-frame buffer and exports its address. Reason: a JavaScript array cannot be used as a wasm pointer, so the earlier call produced silence.
+- 2026-11-10: `rust-toolchain.toml` pins Rust 1.99.1. Reason: README section 3 says to pin the version used to scaffold.
 - 2026-11-10: Vite worker bundles use ES module format. Reason: the engine Web Worker must run in Chrome headless and in production preview; IIFE workers hung with a stale `DataView` on wasm memory.
 - 2026-11-10: `web/` uses vitest 3.x instead of 4.x. Reason: npm install failed on vitest 4 with this Node/npm combination in the cloud check environment.
 
 ## Tool versions
 
-- Rust **1.99.1** (`rust-toolchain.toml`: stable, `rustfmt`, `clippy`, target `wasm32-unknown-unknown`).
+- Rust **1.99.1** pinned in `rust-toolchain.toml` (components `rustfmt` and `clippy`, target `wasm32-unknown-unknown`).
 - Node **22.23.4** (engine requirement >= 22.12).
 - web: **vite 7.3.8**, **react 19.3.1**, **typescript 5.9.3**, **vitest 3.2.7**, **@playwright/test 1.65.0** (see `web/package-lock.json`).
 - ts-rs **10.1.0** (typescript feature on `seatlock-core` only, not wasm builds).
