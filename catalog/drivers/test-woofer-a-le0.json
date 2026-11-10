@@ -1,0 +1,28 @@
+{
+  "id": "test-woofer-a-le0",
+  "status": "synthetic",
+  "maker": "Test",
+  "model": "Woofer A, no inductance",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 50.0,
+    "qes": 0.45,
+    "qms": 4.0,
+    "vas_m3": 0.01,
+    "re_ohm": 6.0,
+    "le_h": 0.0,
+    "sd_m2": 0.0085,
+    "xmax_m": 0.004,
+    "pe_w": 30.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.118,
+    "outer_diameter_m": 0.146,
+    "bolt_circle_m": 0.132,
+    "bolt_count": 4,
+    "depth_m": 0.06
+  },
+  "response_file": null,
+  "source": null,
+  "price": null
+}

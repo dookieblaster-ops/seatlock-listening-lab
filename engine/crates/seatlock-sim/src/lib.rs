@@ -8,7 +8,7 @@ use seatlock_core::catalog;
 use seatlock_core::design::DesignFile;
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
-use seatlock_core::registry::{DspBlock, Registry};
+use seatlock_core::registry::{DspBlock, OuterShape, Registry};
 use seatlock_dsp::{delay_block, gain_block, polarity_block};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -129,7 +129,7 @@ pub fn simulate(
     if request.space == "half" || request.space == "full" || request.space == "step" {
     } else {
         issues.push(Issue::warning(
-            "unsupported_kind",
+            "unsupported_request",
             format!(
                 "Unknown radiation space \"{}\". Using half space.",
                 request.space
@@ -225,7 +225,11 @@ pub fn simulate(
     let enclosure = match registry.create_enclosure(&request.enclosure, &Map::new()) {
         Ok(model) => model,
         Err(err) => {
-            issues.push(Issue::error("unsupported_kind", err, "request.enclosure"));
+            issues.push(Issue::error(
+                "unsupported_request",
+                err,
+                "request.enclosure",
+            ));
             return fail(issues, fidelity);
         }
     };
@@ -233,7 +237,11 @@ pub fn simulate(
     let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
         Ok(model) => model,
         Err(err) => {
-            issues.push(Issue::error("unsupported_kind", err, "request.radiation"));
+            issues.push(Issue::error(
+                "unsupported_request",
+                err,
+                "request.radiation",
+            ));
             return fail(issues, fidelity);
         }
     };
@@ -474,6 +482,103 @@ fn multiply_into(total: &mut [Complex64], factor: &[Complex64]) {
     for (slot, value) in total.iter_mut().zip(factor) {
         *slot *= *value;
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MountView {
+    pub surface: String,
+    pub at_m: [f64; 2],
+    pub position_m: [f64; 3],
+    pub outward: [f64; 3],
+    pub cutout_diameter_m: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GeometryReport {
+    pub width_m: f64,
+    pub height_m: f64,
+    pub depth_m: f64,
+    pub wall_m: f64,
+    pub interior_volume_m3: f64,
+    pub solid_volume_m3: f64,
+    pub voxel_air_volume_m3: f64,
+    pub print_mass_kg: f64,
+    pub cost_note: String,
+    pub mounts: Vec<MountView>,
+}
+
+pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
+    let outer = &design.speaker.enclosure.outer;
+    if outer.kind != "box" {
+        return Err(format!("geometry report needs a box, found {}", outer.kind));
+    }
+    let shape = seatlock_geom::BoxShape {
+        width_m: outer
+            .fields
+            .get("width_m")
+            .and_then(|v| v.as_f64())
+            .ok_or("missing width_m")?,
+        height_m: outer
+            .fields
+            .get("height_m")
+            .and_then(|v| v.as_f64())
+            .ok_or("missing height_m")?,
+        depth_m: outer
+            .fields
+            .get("depth_m")
+            .and_then(|v| v.as_f64())
+            .ok_or("missing depth_m")?,
+        wall_m: outer
+            .fields
+            .get("wall_m")
+            .and_then(|v| v.as_f64())
+            .ok_or("missing wall_m")?,
+    };
+    let mut cutout_area = 0.0;
+    let mut mounts = Vec::new();
+    for mount in &design.speaker.enclosure.mounts {
+        let pose = shape.mount_pose(&mount.surface, mount.at_m)?;
+        let cutout = design
+            .speaker
+            .radiators
+            .iter()
+            .find(|radiator| {
+                radiator.fields.get("mount").and_then(|v| v.as_str()) == Some(mount.id.as_str())
+            })
+            .and_then(|radiator| radiator.fields.get("driver_id").and_then(|v| v.as_str()))
+            .and_then(catalog::driver)
+            .and_then(|driver| {
+                driver
+                    .pointer("/mounting/cutout_diameter_m")
+                    .and_then(|v| v.as_f64())
+            })
+            .unwrap_or(0.0);
+        cutout_area += std::f64::consts::PI * (cutout * 0.5).powi(2);
+        mounts.push(MountView {
+            surface: mount.surface.clone(),
+            at_m: mount.at_m,
+            position_m: pose.position_m,
+            outward: pose.outward,
+            cutout_diameter_m: cutout,
+        });
+    }
+    let solid = shape.solid_volume_m3(cutout_area)?;
+    let density = catalog::material(&design.build.material)
+        .and_then(|record| record.get("density_kg_m3").and_then(|v| v.as_f64()))
+        .unwrap_or(0.0);
+    let print_mass_kg = solid * density * design.build.infill_fraction;
+    Ok(GeometryReport {
+        width_m: shape.width_m,
+        height_m: shape.height_m,
+        depth_m: shape.depth_m,
+        wall_m: shape.wall_m,
+        interior_volume_m3: shape.interior_volume_m3()?,
+        solid_volume_m3: solid,
+        voxel_air_volume_m3: shape.voxel_air_volume_m3(0.005)?,
+        print_mass_kg,
+        cost_note: catalog::cost_note(design),
+        mounts,
+    })
 }
 
 pub fn simulate_json(text: &str, request_json: &str, registry: &Registry) -> Result<Value, String> {

@@ -6,13 +6,14 @@ type Props = {
   unit: string;
   testId: string;
   fidelity: string;
+  overlay?: number[];
 };
 
-export function Graph({ title, explanation, freqs, values, unit, testId, fidelity }: Props) {
+export function Graph({ title, explanation, freqs, values, unit, testId, fidelity, overlay }: Props) {
   const width = 640;
   const height = 220;
   const pad = 40;
-  const finite = values.filter((value) => Number.isFinite(value));
+  const finite = [...values, ...(overlay ?? [])].filter((value) => Number.isFinite(value));
   const ymin = finite.length ? Math.min(...finite) : 0;
   const ymax = finite.length ? Math.max(...finite) : 1;
   const span = Math.max(ymax - ymin, 1e-6);
@@ -22,6 +23,18 @@ export function Graph({ title, explanation, freqs, values, unit, testId, fidelit
     .map((freq, index) => {
       const value = values[index];
       if (freq < 20 || freq > 20_000 || !Number.isFinite(value)) {
+        return null;
+      }
+      const x = pad + ((Math.log(freq) - logMin) / (logMax - logMin)) * (width - pad * 2);
+      const y = height - pad - ((value - ymin) / span) * (height - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .filter((point): point is string => point !== null)
+    .join(" ");
+  const overlayPoints = (overlay ?? [])
+    .map((value, index) => {
+      const freq = freqs[index];
+      if (!freq || freq < 20 || freq > 20_000 || !Number.isFinite(value)) {
         return null;
       }
       const x = pad + ((Math.log(freq) - logMin) / (logMax - logMin)) * (width - pad * 2);
@@ -40,6 +53,7 @@ export function Graph({ title, explanation, freqs, values, unit, testId, fidelit
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title} data-testid={testId}>
         <rect x="0" y="0" width={width} height={height} fill="#fffaf4" />
         <polyline fill="none" stroke="#2f5d50" strokeWidth="2" points={points} />
+        {overlayPoints && <polyline fill="none" stroke="#8a5a2a" strokeWidth="2" points={overlayPoints} />}
         <text x={pad} y={18} fontSize="12">
           {ymax.toFixed(1)}
         </text>

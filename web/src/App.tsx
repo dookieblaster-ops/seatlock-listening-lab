@@ -1,8 +1,10 @@
 import { useRef, useState } from "react";
 
+import { CabinetView } from "./CabinetView";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
-import { useEngine, type SimulateResult } from "./useEngine";
+import { buildCabinetMesh, meshToStl, type SolidMesh } from "./printSolid";
+import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
 import { useTestTone } from "./useTestTone";
 import "./App.css";
 
@@ -49,7 +51,7 @@ function fidelityText(label: SimulateResult["fidelity"]) {
 }
 
 export default function App() {
-  const { version, ready, error: engineError, designCheck, simulate } = useEngine();
+  const { version, ready, error: engineError, designCheck, simulate, geometry } = useEngine();
   const tone = useTestTone();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
@@ -61,6 +63,11 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [sim, setSim] = useState<SimulateResult | null>(null);
   const [simIssues, setSimIssues] = useState<SimulateResult["issues"]>([]);
+  const [geom, setGeom] = useState<GeometryReport | null>(null);
+  const [solid, setSolid] = useState<SolidMesh | null>(null);
+  const [fdtdNote, setFdtdNote] = useState("The full 3D air model has not been run.");
+  const [fdtdCurve, setFdtdCurve] = useState<{ freq: number[]; mag: number[]; lumped: number[] } | null>(null);
+  const fdtdWorker = useRef<Worker | null>(null);
 
   async function publish(next: Design, label: string) {
     const rev = ++revision.current;
@@ -87,6 +94,16 @@ export default function App() {
     }
     setSim(result);
     setSimIssues(result.issues);
+    const report = await geometry(checked.canonical_json);
+    if (rev !== revision.current || report.error) {
+      return;
+    }
+    setGeom(report);
+    const mesh = await buildCabinetMesh(report);
+    if (rev !== revision.current) {
+      return;
+    }
+    setSolid(mesh);
   }
 
   async function onOpenFile(file: File) {
@@ -375,13 +392,127 @@ export default function App() {
         </section>
       )}
 
+      {geom && solid && (
+        <section className="panel">
+          <h2>Cabinet</h2>
+          <p>
+            Air volume <span data-testid="formula-air">{geom.interior_volume_m3.toExponential(6)}</span> m³.
+            Print solid <span data-testid="solid-volume">{solid.solidVolumeM3.toExponential(6)}</span> m³ implies{" "}
+            <span data-testid="print-air">
+              {(
+                geom.width_m * geom.depth_m * geom.height_m -
+                solid.solidVolumeM3 -
+                geom.mounts.reduce(
+                  (sum, mount) => sum + Math.PI * (mount.cutout_diameter_m / 2) ** 2 * geom.wall_m,
+                  0,
+                )
+              ).toExponential(6)}
+            </span>{" "}
+            m³. 5 mm cells <span data-testid="voxel-air">{geom.voxel_air_volume_m3.toExponential(6)}</span> m³.
+          </p>
+          <p data-testid="cost-note">
+            Price: {geom.cost_note}. Cabinet mass {geom.print_mass_kg.toFixed(3)} kg if the price were known.
+          </p>
+          <CabinetView
+            positions={solid.positions}
+            indices={solid.indices}
+            driver={geom.mounts[0]?.position_m ?? null}
+          />
+          <div className="row">
+            <button
+              type="button"
+              onClick={() => {
+                const bytes = meshToStl(solid.positions, solid.indices);
+                const blob = new Blob([bytes], { type: "model/stl" });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = "cabinet.stl";
+                anchor.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Export print file
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                fdtdWorker.current?.terminate();
+                const worker = new Worker(new URL("./fdtdWorker.ts", import.meta.url), { type: "module" });
+                fdtdWorker.current = worker;
+                setFdtdNote("Solving the air inside the box…");
+                const mount = geom.mounts[0];
+                worker.onmessage = (event) => {
+                  if (event.data.type === "done") {
+                    const curve = JSON.parse(event.data.json) as {
+                      elapsed_ms: number;
+                      error?: string;
+                      frequencies_hz?: number[];
+                      real?: number[];
+                      imag?: number[];
+                    };
+                    setFdtdNote(
+                      curve.error
+                        ? curve.error
+                        : `Full 3D finished in ${(curve.elapsed_ms / 1000).toFixed(1)} s.`,
+                    );
+                    if (curve.frequencies_hz && curve.real && curve.imag) {
+                      const compliance = geom.interior_volume_m3 / (1.204 * 343.2 * 343.2);
+                      setFdtdCurve({
+                        freq: curve.frequencies_hz,
+                        mag: curve.real.map((re, index) => Math.hypot(re, curve.imag?.[index] ?? 0)),
+                        lumped: curve.frequencies_hz.map((freq) => 1 / (2 * Math.PI * freq * compliance)),
+                      });
+                    }
+                  }
+                };
+                worker.postMessage({
+                  depth_m: geom.depth_m - 2 * geom.wall_m,
+                  width_m: geom.width_m - 2 * geom.wall_m,
+                  height_m: geom.height_m - 2 * geom.wall_m,
+                  dx: 0.01,
+                  center_y_m: (mount?.position_m[0] ?? 0) - geom.wall_m,
+                  center_z_m: (mount?.position_m[2] ?? 0) - geom.wall_m,
+                  radius_m: (mount?.cutout_diameter_m ?? 0.04) / 2,
+                });
+              }}
+            >
+              Run full 3D
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                fdtdWorker.current?.terminate();
+                fdtdWorker.current = null;
+                setFdtdNote("Full 3D canceled.");
+              }}
+            >
+              Cancel full 3D
+            </button>
+          </div>
+          <p>{fdtdNote}</p>
+          {fdtdCurve && (
+            <Graph
+              title="Air load"
+              explanation="How the air in the box pushes back. Green is the quick model, brown is the full 3D model."
+              freqs={fdtdCurve.freq}
+              values={fdtdCurve.lumped}
+              overlay={fdtdCurve.mag}
+              unit="Pa·s/m³"
+              testId="impedance-3d-graph"
+              fidelity="Quick sealed box and full 3D, rigid walls."
+            />
+          )}
+        </section>
+      )}
+
       {curve && sim && (
         <section className="panel">
           <h2>Results</h2>
           <p>
             Level at 40 Hz: <strong data-testid="spl-40hz">{spl40.toFixed(2)}</strong> dB SPL
           </p>
-          <p data-testid="cost-note">Price: {sim.cost_note}</p>
+          <p>Price: {sim.cost_note}</p>
           {simIssues.length > 0 && (
             <ul className="issues">
               {simIssues.map((issue) => (

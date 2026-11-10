@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "name": "chk-box-published",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "box",
+        "width_m": 0.27,
+        "height_m": 0.22,
+        "depth_m": 0.12,
+        "wall_m": 0.01,
+        "edge_radius_m": 0.0
+      },
+      "chambers": [],
+      "ducts": [],
+      "mounts": [],
+      "solids": []
+    },
+    "radiators": [
+      { "kind": "cone", "driver_id": "test-woofer-a", "mount": "m1" }
+    ],
+    "listening": { "distance_m": 1.0 }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [],
+    "correction": {
+      "enabled": false,
+      "protected_band_hz": [3000.0, 5000.0],
+      "max_filters": 0
+    }
+  },
+  "electronics": { "amplifiers": ["test-amp-a"], "dsp_device": null },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": false,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}
