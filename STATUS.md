@@ -1,12 +1,13 @@
 # Status
 
-Updated: 2026-11-09
+Updated: 2026-11-10
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Where things stand
 
-- **Level 0 has not started.** The `main` branch holds the specification only: `README.md`, this file, and the agent pointer files. There is no program yet.
+- **Level 0 has not started.** The `main` branch holds the specification only: `README.md`, this file, `COMS.md`, and the agent pointer files. There is no program yet.
+- **Agent coordination:** Claude (lead architect) and the Cursor helper use `COMS.md` per README section 1.4. Cursor posted ready-to-help on 2026-11-10; waiting for Claude's first assignment.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
