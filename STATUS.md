@@ -6,7 +6,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Where things stand
 
-- **Level 0 is on `main`, including Assignment 2, merged by Claude on 2026-11-10.** The layout, worker, design load and save, and scripts exist. The test tone now comes from a fixed buffer inside the real-time kernel, and an offline audio check covers it. Graphs and full listen mode are still Level 1.
+- **Level 0 is on `main`, including Assignment 2, merged by Claude on 2026-11-10.** The layout, worker, design load and save, and scripts exist. The test tone now comes from a fixed buffer inside the real-time kernel, and an offline audio check covers it.
+- **Level 1 milestone M1** is on `cursor/level-1-m1-1286` (Assignment 3). One sealed driver can be simulated and graphed. Cabinet drawing, the 3D solver, correction, and full listening are still later milestones.
 - **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
@@ -25,7 +26,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Level 1, milestone M1 of `tasks/level-1.md` (Assignment 3 in `COMS.md`). Milestones M2 to M4 follow, one assignment each, after Claude reviews the one before.
+1. Claude reviews Level 1 milestone M1 on `cursor/level-1-m1-1286`. Milestones M2 to M4 follow, one assignment each, after that review.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -36,6 +37,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - Claude's review of Level 0 on 2026-11-10 found the silent test tone. The Playwright test at that time checked the engine and the design round-trip only.
 - 2026-11-10, before the tone fix, on a Cursor cloud agent: the new worklet check rendered 0.5 s and measured RMS 0.
 - 2026-11-10, after the fix, same machine: that check passed (RMS above 0.05, dominant frequency within 2 Hz of 440 Hz). `./check.sh` was run here, not on the owner's laptop.
+- 2026-11-10, Level 1 M1 on a Cursor cloud agent: CHK-DRV-1, CHK-DRV-2, CHK-BOX-1, CHK-BOX-2, CHK-DSP-1, CHK-DSP-3, CHK-EXT-1, and CHK-EXT-2 pass. `simulate` of sealed-test takes about 1 ms natively. WebAssembly has no clock here, so the engine reports 0 ms in the browser; the native timing is the one recorded.
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
@@ -53,6 +55,9 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: Level 1 is built in four milestones (M1 to M4 in `tasks/level-1.md`), each reviewed before the next. Reason: Level 1 is too large to review well in one piece, and each milestone still connects every track.
 - 2026-11-10: Vite worker bundles use ES module format. Reason: the engine Web Worker must run in Chrome headless and in production preview; IIFE workers hung with a stale `DataView` on wasm memory.
 - 2026-11-10: `web/` uses vitest 3.x instead of 4.x. Reason: npm install failed on vitest 4 with this Node/npm combination in the cloud check environment.
+- 2026-11-10: Graphs are plain SVG, not a chart library. Reason: the three Level 1 curves do not need another dependency.
+- 2026-11-10: `builtin()` lives in `seatlock-sim`, not `seatlock-core`. Reason: the registry type is in core, and core cannot depend on the crates that register kinds.
+- 2026-11-10: The engine does not call `Instant::now` in WebAssembly. Reason: that call panics on `wasm32-unknown-unknown` without a JavaScript clock.
 
 ## Tool versions
 

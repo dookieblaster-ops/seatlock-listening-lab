@@ -1,10 +1,25 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 #[cfg(feature = "typescript")]
 use ts_rs::TS;
 
-/// Level 1 design file root (README section 4.1).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A part that comes in kinds: the kind string plus whatever fields that kind uses.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(TS))]
+#[cfg_attr(
+    feature = "typescript",
+    ts(export, export_to = "../../../../web/src/generated/KindPart.ts")
+)]
+pub struct KindPart {
+    pub kind: String,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub fields: Map<String, Value>,
+}
+
+/// Level 1 design file. Unknown keys on every struct are kept and written back.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -18,9 +33,12 @@ pub struct DesignFile {
     pub electronics: ElectronicsSection,
     pub build: BuildSection,
     pub target: String,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -28,12 +46,16 @@ pub struct DesignFile {
 )]
 pub struct SpeakerSection {
     pub enclosure: EnclosureSection,
-    #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub radiators: Vec<serde_json::Value>,
+    pub radiators: Vec<KindPart>,
     pub listening: ListeningSection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub room: Option<KindPart>,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -43,21 +65,23 @@ pub struct SpeakerSection {
     )
 )]
 pub struct EnclosureSection {
-    #[cfg_attr(feature = "typescript", ts(type = "Record<string, unknown>"))]
-    pub outer: serde_json::Value,
+    pub outer: KindPart,
     #[serde(default)]
     #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub chambers: Vec<serde_json::Value>,
+    pub chambers: Vec<Value>,
     #[serde(default)]
     #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub ducts: Vec<serde_json::Value>,
+    pub ducts: Vec<Value>,
     pub mounts: Vec<MountRecord>,
     #[serde(default)]
     #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub solids: Vec<serde_json::Value>,
+    pub solids: Vec<Value>,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -70,9 +94,12 @@ pub struct MountRecord {
     pub rear_into: String,
     #[serde(default)]
     pub recess_m: f64,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -83,9 +110,12 @@ pub struct MountRecord {
 )]
 pub struct ListeningSection {
     pub distance_m: f64,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -94,21 +124,22 @@ pub struct ListeningSection {
 pub struct DspSection {
     pub sample_rate_hz: u32,
     #[serde(default)]
-    #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub whole_speaker: Vec<serde_json::Value>,
+    pub whole_speaker: Vec<KindPart>,
     pub per_radiator: Vec<PerRadiatorDsp>,
     pub correction: CorrectionSettings,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
     ts(export, export_to = "../../../../web/src/generated/PerRadiatorDsp.ts")
 )]
 pub struct PerRadiatorDsp {
-    #[cfg_attr(feature = "typescript", ts(type = "Array<Record<string, unknown>>"))]
-    pub blocks: Vec<serde_json::Value>,
+    pub blocks: Vec<KindPart>,
     #[serde(default)]
     pub delay_s: f64,
     #[serde(default)]
@@ -116,10 +147,13 @@ pub struct PerRadiatorDsp {
     #[serde(default)]
     pub invert: bool,
     #[cfg_attr(feature = "typescript", ts(type = "Record<string, unknown> | null"))]
-    pub limiter: Option<serde_json::Value>,
+    pub limiter: Option<Value>,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -132,9 +166,12 @@ pub struct CorrectionSettings {
     pub enabled: bool,
     pub protected_band_hz: [f64; 2],
     pub max_filters: u32,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -146,9 +183,12 @@ pub struct CorrectionSettings {
 pub struct ElectronicsSection {
     pub amplifiers: Vec<String>,
     pub dsp_device: Option<String>,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "typescript", derive(TS))]
 #[cfg_attr(
     feature = "typescript",
@@ -160,4 +200,15 @@ pub struct BuildSection {
     pub stereo_pair: bool,
     #[serde(default)]
     pub extras_cost: f64,
+    #[serde(default, flatten)]
+    #[cfg_attr(feature = "typescript", ts(skip))]
+    pub extra: Map<String, Value>,
+}
+
+pub fn canonical_json(design: &DesignFile) -> Result<String, String> {
+    let mut text = serde_json::to_string_pretty(design).map_err(|err| err.to_string())?;
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    Ok(text)
 }

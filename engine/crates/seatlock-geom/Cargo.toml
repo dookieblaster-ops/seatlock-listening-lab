@@ -6,3 +6,4 @@ edition.workspace = true
 
 [dependencies]
 seatlock-core = { path = "../seatlock-core" }
+serde_json.workspace = true

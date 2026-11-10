@@ -3,12 +3,25 @@
 #![allow(clippy::missing_safety_doc)]
 
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
+use seatlock_sim::{builtin, simulate_json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 struct CallRequest {
     #[serde(default)]
     text: Option<String>,
+    #[serde(default)]
+    revision: u64,
+    #[serde(default)]
+    enclosure: Option<String>,
+    #[serde(default)]
+    radiation: Option<String>,
+    #[serde(default)]
+    space: Option<String>,
+    #[serde(default)]
+    voltage_v: Option<f64>,
+    #[serde(default)]
+    frequencies_hz: Option<Vec<f64>>,
 }
 
 #[derive(Serialize)]
@@ -25,6 +38,21 @@ struct DesignCheckReply {
 #[derive(Serialize)]
 struct ErrorReply {
     error: String,
+}
+
+#[derive(Serialize)]
+struct SimRequest {
+    revision: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enclosure: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    radiation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    space: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    voltage_v: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequencies_hz: Option<Vec<f64>>,
 }
 
 fn read_utf8(ptr: *const u8, len: usize) -> Result<String, String> {
@@ -53,6 +81,18 @@ fn write_reply(json: String, out_len: *mut usize) -> *mut u8 {
     ptr
 }
 
+fn parse_request(request: &str) -> CallRequest {
+    serde_json::from_str(request).unwrap_or(CallRequest {
+        text: Some(request.to_string()),
+        revision: 0,
+        enclosure: None,
+        radiation: None,
+        space: None,
+        voltage_v: None,
+        frequencies_hz: None,
+    })
+}
+
 fn dispatch(method: &str, request: &str) -> String {
     match method {
         "version" => serde_json::to_string(&VersionReply {
@@ -60,14 +100,12 @@ fn dispatch(method: &str, request: &str) -> String {
         })
         .unwrap(),
         "design.check" => {
-            let parsed: CallRequest = serde_json::from_str(request).unwrap_or(CallRequest {
-                text: Some(request.to_string()),
-            });
+            let parsed = parse_request(request);
             let text = parsed
                 .text
                 .filter(|t| !t.is_empty())
                 .unwrap_or_else(|| request.to_string());
-            match design_check(&text) {
+            match design_check(&text, &builtin()) {
                 Ok(CheckResult {
                     issues,
                     canonical_json,
@@ -76,6 +114,23 @@ fn dispatch(method: &str, request: &str) -> String {
                     canonical_json,
                 })
                 .unwrap(),
+                Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
+            }
+        }
+        "simulate" => {
+            let parsed = parse_request(request);
+            let text = parsed.text.clone().unwrap_or_default();
+            let request_value = serde_json::to_string(&SimRequest {
+                revision: parsed.revision,
+                enclosure: parsed.enclosure,
+                radiation: parsed.radiation,
+                space: parsed.space,
+                voltage_v: parsed.voltage_v,
+                frequencies_hz: parsed.frequencies_hz,
+            })
+            .unwrap();
+            match simulate_json(&text, &request_value, &builtin()) {
+                Ok(value) => value.to_string(),
                 Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
             }
         }

@@ -1,8 +1,8 @@
 use serde_json::Value;
 
+use crate::design::{canonical_json, DesignFile};
 use crate::issue::Issue;
-use crate::kinds::KindRegistry;
-use crate::DesignFile;
+use crate::registry::{Family, Registry};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckResult {
@@ -12,94 +12,111 @@ pub struct CheckResult {
 
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub fn design_check(text: &str) -> Result<CheckResult, String> {
-    let trimmed = text.trim();
-    let value: Value = serde_json::from_str(trimmed).map_err(|e| format!("Invalid JSON: {e}"))?;
+pub fn design_check(text: &str, registry: &Registry) -> Result<CheckResult, String> {
+    let value: Value =
+        serde_json::from_str(text.trim()).map_err(|err| format!("Invalid JSON: {err}"))?;
+    let design: DesignFile = match serde_json::from_value(value.clone()) {
+        Ok(design) => design,
+        Err(err) => {
+            let mut pretty =
+                serde_json::to_string_pretty(&value).unwrap_or_else(|_| value.to_string());
+            if !pretty.ends_with('\n') {
+                pretty.push('\n');
+            }
+            return Ok(CheckResult {
+                issues: vec![Issue::error(
+                    "missing_field",
+                    format!("The design file is missing something it needs: {err}"),
+                    field_from_serde(&err.to_string()),
+                )],
+                canonical_json: pretty,
+            });
+        }
+    };
 
     let mut issues = Vec::new();
-
-    if value.get("schema_version").is_none() {
-        issues.push(Issue::warning(
-            "ERR_SCHEMA",
-            "The design file is missing schema_version.",
-            "schema_version",
-        ));
+    warn_kind(
+        registry,
+        Family::OuterShape,
+        &design.speaker.enclosure.outer.kind,
+        "speaker.enclosure.outer",
+        "outer shape",
+        &mut issues,
+    );
+    for (index, radiator) in design.speaker.radiators.iter().enumerate() {
+        warn_kind(
+            registry,
+            Family::Radiator,
+            &radiator.kind,
+            &format!("speaker.radiators[{index}]"),
+            "radiator",
+            &mut issues,
+        );
     }
-
-    match serde_json::from_value::<DesignFile>(value.clone()) {
-        Ok(_) => {}
-        Err(e) => issues.push(Issue::warning(
-            "ERR_SHAPE",
-            format!("The design does not match the expected shape: {e}"),
-            "",
-        )),
+    if let Some(room) = &design.speaker.room {
+        warn_kind(
+            registry,
+            Family::RoomModel,
+            &room.kind,
+            "speaker.room",
+            "room",
+            &mut issues,
+        );
     }
-
-    let registry = KindRegistry::level0();
-    walk_kinds(&value, "", &registry, &mut issues);
-
-    let has_blocking = issues.iter().any(|i| i.code.starts_with("ERR_"));
-    let canonical_json = if has_blocking {
-        serde_json::to_string(&value).map_err(|e| e.to_string())?
-    } else {
-        trimmed.to_string()
-    };
+    for (index, block) in design.dsp.whole_speaker.iter().enumerate() {
+        warn_kind(
+            registry,
+            Family::DspBlock,
+            &block.kind,
+            &format!("dsp.whole_speaker[{index}]"),
+            "DSP block",
+            &mut issues,
+        );
+    }
+    for (chain_index, chain) in design.dsp.per_radiator.iter().enumerate() {
+        for (block_index, block) in chain.blocks.iter().enumerate() {
+            warn_kind(
+                registry,
+                Family::DspBlock,
+                &block.kind,
+                &format!("dsp.per_radiator[{chain_index}].blocks[{block_index}]"),
+                "DSP block",
+                &mut issues,
+            );
+        }
+    }
 
     Ok(CheckResult {
         issues,
-        canonical_json,
+        canonical_json: canonical_json(&design)?,
     })
 }
 
-fn walk_kinds(value: &Value, path: &str, registry: &KindRegistry, issues: &mut Vec<Issue>) {
-    match value {
-        Value::Object(map) => {
-            if let Some(kind) = map.get("kind").and_then(|k| k.as_str()) {
-                if let Some(issue) = classify_kind(path, kind, registry) {
-                    issues.push(issue);
-                }
-            }
-            for (key, child) in map {
-                let child_path = if path.is_empty() {
-                    key.clone()
-                } else {
-                    format!("{path}.{key}")
-                };
-                walk_kinds(child, &child_path, registry, issues);
-            }
-        }
-        Value::Array(items) => {
-            for (index, child) in items.iter().enumerate() {
-                let child_path = format!("{path}[{index}]");
-                walk_kinds(child, &child_path, registry, issues);
-            }
-        }
-        _ => {}
+fn warn_kind(
+    registry: &Registry,
+    family: Family,
+    kind: &str,
+    field: &str,
+    family_name: &str,
+    issues: &mut Vec<Issue>,
+) {
+    if registry.knows(family, kind) {
+        return;
     }
+    issues.push(Issue::warning(
+        "unsupported_kind",
+        format!(
+            "This build does not know the {family_name} \"{kind}\". It stays in the file and is left out of the results."
+        ),
+        field,
+    ));
 }
 
-fn classify_kind(path: &str, kind: &str, registry: &KindRegistry) -> Option<Issue> {
-    let (family, known) = if path.ends_with("enclosure.outer") || path.ends_with(".outer") {
-        ("outer shape", registry.is_known_outer_shape(kind))
-    } else if path.contains("radiators") {
-        ("radiator", registry.is_known_radiator(kind))
-    } else if path.contains("blocks") || path.contains("whole_speaker") {
-        ("DSP block", registry.is_known_dsp_block(kind))
-    } else if path.contains("room") || path.ends_with("listening") {
-        ("room", registry.is_known_room(kind))
-    } else {
-        return None;
-    };
-
-    if known {
-        None
-    } else {
-        Some(Issue::warning(
-            "WARN_UNSUPPORTED_KIND",
-            format!(
-                "This build does not simulate the {family} kind \"{kind}\" yet. The part is kept in the file, but it is left out of results."
-            ),
-            path.to_string(),
-        ))
-    }
+fn field_from_serde(message: &str) -> String {
+    message
+        .split("missing field `")
+        .nth(1)
+        .and_then(|rest| rest.split('`').next())
+        .unwrap_or("")
+        .to_string()
 }
