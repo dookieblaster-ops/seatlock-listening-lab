@@ -20,7 +20,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Level 0 from README section 12: the repository layout, `start.sh`, `check.sh`, the engine answering a call from a worker, the worklet test tone, and design file round-trip.
+1. Level 0, written up as a ready-to-run task in `tasks/level-0.md`. Level 0 from README section 12: the repository layout, `start.sh`, `check.sh`, the engine answering a call from a worker, the worklet test tone, and design file round-trip.
 2. Then Level 1, all tracks together, following the level rule.
 
 ## What has been verified
