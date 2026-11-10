@@ -4,7 +4,7 @@
 
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
 use seatlock_fdtd::{aperture_cells, run_grid};
-use seatlock_sim::{builtin, geometry_report, simulate_json};
+use seatlock_sim::{builtin, correction_plan, geometry_report, simulate_json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -125,7 +125,7 @@ fn fdtd_run(request: &str) -> Result<seatlock_fdtd::ImpedanceCurve, String> {
     let ny = (width / dx).round().max(1.0) as usize;
     let nz = (height / dx).round().max(1.0) as usize;
     let source = aperture_cells(ny, nz, dx, [center_y, center_z], radius);
-    Ok(run_grid(nx, ny, nz, dx, &source))
+    Ok(run_grid(nx, ny, nz, dx, &source, depth * width * height))
 }
 
 fn dispatch(method: &str, request: &str) -> String {
@@ -183,6 +183,17 @@ fn dispatch(method: &str, request: &str) -> String {
                 .unwrap(),
             }
         }
+        "correct" => {
+            let parsed = parse_request(request);
+            let text = parsed.text.unwrap_or_default();
+            match serde_json::from_str(&text) {
+                Ok(design) => correction_plan(&design, &builtin()).to_string(),
+                Err(error) => serde_json::to_string(&ErrorReply {
+                    error: error.to_string(),
+                })
+                .unwrap(),
+            }
+        }
         "fdtd.run" => match fdtd_run(request) {
             Ok(curve) => serde_json::json!({
                 "frequencies_hz": curve.frequencies_hz,
@@ -190,6 +201,10 @@ fn dispatch(method: &str, request: &str) -> String {
                 "imag": curve.imag,
                 "steps": curve.steps,
                 "elapsed_ms": curve.elapsed_ms,
+                "grid_volume_m3": curve.grid_volume_m3,
+                "true_volume_m3": curve.true_volume_m3,
+                "warning": curve.warning,
+                "ignored": curve.ignored,
             })
             .to_string(),
             Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),

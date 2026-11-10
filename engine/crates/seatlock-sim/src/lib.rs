@@ -9,6 +9,7 @@ use seatlock_core::design::DesignFile;
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
 use seatlock_core::registry::{DspBlock, OuterShape, Registry};
+use seatlock_correct::metrics;
 use seatlock_dsp::{delay_block, gain_block, polarity_block};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -101,6 +102,9 @@ pub struct SimulateResult {
     pub fidelity: Fidelity,
     pub cost_note: String,
     pub elapsed_ms: f64,
+    pub f6_hz: f64,
+    pub flatness_db: f64,
+    pub max_spl_metric_db: f64,
 }
 
 pub fn simulate(
@@ -185,6 +189,9 @@ pub fn simulate(
         fidelity,
         cost_note: catalog::cost_note(design),
         elapsed_ms: elapsed_ms(started),
+        f6_hz: 0.0,
+        flatness_db: 0.0,
+        max_spl_metric_db: 0.0,
     };
 
     let outer = match registry.create_outer(
@@ -366,6 +373,13 @@ pub fn simulate(
         }
     }
     let summed_spl_db: Vec<f64> = summed_pressure.iter().copied().map(spl_db).collect();
+    let mut max_spl_sum = vec![f64::MAX; freqs.len()];
+    for radiator in &radiators {
+        for (slot, level) in max_spl_sum.iter_mut().zip(&radiator.max_spl_db) {
+            *slot = slot.min(*level);
+        }
+    }
+    let (f6_hz, flatness_db, max_spl_metric_db) = metrics(&freqs, &summed_spl_db, &max_spl_sum);
 
     SimulateResult {
         revision: request.revision,
@@ -378,6 +392,9 @@ pub fn simulate(
         fidelity,
         cost_note: catalog::cost_note(design),
         elapsed_ms: elapsed_ms(started),
+        f6_hz,
+        flatness_db,
+        max_spl_metric_db,
     }
 }
 
@@ -578,6 +595,50 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         print_mass_kg,
         cost_note: catalog::cost_note(design),
         mounts,
+    })
+}
+
+pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
+    let level = catalog::target(&design.target)
+        .and_then(|target| {
+            target
+                .get("max_spl_db_min")
+                .and_then(|value| value.as_f64())
+        })
+        .unwrap_or(95.0);
+    let freqs = seatlock_core::grid::log_grid(10.0, 20_000.0, 24.0);
+    let result = simulate(
+        design,
+        &SimulateRequest {
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        registry,
+    );
+    let Some(curve) = result.radiators.first() else {
+        return serde_json::json!({ "filters": [], "message": "There is no driver to correct." });
+    };
+    let protected = design.dsp.correction.protected_band_hz;
+    let outcome = seatlock_correct::correct(
+        &freqs,
+        &curve.spl_db,
+        &curve.max_spl_db,
+        level,
+        protected,
+        design.dsp.correction.max_filters as usize,
+        design.dsp.sample_rate_hz as f64,
+    );
+    serde_json::json!({
+        "message": outcome.message,
+        "filters": outcome.filters.iter().map(|filter| serde_json::json!({
+            "kind": "biquad",
+            "type": filter.filter_type,
+            "f_hz": filter.f_hz,
+            "q": filter.q,
+            "gain_db": filter.gain_db,
+            "reason": filter.reason,
+            "correction": true
+        })).collect::<Vec<_>>(),
     })
 }
 

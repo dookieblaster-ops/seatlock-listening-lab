@@ -51,7 +51,7 @@ function fidelityText(label: SimulateResult["fidelity"]) {
 }
 
 export default function App() {
-  const { version, ready, error: engineError, designCheck, simulate, geometry } = useEngine();
+  const { version, ready, error: engineError, designCheck, simulate, geometry, correct } = useEngine();
   const tone = useTestTone();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
@@ -66,7 +66,15 @@ export default function App() {
   const [geom, setGeom] = useState<GeometryReport | null>(null);
   const [solid, setSolid] = useState<SolidMesh | null>(null);
   const [fdtdNote, setFdtdNote] = useState("The full 3D air model has not been run.");
-  const [fdtdCurve, setFdtdCurve] = useState<{ freq: number[]; mag: number[]; lumped: number[] } | null>(null);
+  const [fdtdWarning, setFdtdWarning] = useState("");
+  const [correctionNote, setCorrectionNote] = useState("");
+  const [sweep, setSweep] = useState<Array<{ volume: number; bass: number }>>([]);
+  const [fdtdCurve, setFdtdCurve] = useState<{
+    freq: number[];
+    mag: number[];
+    lumped: number[];
+    ignored: string[];
+  } | null>(null);
   const fdtdWorker = useRef<Worker | null>(null);
 
   async function publish(next: Design, label: string) {
@@ -319,6 +327,11 @@ export default function App() {
             <input type="checkbox" checked={design.dsp.correction.enabled} onChange={(event) => {
               const next = structuredClone(design);
               next.dsp.correction.enabled = event.target.checked;
+              if (!event.target.checked && next.dsp.per_radiator[0]) {
+                next.dsp.per_radiator[0].blocks = next.dsp.per_radiator[0].blocks.filter(
+                  (block) => block.correction !== true,
+                );
+              }
               void publish(next, designName);
             }} />
             Correction enabled
@@ -440,6 +453,8 @@ export default function App() {
                 fdtdWorker.current?.terminate();
                 const worker = new Worker(new URL("./fdtdWorker.ts", import.meta.url), { type: "module" });
                 fdtdWorker.current = worker;
+                setFdtdCurve(null);
+                setFdtdWarning("");
                 setFdtdNote("Solving the air inside the box…");
                 const mount = geom.mounts[0];
                 worker.onmessage = (event) => {
@@ -447,6 +462,8 @@ export default function App() {
                     const curve = JSON.parse(event.data.json) as {
                       elapsed_ms: number;
                       error?: string;
+                      warning?: string;
+                      ignored?: string[];
                       frequencies_hz?: number[];
                       real?: number[];
                       imag?: number[];
@@ -456,12 +473,14 @@ export default function App() {
                         ? curve.error
                         : `Full 3D finished in ${(curve.elapsed_ms / 1000).toFixed(1)} s.`,
                     );
+                    setFdtdWarning(curve.warning ?? "");
                     if (curve.frequencies_hz && curve.real && curve.imag) {
                       const compliance = geom.interior_volume_m3 / (1.204 * 343.2 * 343.2);
                       setFdtdCurve({
                         freq: curve.frequencies_hz,
                         mag: curve.real.map((re, index) => Math.hypot(re, curve.imag?.[index] ?? 0)),
                         lumped: curve.frequencies_hz.map((freq) => 1 / (2 * Math.PI * freq * compliance)),
+                        ignored: curve.ignored ?? [],
                       });
                     }
                   }
@@ -490,7 +509,11 @@ export default function App() {
               Cancel full 3D
             </button>
           </div>
-          <p>{fdtdNote}</p>
+          <p data-testid="fdtd-note">{fdtdNote}</p>
+          {fdtdNote.includes("unreachable") || fdtdNote.includes("RuntimeError") ? (
+            <p data-testid="fdtd-error">{fdtdNote}</p>
+          ) : null}
+          {fdtdWarning ? <p data-testid="fdtd-warning">{fdtdWarning}</p> : null}
           {fdtdCurve && (
             <Graph
               title="Air load"
@@ -500,7 +523,7 @@ export default function App() {
               overlay={fdtdCurve.mag}
               unit="Pa·s/m³"
               testId="impedance-3d-graph"
-              fidelity="Quick sealed box and full 3D, rigid walls."
+              fidelity={`Quick sealed box and full 3D, rigid walls. ${fdtdCurve.ignored.join(" ")}`}
             />
           )}
         </section>
@@ -512,6 +535,79 @@ export default function App() {
           <p>
             Level at 40 Hz: <strong data-testid="spl-40hz">{spl40.toFixed(2)}</strong> dB SPL
           </p>
+          <p data-testid="scores">
+            Bass limit {sim.f6_hz.toFixed(0)} Hz. Evenness {sim.flatness_db.toFixed(1)} dB. Maximum
+            clean level {sim.max_spl_metric_db.toFixed(0)} dB. Price: {sim.cost_note}.
+          </p>
+          <div className="row">
+            <button
+              type="button"
+              onClick={() => {
+                if (!canonical || !design) {
+                  return;
+                }
+                void (async () => {
+                  const plan = await correct(canonical);
+                  if (plan.error) {
+                    setCorrectionNote(plan.error);
+                    return;
+                  }
+                  const next = structuredClone(design);
+                  const kept = next.dsp.per_radiator[0].blocks.filter((block) => block.correction !== true);
+                  next.dsp.per_radiator[0].blocks = [...kept, ...plan.filters];
+                  next.dsp.correction.enabled = true;
+                  setCorrectionNote(plan.message);
+                  await publish(next, designName);
+                })();
+              }}
+            >
+              Apply correction
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!design) {
+                  return;
+                }
+                void (async () => {
+                  const points: Array<{ volume: number; bass: number }> = [];
+                  for (const depth of [0.1, 0.14, 0.18, 0.24, 0.32, 0.4]) {
+                    const next = structuredClone(design);
+                    next.speaker.enclosure.outer.depth_m = depth;
+                    const checked = await designCheck(JSON.stringify(next));
+                    const result = await simulate(checked.canonical_json, revision.current, grid);
+                    points.push({
+                      volume: result.interior_volume_m3 ?? 0,
+                      bass: result.f6_hz,
+                    });
+                  }
+                  setSweep(points);
+                })();
+              }}
+            >
+              Sweep box depth
+            </button>
+          </div>
+          {correctionNote && <p>{correctionNote}</p>}
+          {sweep.length > 0 && (
+            <svg data-testid="volume-sweep" viewBox="0 0 320 140" role="img" aria-label="Bass limit against box volume">
+              <text x="8" y="16" fontSize="12">
+                Bass limit against box size
+              </text>
+              <polyline
+                fill="none"
+                stroke="#2f5d50"
+                strokeWidth="2"
+                points={sweep
+                  .map((point, index) => {
+                    const x = 20 + index * 50;
+                    const y = 120 - Math.min(point.bass, 200) / 2;
+                    return `${x},${y}`;
+                  })
+                  .join(" ")}
+              />
+            </svg>
+          )}
           <p>Price: {sim.cost_note}</p>
           {simIssues.length > 0 && (
             <ul className="issues">

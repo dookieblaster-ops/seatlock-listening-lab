@@ -74,6 +74,18 @@ export function useEngine() {
     [call],
   );
 
+  const correct = useCallback(
+    async (text: string) => {
+      const json = await call({ type: "correct", text });
+      return JSON.parse(json) as {
+        message: string;
+        filters: Array<Record<string, unknown>>;
+        error?: string;
+      };
+    },
+    [call],
+  );
+
   const geometry = useCallback(
     async (text: string) => {
       const json = await call({ type: "geometry", text });
@@ -90,7 +102,7 @@ export function useEngine() {
     [call],
   );
 
-  return { version, ready, error, designCheck, simulate, geometry };
+  return { version, ready, error, designCheck, simulate, geometry, correct };
 }
 
 export type GeometryReport = {
@@ -124,5 +136,9 @@ export type SimulateResult = {
   issues: Array<{ severity: string; code: string; message: string; field: string }>;
   fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
   cost_note: string;
+  interior_volume_m3: number | null;
+  f6_hz: number;
+  flatness_db: number;
+  max_spl_metric_db: number;
   error?: string;
 };

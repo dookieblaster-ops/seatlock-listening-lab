@@ -19,6 +19,10 @@ pub struct ImpedanceCurve {
     pub imag: Vec<f64>,
     pub steps: usize,
     pub elapsed_ms: f64,
+    pub grid_volume_m3: f64,
+    pub true_volume_m3: f64,
+    pub warning: Option<String>,
+    pub ignored: Vec<String>,
 }
 
 pub fn run_cavity(cavity: &Cavity) -> ImpedanceCurve {
@@ -33,7 +37,8 @@ pub fn run_cavity(cavity: &Cavity) -> ImpedanceCurve {
             }
         }
     }
-    run_grid(nx, ny, nz, cavity.dx, &source)
+    let true_volume = cavity.size_m[0] * cavity.size_m[1] * cavity.size_m[2];
+    run_grid(nx, ny, nz, cavity.dx, &source, true_volume)
 }
 
 /// Closed box of air. Source cells sit on the low-x wall and use that face as the resistive source.
@@ -43,8 +48,9 @@ pub fn run_grid(
     nz: usize,
     dx: f64,
     source_cells: &[[usize; 3]],
+    true_volume_m3: f64,
 ) -> ImpedanceCurve {
-    let started = std::time::Instant::now();
+    let started = clock_start();
     let mut is_source = vec![false; nx * ny * nz];
     for cell in source_cells {
         if cell[0] < nx && cell[1] < ny && cell[2] < nz {
@@ -57,6 +63,7 @@ pub fn run_grid(
     let rho_c = RHO0 * C0;
 
     let mut pressure = vec![0.0_f32; nx * ny * nz];
+    let mut next = vec![0.0_f32; nx * ny * nz];
     let mut vx = vec![0.0_f32; (nx + 1) * ny * nz];
     let mut vy = vec![0.0_f32; nx * (ny + 1) * nz];
     let mut vz = vec![0.0_f32; nx * ny * (nz + 1)];
@@ -107,7 +114,6 @@ pub fn run_grid(
             }
         }
 
-        let mut next = pressure.clone();
         let mut p_sum = 0.0_f64;
         let mut u_sum = 0.0_f64;
         let mut faces = 0.0_f64;
@@ -151,7 +157,7 @@ pub fn run_grid(
                 }
             }
         }
-        pressure = next;
+        std::mem::swap(&mut pressure, &mut next);
         let aperture_p = if faces > 0.0 { p_sum / faces } else { 0.0 };
         samples_p.push(aperture_p);
         samples_u.push(u_sum);
@@ -205,13 +211,84 @@ pub fn run_grid(
         imag.push(z.1);
     }
 
+    let grid_volume_m3 = nx as f64 * ny as f64 * nz as f64 * dx * dx * dx;
+    let (warning, ignored) = volume_warning(
+        &frequencies_hz,
+        &real,
+        &imag,
+        grid_volume_m3,
+        true_volume_m3,
+        dx * (nx.max(ny).max(nz) as f64),
+    );
     ImpedanceCurve {
         frequencies_hz,
         real,
         imag,
         steps,
-        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+        elapsed_ms: elapsed_ms(started),
+        grid_volume_m3,
+        true_volume_m3,
+        warning,
+        ignored,
     }
+}
+
+fn clock_start() -> Option<std::time::Instant> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Some(std::time::Instant::now())
+    }
+}
+
+fn elapsed_ms(started: Option<std::time::Instant>) -> f64 {
+    started
+        .map(|instant| instant.elapsed().as_secs_f64() * 1000.0)
+        .unwrap_or(0.0)
+}
+
+fn volume_warning(
+    frequencies_hz: &[f64],
+    real: &[f64],
+    imag: &[f64],
+    grid_volume_m3: f64,
+    true_volume_m3: f64,
+    longest_m: f64,
+) -> (Option<String>, Vec<String>) {
+    let limit_hz = C0 / (50.0 * longest_m.max(dx_guard(longest_m)));
+    let compliance = true_volume_m3 / (RHO0 * C0 * C0);
+    let mut worst = 0.0_f64;
+    for index in 0..frequencies_hz.len() {
+        let freq = frequencies_hz[index];
+        if freq <= 0.0 || freq >= limit_hz {
+            continue;
+        }
+        let lumped = 1.0 / (2.0 * PI * freq * compliance);
+        let magnitude = (real[index] * real[index] + imag[index] * imag[index]).sqrt();
+        if lumped > 0.0 {
+            worst = worst.max((magnitude - lumped).abs() / lumped);
+        }
+    }
+    if worst > 0.03 {
+        let percent = (grid_volume_m3 - true_volume_m3).abs() / true_volume_m3 * 100.0;
+        let warning = format!(
+            "The 3D grid holds {:.3} L of air and the box holds {:.3} L, so the low-frequency result is off by {:.1}%.",
+            grid_volume_m3 * 1000.0,
+            true_volume_m3 * 1000.0,
+            worst * 100.0
+        );
+        let ignored = vec![format!("air volume on the grid differs by {percent:.1}%")];
+        (Some(warning), ignored)
+    } else {
+        (None, Vec::new())
+    }
+}
+
+fn dx_guard(longest_m: f64) -> f64 {
+    longest_m.max(1e-6)
 }
 
 fn num_complex(re: f64, im: f64) -> (f64, f64) {

@@ -179,6 +179,7 @@ dependencies = [
  "num-complex",
  "seatlock-acoustics",
  "seatlock-core",
+ "seatlock-correct",
  "seatlock-dsp",
  "seatlock-geom",
  "serde",

@@ -1,8 +1,86 @@
 use seatlock_core::constants::{C0, P_REF, RHO0};
 use seatlock_core::design_check;
 use seatlock_core::grid::log_grid;
+use seatlock_correct::{correct, filter_db};
 use seatlock_sim::{builtin, simulate, SimulateRequest};
 use std::f64::consts::PI;
+
+#[test]
+fn chk_eq_2_correction_respects_limits_and_protected_band() {
+    let design =
+        serde_json::from_str::<seatlock_core::DesignFile>(&load_fixture("chk-box-published"))
+            .unwrap();
+    let freqs = log_grid(10.0, 20_000.0, 24.0);
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            space: "half".to_string(),
+            voltage_v: 2.83,
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let curve = &result.radiators[0];
+    let outcome = correct(
+        &freqs,
+        &curve.spl_db,
+        &curve.max_spl_db,
+        95.0,
+        [3000.0, 5000.0],
+        8,
+        48_000.0,
+    );
+    for filter in &outcome.filters {
+        if filter.gain_db > 0.0 {
+            assert!(
+                filter.f_hz < 3000.0 || filter.f_hz > 5000.0,
+                "{}",
+                filter.reason
+            );
+        }
+    }
+    for freq in freqs
+        .iter()
+        .copied()
+        .filter(|freq| *freq >= 3000.0 && *freq <= 5000.0)
+    {
+        let boost: f64 = outcome
+            .filters
+            .iter()
+            .map(|filter| filter_db(filter, freq, 48_000.0))
+            .sum();
+        assert!(boost <= 0.05, "boost {boost} at {freq}");
+    }
+    let h_ref: f64 = outcome
+        .filters
+        .iter()
+        .map(|filter| filter_db(filter, 1000.0, 48_000.0))
+        .sum();
+    let spl_ref = curve.spl_db.iter().zip(&freqs).min_by(|(a, fa), (b, fb)| {
+        (*fa - 1000.0)
+            .abs()
+            .partial_cmp(&(*fb - 1000.0).abs())
+            .unwrap()
+            .then(a.partial_cmp(b).unwrap())
+    });
+    let spl_1k = curve.spl_db[freqs.iter().position(|freq| *freq >= 1000.0).unwrap()];
+    let _ = spl_ref;
+    let voltage = 2.83 * 10_f64.powf((95.0 - spl_1k - h_ref) / 20.0);
+    for (index, freq) in freqs.iter().enumerate() {
+        let gain: f64 = outcome
+            .filters
+            .iter()
+            .map(|filter| filter_db(filter, *freq, 48_000.0))
+            .sum();
+        let drive = voltage * 10_f64.powf(gain / 20.0);
+        let travel = curve.cone_travel_m[index] * (drive / 2.83);
+        let current = drive / curve.impedance_ohm[index];
+        assert!(travel <= 0.004 * 1.001, "travel {travel} at {freq}");
+        assert!(current * current * 6.0 <= 30.0 * 1.001, "heat at {freq}");
+        assert!(drive <= (200.0_f64).sqrt() * 1.001, "amp at {freq}");
+    }
+}
 
 fn load_fixture(name: &str) -> String {
     let path = format!(
