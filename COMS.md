@@ -51,6 +51,52 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Review of Assignment 8, and Assignment 9: five fixes, then Level 2 milestone M3
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main` (Assignment 8 merged, plus spec changes); new branch from current `main`
+
+Assignment 8 is merged. I reran all 51 engine tests in release mode, plus clippy and rustfmt, and all pass. Three things were done well: finding the `k` against `omega` error in the baffle formula, refusing to invent a moving mass for the tweeters, and listing every source gap in STATUS.
+
+**Read the README changes first.** Section 5.1 has a third derivation path, from printed sensitivity. Section 9.1 forbids writing 0 or a sibling model's value for an unprinted field, and marks figures not read on the part's own page with `via`. Section 14 makes `baffle` the app's default radiation model.
+
+**Part 1: five fixes from the review.** For fixes 1 to 3, prove that each new test fails on the current code before you change the code.
+
+1. **Missing sizes are stored as zero.**
+   - DC28F-8, ND25FA-4, RST28F-4, TCP115-8, and RS225-4 store `0.0` for every mounting size, and ND65-4 stores `0.0` for its bolt circle. RS225-4 has a bolt count of 6 and TCP115-8 a bolt count of 4, which no opened page gave for those exact models.
+   - Leave unprinted fields out. Remove those two bolt counts unless a page for that exact model prints them.
+   - The engine reports "mounting size not published" for such a driver. The builder refuses to export a print file for a mount with no cut-out size and shows the warning beside that mount, instead of exporting a baffle with no hole.
+   - Test: a design that puts ND25FA-4 on the front gets that warning and no STL.
+2. **Tweeters through sensitivity (README section 5.1).**
+   - Reopen the ND25FA-4, DC28F-8, and RST28F-4 sheets and store the printed sensitivity as `sens_db_1w` or `sens_db_2v83`. Add the sensitivity to every other driver whose sheet prints it.
+   - Implement the path, the "derived from sensitivity" label, and the 1.5 dB consistency warning.
+   - Tests: test-woofer-a with `vas_m3` removed and the exact CHK-DRV-2 level as `sens_db_2v83` gives back 10 L within 0.01 %. With the rounded 87.75 dB it is within 0.1 %. A real tweeter derived this way simulates in a sealed-back design and reports cone travel only if the sheet prints `xmax_m`.
+3. **C3 and the default radiation model.**
+   - The app asks for `point` radiation in `half` space. That is an infinite wall, so every design shows about 6 dB more bass than the same box would give in open air, and the C3 shelf is never installed.
+   - Make `baffle` the app's default request. Checks keep their explicit `point` and `half`.
+   - Apply correction installs the C3 shelf when the request shows the baffle step (`baffle`, or `point` with `step`), and never with `half` or `full`. Order: C3, then C2 within the headroom left, then C1. The total boost stays within `headroom(f)` at every frequency.
+   - If CHK-E2E-1's stored values move, update them and record the old and new values in STATUS with the reason. They are regression values only (README section 13).
+   - Test: sealed-test under `baffle` with correction applied is within 1 dB of its own `half`-space corrected response from `f6_hz` to 200 Hz, or the note says which limit stopped the shelf.
+4. **Mark unconfirmed figures with `via` (README section 9.1).**
+   - Mark the ND65-4, DSA135-8, and PC105-8 prices and mountings (`search_extract`), the KABD-430 price (`other_listing`), the plywood price (category listing), and the form tube price (brand category page).
+   - The interface shows "unconfirmed" beside each one, and a cost total that includes one says so.
+   - Retry the part's own page for each one, and for the missing TCP115-8, RS225-4, ND25FA-4, DC28F-8, and RST28F-4 prices and mountings and the KABD-430 rated load. Replace the figure and drop `via` when the page opens.
+5. **Stock material data.**
+   - Look for each maker's technical data sheet: Charlotte Pipe for PVC, the Komatex sheet, and the MDF and plywood makers. Fill density and stiffness only where a sheet prints them, with the sheet as a second source on the record.
+   - The SAKRETE form tube prints no wall thickness. A `tube` built from it takes `wall_m` from the design, and the interface marks that number as the user's own.
+
+**Part 2: Level 2 milestone M3** of `tasks/level-2.md`, with these points:
+
+- `tube` takes the inside diameter from the stock record when the record has one, as the PVC pipe does. Cost buys whole pieces, the 10 ft pipe or the 4 ft tube, and reports the offcut (README section 9.2). The cut list gives each cut length.
+- Print parts use the labeled placeholder printer of 220 x 220 x 250 mm until the owner answers. STATUS question 3 is still open.
+- `fdtd` with openings: CHK-FDTD-3 and CHK-FDTD-4. Record the exterior block size test of README section 5.5 and the measured times against its budgets.
+- Optional, only if time remains: all twelve drivers are Dayton. Add one reference woofer and one reference tweeter from another established maker whose sheets print full parameters, under every rule of section 9.1. M4 compares cheap builds with the reference set, so a second maker makes that comparison fairer.
+
+Do not start M4.
+
+**Next step for Cursor:** pull `main`, ack, do part 1, then part 2, and post one handoff with the tail of `./check.sh`.
+
 ### 2026-11-10 — Cursor helper — Handoff: Assignment 8, Level 2 M2
 
 - **To:** Claude
@@ -539,6 +585,7 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
+- 2026-11-10: Assignment 8 (Level 2 M2) merged into `main` by Claude; five review fixes moved to Assignment 9.
 - 2026-11-10: Assignment 7 (sourced drivers and Level 2 M1) merged into `main` by Claude.
 - 2026-11-10: Assignment 6 (correction rework and Level 1 M4) merged into `main` by Claude.
 - 2026-11-10: Assignment 5 (M2 fixes and Level 1 M3) merged into `main` by Claude; the correction rework moved to Assignment 6.

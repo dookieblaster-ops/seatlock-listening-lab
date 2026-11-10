@@ -272,7 +272,15 @@ qts = qes*qms / (qes + qms)
 
 If the source also prints `bl`, `mms`, or `cms` and one differs from the derived value by more than 10 %, keep computing from the list above and attach a warning to the driver.
 
-Some data sheets, mostly for tweeters, do not print `vas_m3`. Then derive `mms` from the first one printed, in this order: `mms_kg` as printed, or `bl_tm` through `mms = bl^2 * qes / (2*pi*fs*re)`. Then `cms = 1 / ((2*pi*fs)^2 * mms)`, and the rest as above. Record which path was used. If `xmax_m` is not printed, `max_spl` leaves cone travel out for that driver, and a warning says so beside the maximum clean level.
+Some data sheets, mostly for tweeters, do not print `vas_m3`. Then derive `mms` from the first one printed, in this order: `mms_kg` as printed, or `bl_tm` through `mms = bl^2 * qes / (2*pi*fs*re)`. Then `cms = 1 / ((2*pi*fs)^2 * mms)`, and the rest as above. If neither is printed but the sheet prints a sensitivity, derive `vas_m3` from it. Store the sensitivity as printed, in `sens_db_1w` (SPL at 1 m for 1 W) or `sens_db_2v83` (SPL at 1 m for 2.83 V), then:
+
+```
+sens_db_1w = sens_db_2v83 - 10*log10(2.83^2 / re)
+eta0       = 10^((sens_db_1w - K_half) / 10)       K_half = 10*log10(RHO0*C0 / (2*pi*P_REF^2)) = 112.16 dB
+vas        = eta0 * C0^3 * qes / (4*pi^2 * fs^3)
+```
+
+This inverts the CHK-DRV-2 formula and treats the printed figure as half-space, which is close to the large baffle makers usually measure on. It is the least reliable path, because makers often average sensitivity over a band, so the driver is labeled "derived from sensitivity". For a sealed-back driver it still fixes everything the model uses: the level, the shape from `fs` and the Q values, and cone travel through `sd`. When a sheet prints both `vas_m3` and a sensitivity, and the level computed from `vas_m3` differs from the printed sensitivity by more than 1.5 dB, keep `vas_m3` and attach a warning. Record which path was used. If `xmax_m` is not printed, `max_spl` leaves cone travel out for that driver, and a warning says so beside the maximum clean level.
 
 With voltage `V` at the terminals, and the enclosure presenting acoustic impedance `Z_ab` to the back of the cone (section 5.2):
 
@@ -599,12 +607,13 @@ One JSON file per driver in `catalog/drivers/`.
 
 Rules:
 
-- A `sourced` record is written with the manufacturer's data sheet open in the same session. Copy the numbers as printed and convert them to SI. Do not fill a field from memory, from a forum, or from another tool's database. If a field is not printed, leave it out and let the engine warn.
+- A `sourced` record is written with the manufacturer's data sheet open in the same session. Copy the numbers as printed and convert them to SI. Do not fill a field from memory, from a forum, or from another tool's database. If a field is not printed, leave it out and let the engine warn. Never write 0, or a sibling model's value, in its place: a missing size stays missing, and the builder refuses to cut a hole it does not know.
 - If you cannot open the source, do not add the driver. Note the gap in `STATUS.md`.
 - Every real record has a `tier`: `budget` or `reference`. Budget parts are the point of the lab: inexpensive drivers, full-range units, amplifier boards, and DSP options sold new today. Reference parts are a small set of well-regarded quality components, kept so that designs can be compared with a conventional build. When choosing what to add, budget parts come first.
 - Only new, off-the-shelf parts with published data. Used, salvaged, or self-measured parts are not catalog records.
 - `synthetic` records exist for checks and demos. Their ids start with `test-`. The interface shows them as "Test driver, not a real product". The optimizer never proposes them.
 - Prices go stale. Show `read_on` beside every price, and warn when a price is more than 90 days old. Prices are in USD.
+- A figure read anywhere other than the part's own page, such as a search result's extract or another product's listing, carries `"via"` naming where it came from (`"search_extract"` or `"other_listing"`). The interface shows it as unconfirmed, and a cost that includes it says so. Replace it, and drop `via`, when the part's own page opens.
 
 Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing rules. An amplifier record holds channel count, power per channel at a rated load, and price. A DSP device record holds output channels, sample rates, filter capacity, and price. The synthetic amplifier `test-amp-a` has one channel of 50 W into 4 ohm.
 
@@ -807,6 +816,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - Editing feels instant. `lumped` and `waveguide` results update within 50 ms of a change. Slower work shows progress and can be canceled. Results that no longer match the design are grayed out until they are recomputed.
 - Interface work never makes the audio glitch.
 - Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
+- The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
 - A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.
