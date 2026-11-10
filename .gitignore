@@ -1,9 +1,16 @@
-/target
+# Rust
+target/
+
+# Web
+node_modules/
+dist/
+web/src/engine-pkg/
+
+# Local and editor files
 .DS_Store
+*.local
+.env
+
+# Never commit signing keys or passwords
 *.keystore
 keystore-password.txt
-android/local.properties
-android/.gradle
-android/app/build
-android/app/src/main/jniLibs
-

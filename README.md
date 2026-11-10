@@ -1,46 +1,678 @@
 # Seatlock Listening Lab
 
-Native audio and cabinet engine for Seatlock. Version 0.1.0. The phone can open an output stream and play silence generated in Rust. It does not play the lab.
+Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a 3D-printable cabinet including its internal geometry, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build.
 
-Rust owns the engine. Kotlin owns the Android shell. The browser lab in the parent workspace is the reference the filters have to match. It is not this product. The earlier WebView APK is not this product either.
+The goal is hi-fi sound for the least money. Cheap digital processing and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. The simulator's job is to show which of those trades work before any money is spent.
 
-## Crates
+**This README is the specification. It is written for the AI coding agents that build the program.** Read all of it before your first change in a session, then read `STATUS.md`, which records what exists today, what was decided along the way, and what to do next. If your context is too small for the whole file, always read sections 1 to 4 and 12, plus the sections for the part you are working on.
 
-| Crate | Job | Allowed to speak when |
+| Sections | Read when you work on |
+| --- | --- |
+| 1 Working here, 2 Product, 3 Architecture, 4 Conventions, 12 Build plan | anything |
+| 5 Physics, 13 Checks | driver, box, waveguide, or 3D solver code |
+| 6 Cabinet builder | geometry, the 3D view, print export |
+| 7 Crossover and DSP, 10 Listen mode | filters and real-time audio |
+| 8 Correction and auto EQ | correction |
+| 9 Catalog and cost | drivers, prices, materials |
+| 11 Score, targets, optimizer | scoring and search |
+| 14 Interface | screens and wording |
+
+## 1. Working in this repository
+
+### 1.1 The owner
+
+The owner designs speakers and directs this project in plain language. The owner is not a programmer and does not read code. That shapes how you work:
+
+- **Decide technical questions yourself.** Choose libraries, structure, algorithms, and fixes without asking. Record any decision a later session would need in `STATUS.md`, one line plus the reason.
+- **Ask the owner only about the product**: what the lab should do, how good is good enough, what things cost, what hardware they own. Ask in plain language, one question at a time, and include your recommendation.
+- **Report in plain language, briefly, result first.** Say what the owner can do now that they could not do before, what is still missing, and what they need to decide. Leave out code, file names, and jargon unless asked.
+- **The owner runs one command**, `./start.sh`. Anything more complicated is yours to automate.
+- **When the owner lists problems or changes, collect them and wait for a go-ahead before editing.** They often think of more items while describing the first ones, and starting early means redoing work. Summarize the list back, then wait.
+- **Report only what you verified.** If you did not run it, say so.
+
+### 1.2 Every session
+
+1. Read this file and `STATUS.md`.
+2. Run `./check.sh`. Level 0 creates it; before that there is nothing to run. If it fails before you have changed anything, repairing it comes first.
+3. Choose work using the level rule in section 12.
+4. Work in small commits. Every commit leaves `./check.sh` passing.
+5. Before you stop, update `STATUS.md`, commit, and push.
+
+You start each session with no memory of the last one. Whatever is not in the repository is lost, so `STATUS.md` has to be true at the end of every session.
+
+### 1.3 Rules that protect the simulator
+
+A simulator is worth using only if its numbers can be trusted. These rules exist for that reason.
+
+- **Do not invent data.** Driver parameters, prices, and material properties come from a source you have open in the same session (section 9). Your own memory of a part is not a source.
+- **Do not weaken a check to make it pass.** A failing check from section 13 means the code is wrong until shown otherwise. If you conclude the check itself is wrong, prove it with an independent derivation, record the proof in `STATUS.md`, and only then change the check.
+- **Label every result with the model that produced it**, and list what that model could not represent (section 5.8).
+- **Keep physics out of the interface and the interface out of the physics** (section 3).
+- **Keep this README true.** When the owner changes what the product is, or you find the specification wrong, change the README in the same commit as the code and note it in `STATUS.md`.
+
+## 2. The product
+
+### 2.1 One design, one chain
+
+Everything the lab shows comes from one design document passing through one chain:
+
+```
+music or test signal
+  -> correction applied to the whole speaker
+  -> digital crossover: one branch per driver
+  -> per-driver correction, delay, gain, limiter
+  -> amplifier channel, one per driver
+  -> driver                electrical and mechanical model
+  -> cabinet air           box, ports, lines, chambers   <- from the 3D cabinet geometry
+  -> radiation             cone and openings, baffle, directivity
+  -> listening position
+  => graphs, score, cost, and sound
+```
+
+"Digital isolated crossover" means every driver has its own DSP channel and its own amplifier channel. Drivers are electrically isolated from each other. There are no passive crossover parts between amplifier and driver.
+
+### 2.2 What the user does
+
+1. Picks drivers from a catalog of real parts with prices.
+2. Shapes the cabinet: outer size, walls, chambers, ports, internal ducts and folds, bracing. Sees it in 3D. Exports it for printing.
+3. Sets the crossover, or has the lab propose one.
+4. Runs correction and auto EQ.
+5. Reads the results: frequency response, impedance, cone travel, port air speed, and maximum clean level, before and after correction, per driver and summed.
+6. Listens to the simulated speaker and switches between designs.
+7. Sees what the design costs and how it scores, and asks the optimizer for the cheapest design that meets a target.
+
+### 2.3 Why all parts are built together
+
+The stages depend on each other in a line. Cabinet shape sets the air load on the driver. The load sets how the driver behaves. That sets what the crossover and correction must do. All of it sets the sound and the cost. A part built on its own gets built against guesses about its neighbors and has to be rebuilt. So every part exists in thin form from the first level, connected end to end, and all parts deepen together. Section 12 turns this into a rule.
+
+### 2.4 Where the savings come from
+
+- Digital processing replaces passive crossover parts and corrects response errors that would otherwise need better drivers.
+- Printed geometry replaces woodworking and makes internal shapes possible that improve a cheap driver's result.
+- Drivers are chosen by simulated result per dollar, not by price or reputation.
+
+The lab must also show the limits of these trades: what correction cannot fix, and where money has to go into hardware.
+
+## 3. Architecture
+
+These decisions are fixed. Each has a reason. If a reason stops holding, raise it in `STATUS.md` before changing course.
+
+| Decision | Reason |
+| --- | --- |
+| A local web app in a desktop browser. Reference machine: the owner's laptop, Linux Mint, 32 GB RAM, no discrete GPU assumed. Current Chrome and Firefox. | Heavy simulation needs a desktop processor. The browser provides 3D, graphs, and audio with nothing to install. Phone screens must not break, but heavy solves may be unavailable there. |
+| The engine is Rust compiled to WebAssembly. All physics, DSP, geometry measurement, scoring, and optimization live in the engine. The one exception is the print solid (section 6.3). | Fast enough for the 3D solver. Strict types catch unit and shape mistakes. `cargo test` runs every physics check natively, without a browser. The same code can later run natively or on a playback device. |
+| The interface is TypeScript and React, built with Vite. The 3D view uses three.js. | Widely used, well documented, well supported by coding agents. |
+| The interface never computes physics. It edits the design and displays results. | One implementation of each formula. |
+| The engine runs in Web Workers, never on the interface thread. Each request carries the design's revision number. Results for an old revision are discarded. Long jobs report progress and can be canceled. | The interface stays responsive during solves. |
+| Real-time audio runs in an AudioWorklet that executes the engine's own DSP code. | What is simulated and what is heard come from the same code. |
+| No server, no accounts, no network at run time. Designs are local files plus browser autosave. The catalog ships inside the app. | Works offline, nothing to host. The production build is a folder of static files. |
+| Parallel work uses several workers, each with its own engine instance. Do not require SharedArrayBuffer or WebAssembly threads until a measured need exists. | Those need cross-origin isolation headers, which complicate hosting and development. |
+
+Build and tooling rules:
+
+- Build the engine with `cargo build --target wasm32-unknown-unknown --release`, then the `wasm-bindgen` command-line tool with `--target web`. Pin the tool to the same version as the `wasm-bindgen` crate. Do not depend on `wasm-pack`: the organization that maintained it was archived in 2025, while `wasm-bindgen` moved to its own organization and is maintained.
+- Engine dependencies must be pure Rust. The `wasm32-unknown-unknown` target cannot link C or C++ libraries without extra toolchains.
+- The real-time crate exposes a plain C ABI (`extern "C"`, no `wasm-bindgen`). The page fetches the `.wasm` bytes and posts them to the worklet, which instantiates them there. Reason: the worklet scope has no `fetch` and may lack the text-decoding APIs that `wasm-bindgen` glue expects.
+- Use the current stable release of each tool when you scaffold. Pin versions with `rust-toolchain.toml`, `Cargo.lock`, and `package-lock.json`, and record them in `STATUS.md`.
+- Define the design types once, in Rust. Generate the TypeScript types from them. Do not maintain two hand-written copies.
+
+### 3.1 Repository layout (target)
+
+```
+README.md          this specification
+STATUS.md          current state, decisions, next steps, questions for the owner
+AGENTS.md          pointer that sends coding agents to this file (CLAUDE.md imports it)
+start.sh           the one command the owner runs
+check.sh           the one command that runs every check
+engine/            Rust workspace
+  crates/
+    seatlock-core        constants, units, complex helpers, frequency grids, design types, errors
+    seatlock-geom        cabinet parameters -> air network, solid primitives, voxel grid, volumes
+    seatlock-acoustics   driver model, enclosure loads (lumped, waveguide), radiation, limits
+    seatlock-fdtd        3D solver
+    seatlock-dsp         filters, delay, FIR, limiter; frequency response and sample processing of each block
+    seatlock-correct     targets, auto EQ, physics limits
+    seatlock-sim         design -> results; score; cost; optimizer
+    seatlock-wasm        wasm-bindgen wrapper used by the workers
+    seatlock-rt          C-ABI real-time kernel used by the AudioWorklet
+web/               TypeScript and React app
+catalog/           drivers/, electronics/, materials.json
+targets/           quality targets
+designs/examples/  example designs used by checks and demos
+```
+
+Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock-dsp` and `seatlock-rt` never depend on physics crates. Nothing under `engine/` depends on the browser except the two wrapper crates. You may merge or split crates if you keep that direction and record why.
+
+- `./start.sh` checks that the tools are installed and, if one is missing, prints the exact command to install it on Linux Mint. It builds the engine, installs web dependencies when needed, starts the app, and opens the browser. It must work from a fresh clone.
+- `./check.sh` runs formatting, lints, `cargo test --workspace`, the WebAssembly build, the TypeScript type check, unit tests, and one headless-browser test that opens the app and loads an example design.
+
+### 3.2 The engine's front door
+
+```
+simulate(design, request) -> results
+  request:  { fidelity: "lumped" | "waveguide" | "fdtd", frequency grid, which outputs }
+  results:  per driver and summed: complex pressure response, impedance, cone travel,
+            opening air speed, limits, maximum level; score; cost; warnings;
+            and for every curve the fidelity label of section 5.8
+```
+
+One function turns a design into results. The interface, the optimizer, the checks, and listen mode all use it. The other entry points (correct, optimize, export, impulse response) take a design and return a design, files, or samples.
+
+## 4. Conventions
+
+- **SI units everywhere in the engine and in design files**: m, m^2, m^3, kg, s, Hz, Pa, N, V, A, ohm, H. Field names end with the unit: `vas_m3`, `xmax_m`, `fs_hz`, `re_ohm`. Convert only at the screen (liters, mm, cm^2, grams) and at file export.
+- **Constants**, defined once in `seatlock-core`, for air at 20 °C and 101.325 kPa: `RHO0 = 1.204 kg/m^3`, `C0 = 343.2 m/s`, `P_REF = 20e-6 Pa`.
+- **Amplitudes are RMS** unless the name ends in `_peak`. Time dependence is `e^(+j*omega*t)`. `omega = 2*pi*f`, `k = omega / C0`.
+- **Frequency grid**: logarithmic, 10 Hz to 24 kHz, 48 points per octave, unless a request says otherwise.
+- **Sample rate**: 48 kHz by default. Ask the audio context for the design's rate, read back the rate it actually gives, and compute coefficients for that rate.
+- **Number types**: `f64` for analysis and for filter coefficients and filter state. `f32` for audio samples and for the 3D solver's fields.
+- **Real-time code allocates nothing, takes no locks, and makes no system calls** inside the processing function.
+- **Coordinates**: right-handed, in meters. `x` runs left to right when facing the front baffle, `y` front to back, `z` bottom to top. The origin is the outer front-bottom-left corner. The listener is on the `-y` side. A position on a cabinet face is `[u, v]` from that face's lower-left corner as seen from outside.
+- **Determinism**: the same design and request give the same results. Anything random, such as optimizer starting points, takes a seed stored in the request.
+- **Errors and warnings are data**: a code, a plain-language sentence, and the design field they refer to. The interface shows them beside that field.
+
+### 4.1 The design file
+
+A design is one JSON file, `name.seatlock.json`. This is the Level 1 shape. Later levels add fields. When the shape changes, raise `schema_version` and add a migration so older files still open.
+
+```jsonc
+{
+  "schema_version": 1,
+  "name": "sealed-test",
+  "speaker": {
+    "enclosure": {
+      "shell": { "width_m": 0.160, "height_m": 0.250, "depth_m": 0.180, "wall_m": 0.008, "edge_radius_m": 0.0 },
+      "chambers": [],        // empty: the whole shell interior is one chamber with id "main"
+      "ducts": [],
+      "mounts": [ { "id": "m1", "face": "front", "center_m": [0.080, 0.150], "rear_into": "main", "recess_m": 0.0 } ],
+      "solids": []
+    },
+    "drivers": [ { "catalog_id": "test-woofer-a", "mount": "m1" } ],   // ordered from lowest range to highest
+    "radiation": "baffle",   // "full" | "half" | "baffle", section 5.6
+    "listening": { "distance_m": 1.0 }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],     // blocks applied before the split into drivers
+    "per_driver": [
+      { "blocks": [ { "kind": "biquad", "type": "highpass", "f_hz": 35.0, "q": 0.707 } ],
+        "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null }
+    ],
+    "correction": { "enabled": true, "protected_band_hz": [3000, 5000], "max_filters": 10 }
+  },
+  "electronics": { "amplifiers": ["test-amp-a"], "dsp_device": null },   // one amplifier channel per driver
+  "build": { "material": "pla", "infill_fraction": 1.0, "stereo_pair": true, "extras_cost": 0.0 },
+  "target": "hifi-default"
+}
+```
+
+## 5. Physics
+
+### 5.1 Driver
+
+The catalog stores what the manufacturer publishes: `fs_hz, qes, qms, vas_m3, re_ohm, le_h, sd_m2, xmax_m, pe_w`. Derive the mechanical parameters from those:
+
+```
+cms = vas / (RHO0 * C0^2 * sd^2)        suspension compliance, m/N
+mms = 1 / ((2*pi*fs)^2 * cms)           moving mass including air load, kg
+rms = 2*pi*fs*mms / qms                 mechanical resistance, N*s/m
+bl  = sqrt(2*pi*fs*mms*re / qes)        force factor, T*m
+qts = qes*qms / (qes + qms)
+```
+
+If the source also prints `bl`, `mms`, or `cms` and one differs from the derived value by more than 10 %, keep computing from the list above and attach a warning to the driver.
+
+With voltage `V` at the terminals, and the enclosure presenting acoustic impedance `Z_ab` to the back of the cone (section 5.2):
+
+```
+Ze  = re + j*omega*le
+Zm  = rms + j*omega*mms + 1/(j*omega*cms) + sd^2 * Z_ab
+u   = bl*V / (Ze*Zm + bl^2)             cone velocity, m/s
+Zin = Ze + bl^2 / Zm                    electrical impedance, ohm
+I   = V / Zin
+U_d = sd * u                            volume velocity leaving the front of the cone, m^3/s
+x_peak = sqrt(2) * |u| / omega          cone travel, m
+```
+
+The air load on the front of the cone is left out of `Zm` because `mms` already includes it. A driver with a sealed back, such as most tweeters, has `Z_ab = 0` and no openings.
+
+### 5.2 The enclosure load interface
+
+Every enclosure model, whatever its fidelity, answers the same two questions. `U_in` is the volume velocity that the back of the cone pushes into the enclosure.
+
+```
+Z_ab(f) = p_back / U_in       acoustic impedance seen by the back of the cone, Pa*s/m^3
+H_k(f)  = U_out_k / U_in      volume velocity leaving opening k, per unit pushed in
+```
+
+When the cone moves outward, `U_in = -U_d`. The total volume velocity this driver sends into the room is therefore
+
+```
+U_total = U_d * (1 - sum over k of H_k)
+```
+
+A sealed box has no openings, so `U_total = U_d`. In a vented box `H -> 1` as frequency goes to zero, so `U_total -> 0`: the port cancels the cone.
+
+Three models implement this interface: `lumped`, `waveguide`, and `fdtd`. The driver model, radiation, limits, correction, and listen mode do not care which one is in use. That is what lets a fast model drive the interactive view while a slow one refines the same curves in the background.
+
+### 5.3 Model `lumped`
+
+```
+C_ab = V_box / (RHO0 * C0^2)                       box air compliance
+
+sealed:  Z_ab = 1 / (j*omega*C_ab)
+
+vented:  M_ap   = RHO0 * L_eff / S_port            port air mass
+         Z_port = j*omega*M_ap + R_ap
+         Z_ab   = 1 / (j*omega*C_ab + 1/Z_port + 1/R_leak)
+         H_port = Z_ab / Z_port
+         f_b    = (C0 / (2*pi)) * sqrt(S_port / (V_box * L_eff))
+         L_eff  = L + one end correction per end
+                  end correction = 0.849*a for an end flush with a wall, 0.613*a for a free end
+                  a = sqrt(S_port / pi)
+         R_leak = q_leak / (2*pi*f_b*C_ab),  q_leak = 7 by default
+```
+
+`V_box` is the net air volume: the gross internal volume minus what the driver, port, and bracing displace. Several ports from one chamber are parallel branches. Checks run with no leak and `R_ap = 0`.
+
+This model knows volumes and ports. It knows nothing about shape: no standing waves, no folds, no pipe resonances in the port.
+
+### 5.4 Model `waveguide`
+
+The cabinet's air is a network of ducts and chambers (section 6.2). A duct segment of length `L` and area `S` relates pressure and volume velocity at its two ends:
+
+```
+[p1]   [ cos(k*L)          j*Z0*sin(k*L) ] [p2]
+[U1] = [ j*sin(k*L)/Z0     cos(k*L)      ] [U2]          Z0 = RHO0*C0 / S
+```
+
+- A tapered duct is sliced into uniform segments no longer than 10 mm.
+- A chamber whose largest dimension is under one eighth of a wavelength is a shunt compliance with admittance `j*omega*V / (RHO0*C0^2)`. A longer chamber is a duct along its longest axis.
+- Where a duct opens into a chamber through a wall, add `0.849*a` to its length.
+- An opening to outside air ends in its radiation impedance: `Z0 * ((k*a)^2/4 + j*0.613*k*a)` for a free end, `Z0 * ((k*a)^2/2 + j*0.849*k*a)` for an end flush with a wall. Both hold for `k*a < 1`.
+- A bend is treated as a straight duct of the center-line length. Report that as an approximation (section 5.8).
+- Losses arrive at Level 3: replace `k` by `k - j*alpha` with `alpha = 2.99e-5 * sqrt(f) / a` per meter for a smooth round duct, and add a flow-resistance term for damping fill.
+
+Solve the network for `Z_ab` at the driver and `H_k` at each opening. Tree-shaped networks are enough through Level 2. Loops come at Level 3.
+
+This model knows lengths, tapers, quarter-wave lines, and pipe resonances. It knows nothing across a duct: bends, sudden steps, and chamber standing waves in the other two directions are invisible to it.
+
+### 5.5 Model `fdtd`, the 3D solver
+
+A finite-difference time-domain solution of the linear acoustic equations on a grid of cubic cells that fills the cabinet's air.
+
+```
+cell size dx; pressure at cell centers; velocity on cell faces
+dt = 0.95 * dx / (C0 * sqrt(3))
+velocity:  v += -(dt / (RHO0*dx)) * (p_ahead - p_behind)        only on faces between two air cells
+pressure:  p += -kp * (net outflow through the cell's faces),   kp = RHO0*C0^2*dt/dx
+rigid wall: the face velocity stays 0
+```
+
+The rules below were found while validating this specification with a reference solver. Follow them unless you can show something better.
+
+- **Fold boundary admittance into the pressure update.** For a cell whose boundary faces have total specific admittance `Y_sum` (each absorbing face contributes `1 / (RHO0*C0)`):
+  ```
+  g     = 0.5 * kp * Y_sum
+  p_new = (p*(1 - g) - kp*net_interior_outflow + kp*v_source) / (1 + g)
+  ```
+  Setting boundary face velocities directly from the old pressure goes unstable in corner cells near the stability limit.
+- **Drive through a resistive source.** The driver aperture's faces are boundary faces with admittance `1 / (RHO0*C0)` and a source velocity `v_source(t)`, a short Gaussian pulse. The net inflow velocity on each face is `v_net = v_source - (p_new + p) / (2*RHO0*C0)`. Record the aperture's mean of `(p_new + p)/2` and `U_in = sum(v_net) * dx^2` at every step. Then `Z_ab = FFT(p) / FFT(U_in)` and `H_k = FFT(U_out_k) / FFT(U_in)`, where `U_out_k` is the flow through a plane across opening k. The absorbing source drains the cavity quickly, so runs are short, and the ratios still give the true impedance. A rigid, lossless cavity driven by a hard source rings almost forever.
+- **Openings radiate into an exterior air block** whose outer faces absorb. Start with a block that extends three opening widths in every direction, and confirm that doubling it changes the result by under 1 %.
+- **Stop** when the aperture pressure has fallen below 1e-4 of its peak, or at a time cap.
+- **Valid range**: up to `C0 / (10*dx)`, which is 3.4 kHz at 10 mm and 6.9 kHz at 5 mm. A feature thinner than two cells is unresolved, so warn about it.
+- **Preserve cross-section areas** when turning round or slanted shapes into cells. Slanted and curved walls become stair-steps, so run at two cell sizes and report the difference as the uncertainty.
+- **Self-check every run**: below `C0 / (50 * longest internal dimension)`, `Z_ab` must match `lumped` within 3 %.
+- **Time budgets** on the reference machine with one worker: a 20-liter cabinet in under 20 s at 10 mm for a preview and under 5 min at 5 mm for a final result. These are targets. Record measured times in `STATUS.md`.
+
+This model knows the full shape of the internal air, within its grid. Through Level 2 the walls are rigid and the air is lossless. Fill and wall losses arrive at Level 3. It does not model wall vibration.
+
+### 5.6 Radiation and summation
+
+Each source `s` is a cone or an opening, with volume velocity `U_s`, at distance `r_s` from the listening point:
+
+```
+p_s     = j*omega*RHO0 * U_s * B(f) * D_s(theta, f) * e^(-j*k*r_s) / (4*pi*r_s)
+p_total = sum of p_s over all sources of all drivers, each multiplied by its DSP and amplifier transfer function
+SPL     = 20*log10(|p_total| / P_REF)
+```
+
+- For a cone, `U_s = U_d`. For opening k, `U_s = H_k * U_in = -H_k * U_d`. Keep that sign: it is what makes a port cancel the cone at low frequency.
+- `B(f)` is the baffle gain, from 1 when sound radiates all around to 2 when it radiates forward only. There are three modes. `full` is `B = 1`. `half` is `B = 2`, an infinite baffle, and is what the checks use. `baffle` at Level 1 is a shelf centered on `f3 = 115 / baffle_width_m`: `B = (1 + j*f/(f3/sqrt(2))) / (1 + j*f/(f3*sqrt(2)))`. Level 2 replaces that shelf with an edge-diffraction model computed from the baffle outline and the driver position.
+- `D` is directivity. Level 1 uses 1. Level 2 uses a rigid piston: `2*J1(k*a*sin(theta)) / (k*a*sin(theta))`.
+- Level 1 puts all sources of a driver at one point. Level 2 gives each source its real position.
+- The piston model has no cone break-up. Above roughly `k*a = 1`, a driver's real response comes from its published or measured curve. Level 2 adds a response file per driver, blended in above a chosen frequency. Until a curve is present, label that region accordingly (section 5.8).
+
+### 5.7 Limits and maximum level
+
+Everything scales linearly with drive voltage, so compute at 1 V and scale.
+
+```
+cone travel         x_peak(f)                      <= xmax_m
+opening air speed   sqrt(2) * |U_out_k(f)| / S_k   <= 0.05 * C0   (17 m/s, default)
+voice-coil heating  |I(f)|^2 * re_ohm              <= pe_w
+amplifier           V(f)                           <= sqrt(amp_power_w * amp_rated_load_ohm)
+```
+
+`max_spl(f)` is the SPL at 1 m when the first limit is reached with a sine at frequency `f`. `headroom(f) = max_spl(f) - design_level`, where the design level is the target's `max_spl_db_min` (section 11).
+
+### 5.8 Fidelity labels
+
+Every curve and number carries three things: the enclosure model (`lumped`, `waveguide`, `fdtd`, or `measured`), the radiation model, and a list of design features that model ignored, for example "two bends treated as straight", "no cone break-up above 2.1 kHz", or "chamber standing waves not modeled". The interface shows the label on every graph. When two models are available, draw both. Where they disagree is something the user needs to see.
+
+## 6. Cabinet builder
+
+### 6.1 What it is
+
+A parametric model of the cabinet. The user edits numbers and drags handles, and the solid is regenerated. There is no free-form sculpting.
+
+### 6.2 Geometry data
+
+Section 4.1 shows the Level 1 enclosure. From Level 2 the same fields describe ports, extra chambers, and internal ducts:
+
+```jsonc
+"chambers": [ { "id": "main", "min_m": [0.008, 0.008, 0.008], "max_m": [0.152, 0.172, 0.242], "fill": null } ],
+"ducts": [ { "id": "port", "from": "main", "to": "outside",
+             "path_m": [[0.080, 0.060, 0.050], [0.080, 0.0, 0.050]],   // center line; a corner in the path is a bend
+             "section": { "shape": "round", "start_m": [0.035], "end_m": [0.035] } } ],   // round: [diameter]; rect: [width, height]; start != end is a taper
+"solids": [ { "id": "brace-1", "kind": "brace", "min_m": [0.008, 0.080, 0.120], "max_m": [0.152, 0.100, 0.130] } ]   // a bar across the chamber
+```
+
+The air region is chambers plus ducts minus solids. Chambers are the nodes and ducts are the edges of the air network that `lumped` and `waveguide` solve. From Level 3 a driver may mount directly on a duct, as in a transmission line.
+
+### 6.3 Three views of one solid
+
+From the same parameters derive:
+
+1. The air network (volumes, lengths, areas) for `lumped` and `waveguide`, computed by formula in the engine.
+2. The print solid, built on the web side with constructive solid geometry using the `manifold-3d` package, the Manifold kernel compiled to WebAssembly. It guarantees manifold output. Run it in a worker. Call its `setup()` after loading, and release every object it creates with `.delete()`, because they are not garbage collected. Cost uses the engine's own solid volume, not this solid's.
+3. The voxel grid for `fdtd`, sampled in the engine directly from the primitives.
+
+These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
+
+### 6.4 Export
+
+- Binary STL from Level 1 and 3MF from Level 2. Print files are in millimeters, so multiply by 1000 on export.
+- Solids are watertight and manifold (CHK-GEO-2).
+- Driver cut-outs, recesses, and bolt holes come from the driver's mounting data.
+- From Level 2, split the cabinet into parts that fit the printer's build volume, add alignment features, and report part count, material mass, and print time.
+- Enforce a minimum wall thickness and warn about thin features. Wall vibration is not simulated, and the interface says so.
+
+## 7. Crossover and DSP chain
+
+- Order for each driver: crossover filters, per-driver EQ, delay, gain and polarity, limiter. Blocks for the whole speaker come before the split.
+- Biquads follow the RBJ Audio EQ Cookbook, with `H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)`. Types: lowpass, highpass, peaking, low shelf, high shelf, allpass, notch.
+- Crossover families: Butterworth of order n, and Linkwitz–Riley of order 2n, which is two Butterworth filters of order n in cascade. LR4 and LR8 sum flat in phase. LR2 needs one side inverted. The lab sets polarity automatically and shows the summed response either way.
+- Every block provides its complex frequency response for simulation and a sample-by-sample process function for audio, from one implementation.
+- Delay is whole samples at Level 1 and fractional from Level 2. FIR blocks and linear-phase crossovers come at Level 3, with the added latency shown.
+- Changing a parameter during playback crossfades between old and new settings over about 20 ms.
+- Export for real hardware: for each driver, a text file of biquad coefficients at a chosen sample rate, and FIR filters as mono WAV files. Hardware-specific formats wait for the owner's choice of playback hardware (`STATUS.md`).
+
+## 8. Correction and auto EQ
+
+Purpose: get the most out of cheap hardware and never ask it for more than it can do. Inputs are the simulated response per driver and summed (later a measured one), the limits of section 5.7, and the target.
+
+| | Feature | What it does | Level |
+| --- | --- | --- | --- |
+| C1 | Target fit | Parametric EQ that brings the response to the target curve. | 1 |
+| C2 | Physics-limited bass extension | Extends the bass by boosting only as far as cone travel, amplifier, heating, and port limits allow at the design level, with a protective high-pass below. | 1 |
+| C3 | Geometry-derived compensation | Baffle-step and edge-diffraction correction computed from the cabinet's outer shape. | 2 |
+| C4 | Time and phase alignment | Per-driver delay from the driver positions, and phase alignment through the crossover. | 2 |
+| C5 | Cabinet-resonance correction | Finds internal resonances in the `fdtd` result that reach the listener through the cone or a port, cuts them, and tells the user which geometry change would remove the cause. | 3 |
+| C6 | Level-aware bass | Deep bass at normal volume that backs off as level rises: a look-ahead limiter driven by a running model of cone travel, `X/V = bl / (j*omega*(Ze*Zm + bl^2))`, realized as a digital filter. | 3 |
+| C7 | Linear-phase correction | FIR correction and crossovers, with latency reported. | 3 |
+| C8 | Pre-distortion, experimental | Cancels a driver's own distortion using a nonlinear driver model. The interface labels it unproven until a measurement confirms it. | 4 |
+| C9 | Correction from measurement | The same tools fed by a measured response instead of a simulated one. | 4 |
+
+C1 works this way, so that behavior is the same from session to session:
+
+1. Smooth the response to 1/6 octave. The error is target minus response, in dB, over the correction band.
+2. Add one peaking filter at a time at the largest remaining error region, taking center, gain, and Q from that region. Then refine all filters together by least squares. Stop at `max_filters`, or when a new filter improves the RMS error by less than 0.1 dB.
+3. Gain per filter stays between -12 and +6 dB. A boost has Q of 4 or less. Cuts are always allowed.
+4. Do not fill a narrow dip. A dip with Q above 4 in the uncorrected response is a cancellation, which EQ cannot fill. Report it as a crossover or geometry problem instead.
+5. Do not boost inside the protected band, 3 kHz to 5 kHz by default. This is the owner's rule.
+6. Total boost at any frequency stays within `headroom(f)`.
+7. Keep the result only if it helps. If flatness improves by less than 0.2 dB, or any target metric gets worse, return no correction and say why.
+
+C2 finds the lowest frequency `f_low` at which `max_spl(f)` still reaches the design level, shapes the low end into a clean high-pass at `f_low` (second order for a sealed box, fourth order for a vented one) by boosting within headroom, and always adds a protective high-pass below. Below a vented box's tuning the cone is unloaded, so that high-pass is not optional.
+
+The target curve is flat from `f_low` to 20 kHz with that high-pass shape below, plus an optional tilt in dB per octave that defaults to 0.
+
+Every filter in the output carries a one-sentence reason in plain language, for example "Cuts 3 dB at 1.1 kHz: peak from the baffle edge".
+
+## 9. Catalog and cost
+
+### 9.1 Driver records
+
+One JSON file per driver in `catalog/drivers/`.
+
+```jsonc
+{
+  "id": "test-woofer-a",
+  "status": "synthetic",              // "sourced" for a real part
+  "maker": "Test", "model": "Woofer A", "kind": "woofer",   // woofer | midrange | tweeter | fullrange
+  "published": { "fs_hz": 50.0, "qes": 0.45, "qms": 4.0, "vas_m3": 0.010, "re_ohm": 6.0,
+                 "le_h": 0.0005, "sd_m2": 0.0085, "xmax_m": 0.004, "pe_w": 30.0 },
+  "mounting": { "cutout_diameter_m": 0.118, "outer_diameter_m": 0.146, "bolt_circle_m": 0.132,
+                "bolt_count": 4, "depth_m": 0.060 },
+  "response_file": null,              // Level 2: on-axis curve, with its measurement conditions
+  "source": null,                     // sourced: { "url": "...", "title": "...", "read_on": "YYYY-MM-DD" }
+  "price": null                       // sourced: { "amount": 0.0, "currency": "USD", "vendor": "...", "url": "...", "read_on": "YYYY-MM-DD" }
+}
+```
+
+Rules:
+
+- A `sourced` record is written with the manufacturer's data sheet open in the same session. Copy the numbers as printed and convert them to SI. Do not fill a field from memory, from a forum, or from another tool's database. If a field is not printed, leave it out and let the engine warn.
+- If you cannot open the source, do not add the driver. Note the gap in `STATUS.md`.
+- `synthetic` records exist for checks and demos. Their ids start with `test-`. The interface shows them as "Test driver, not a real product". The optimizer never proposes them.
+- Prices go stale. Show `read_on` beside every price, and warn when a price is more than 90 days old. Prices are in USD.
+
+Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing rules. An amplifier record holds channel count, power per channel at a rated load, and price. A DSP device record holds output channels, sample rates, filter capacity, and price. The synthetic amplifier `test-amp-a` has one channel of 50 W into 4 ohm.
+
+`catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram and the printer's build volume and flow rate come from the owner.
+
+### 9.2 Cost
+
+```
+cost of one speaker = drivers + cabinet + extras
+cabinet             = print_mass_kg * price_per_kg
+print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
+print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600
+cost of the system  = (2 if stereo_pair else 1) * cost of one speaker + electronics
+electronics         = the amplifiers and DSP devices needed to give every driver its own channel
+```
+
+Cost is shown beside performance at all times. Every figure in it traces to a catalog record with a source and a date.
+
+## 10. Listen mode
+
+The user hears the simulated speaker and switches between designs.
+
+- The AudioWorklet runs the design's own DSP chain in the `seatlock-rt` kernel and outputs one channel per driver. This is the part that would run on real hardware.
+- The virtual speaker follows it. Each driver's channel is convolved with that driver's simulated impulse response, from terminal voltage to pressure at the listening position, and the results are summed. The engine computes the impulse responses. Use one `ConvolverNode` per driver with `normalize = false`, because the default rescales the response.
+- Sources are an audio file the user opens and built-in test signals: pink noise, sweeps, tones. Do not bundle music.
+- A/B: two designs are loaded at once and switched with a short crossfade, at matched level by default.
+- A volume control maps to amplifier voltage. The interface shows the simulated level at 1 m and lights a limit indicator when cone travel, opening air speed, or amplifier voltage would exceed section 5.7.
+- From Level 3 the virtual speaker reproduces limit behavior audibly, so an overdriven design sounds overdriven.
+- Parameters reach the kernel as messages. The kernel applies them at a block boundary with a crossfade.
+
+Things that go wrong if ignored:
+
+- Browsers do not start audio until the user clicks or taps. Create or resume the audio context inside a click handler.
+- The worklet processes fixed blocks of 128 frames. Do nothing in it that can wait.
+- Tell the user what they are hearing: the simulated speaker played through their own headphones or speakers, which add their own sound. Differences between designs are reliable. Absolute tone is not.
+
+## 11. Score, targets, optimizer
+
+### 11.1 Metrics
+
+All metrics use the corrected, summed, on-axis response, smoothed to 1/6 octave and normalized to its mean level from 300 Hz to 3 kHz.
+
+```
+f6_hz         lowest frequency at which the response is at -6 dB
+flatness_db   RMS difference from the target between 1.5 * f6_hz and 16 kHz, on the logarithmic grid
+max_spl_db    minimum of max_spl(f) from f6_hz to 16 kHz: the loudest sine the speaker reproduces
+              within every limit at every frequency in its range, at 1 m, one speaker
+cost          section 9.2
+```
+
+### 11.2 Targets
+
+A target is a set of thresholds in `targets/`. A design meets the target when it satisfies all of them.
+
+```jsonc
+// targets/hifi-default.json
+{ "f6_hz_max": 50, "flatness_db_max": 1.5, "max_spl_db_min": 95, "budget_max": null }
+```
+
+These numbers are placeholders chosen when this specification was written. They are not the owner's decision yet. Ask the owner before Level 2 optimizer work depends on them (`STATUS.md`).
+
+Among designs that meet the target, the cheaper one is better. Among designs that miss it, the one with the smaller shortfall is better:
+
+```
+shortfall = max(0, log2(f6_hz / f6_hz_max))
+          + max(0, flatness_db - flatness_db_max) / 1.5
+          + max(0, max_spl_db_min - max_spl_db) / 6
+```
+
+### 11.3 Optimizer
+
+- It answers one question: what is the cheapest design that meets this target?
+- Level 2 variables, for drivers the user has chosen: sealed or vented, box volume, tuning, crossover frequencies and slopes, driver gains. Correction runs inside every evaluation.
+- Level 3 adds the choice of drivers from the catalog, cabinet proportions, and internal elements.
+- Method: for each combination of discrete choices, search the continuous variables with a derivative-free method on the `lumped` or `waveguide` model. Keep the best few. Verify the finalists with `fdtd` and report what changed.
+- Output: a ranked list and a cost-against-quality plot. Every result is a complete design file the user can open.
+- It runs in workers, shows first results within 30 s, can be canceled, and is repeatable from its seed.
+
+## 12. Build plan
+
+Tracks:
+
+```
+A  Design model and app shell     B  Catalog and cost           C  Driver and fast enclosure models
+D  3D solver                      E  Cabinet builder            F  Crossover and DSP chain
+G  Correction and auto EQ         H  Listen mode                I  Score and optimizer
+```
+
+**The level rule.** Every track advances through the same levels. A level is finished when every track has delivered its items for that level and the level's end-to-end check passes. Do not start any track's next-level items while another track is unfinished at the current level. Inside a level, connect the thinnest version of every track first, then deepen them. Section 2.3 gives the reason.
+
+**Level 0, scaffold.** The layout of section 3.1 exists. `./start.sh` and `./check.sh` work from a fresh clone. The engine builds to WebAssembly, loads in a worker, and answers a call. The worklet plays a test tone produced by the real-time kernel. A design file loads, saves, and round-trips unchanged. Versions are pinned and recorded.
+
+**Level 1, one driver in a sealed box, end to end.**
+
+- A: edit every Level 1 field; save and load; graphs for response, impedance, and cone travel; fidelity labels shown.
+- B: the two test drivers of section 13; at least three sourced real drivers if you have web access; cost from drivers and print material.
+- C: driver model, `lumped` sealed box, limits, maximum level. CHK-DRV-1, CHK-DRV-2, CHK-BOX-1, CHK-BOX-2.
+- D: solver core on a closed box; voxels from the Level 1 shell; `Z_ab` from `fdtd` drawn over the `lumped` curve. CHK-FDTD-1, CHK-FDTD-2.
+- E: shell with one driver cut-out, 3D view, air volume read from the solid, STL export. CHK-GEO-1, CHK-GEO-2.
+- F: one-driver chain with high-pass, gain, and EQ biquads; chain response; coefficient export. CHK-DSP-1, CHK-DSP-3.
+- G: C1 and C2, with the keep-only-if-it-helps rule. CHK-EQ-1, CHK-EQ-2, CHK-EQ-3.
+- H: a music file or test signal through the chain and the virtual speaker; correction switched on and off; a cone-travel meter.
+- I: `f6_hz`, `flatness_db`, `max_spl_db`, and cost on screen; a one-variable sweep, for example cost and `f6_hz` against box volume. CHK-COST-1.
+- End to end, CHK-E2E-1: the example design `sealed-test` loads, simulates, corrects, exports STL and filters, and reports score and cost. All outputs match stored expected values, and the headless browser shows the design.
+
+**Level 2, a two-way vented speaker from real parts.**
+
+- A: several drivers per design; two designs side by side.
+- B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data; sourced amplifiers and DSP devices; cost with electronics and stereo pairs; price dates shown.
+- C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; edge diffraction; piston directivity; separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3.
+- D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
+- E: round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
+- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-driver limiter. CHK-DSP-2.
+- G: C3 and C4; EQ per driver and for the whole speaker.
+- H: all drivers playing; A/B between two designs at matched level; live limit indicators.
+- I: optimizer over continuous variables for chosen drivers; cost-against-quality plot.
+- End to end, CHK-E2E-2: the example design `two-way-vented` passes the same sequence as CHK-E2E-1, and its three enclosure models agree within 1.5 dB below 200 Hz.
+
+**Level 3, novel geometry and advanced correction.**
+
+- A: undo and redo; design history.
+- B: stale-price warnings; alternative vendors per part.
+- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber.
+- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met.
+- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings.
+- F: FIR blocks and linear-phase crossovers, with latency shown.
+- G: C5, C6, C7.
+- H: audible limit behavior in the virtual speaker.
+- I: optimizer chooses drivers from the catalog as well as geometry and DSP; finalists verified with `fdtd`.
+- End to end, CHK-E2E-3: the example design `folded-line` runs in all three models, and the report lists what each model ignored.
+
+**Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, and export for the owner's chosen playback hardware. Plan this level with the owner when Level 3 is done.
+
+## 13. Checks
+
+Each check becomes an automated test named after its id. The numbers were produced on 2026-11-09 by a separate reference implementation of the equations in section 5, including a small 3D solver. Identity checks (CHK-DRV-2, CHK-BOX-1, CHK-BOX-3, CHK-DSP-2) compare the implementation with closed-form results that are known independently of this code. The value checks anchor your implementation to the same equations. Stored expected values in the end-to-end checks catch regressions only. They never prove correctness.
+
+Test drivers:
+
+```
+test-woofer-a   fs 50 Hz, Qes 0.45,   Qms 4.0, Vas 10 L, Re 6.0 ohm, Le 0.5 mH, Sd 85 cm^2,  Xmax 4 mm, Pe 30 W
+test-woofer-b   fs 40 Hz, Qes 0.4144, Qms 5.0, Vas 20 L, Re 6.0 ohm, Le 0,      Sd 130 cm^2, Xmax 6 mm, Pe 50 W
+test-amp-a      1 channel, 50 W into 4 ohm
+```
+
+Unless a check says otherwise: 2.83 V RMS at the terminals, radiation mode `half`, distance 1 m, model `lumped`, no leak, no port loss.
+
+| Id | Setup | Must hold |
 | --- | --- | --- |
-| `seatlock-dsp` | Biquads, delay, cone-law waveshaper | A fixed input matches the browser reference sample for sample |
-| `seatlock-box` | Sealed and ported model, excursion, port speed | A known alignment hits its published knee |
-| `seatlock-geom` | Parametric solid, STL, volume and path length read off the solid | Those litres match the box model |
-| `seatlock-catalog` | Drivers with a public source and a date | A sheet has been read into this crate. The list is empty |
-| `seatlock-engine` | The callback the phone calls | `fill_silence` writes zeros and counts the frames |
-| `seatlock-jni` | The Android bridge into `seatlock-engine` | The `.so` loads and the Kotlin stream calls it |
+| CHK-DRV-1 | Derive the mechanical parameters of both test drivers. | A: cms 9.7598e-4 m/N, mms 0.010381 kg, rms 0.8154 N·s/m, bl 6.594 T·m, qts 0.4045. B: cms 8.3449e-4, mms 0.018971, rms 0.9536, bl 8.309, qts 0.3827. Within 0.1 %. |
+| CHK-DRV-2 | A with Le set to 0, sealed 5.000 L, at 1 kHz. | SPL equals `10*log10(RHO0*C0*eta0*(V^2/re) / (2*pi*r^2) / P_REF^2)` with `eta0 = 4*pi^2*fs^3*vas / (C0^3*qes)`. That is 87.75 dB, within 0.02 dB. |
+| CHK-BOX-1 | A with Le set to 0, sealed 5.000 L. | fc = 86.60 Hz and Qtc = 0.7006. The response equals the second-order high-pass `s^2 / (s^2 + s*wc/Qtc + wc^2)` scaled to the level the CHK-DRV-2 formula gives (use the formula, not the rounded number), within 0.001 dB from 5 Hz to 20 kHz. |
+| CHK-BOX-2 | A as published, sealed 5.000 L. | 40 Hz: 74.02 dB, 7.87 ohm, x_peak 1.381 mm. 86.60 Hz: 84.66 dB, 59.33 ohm, 1.003 mm. 1 kHz: 87.12 dB, 6.50 ohm, 0.0100 mm. Within 0.02 dB and 0.5 %. |
+| CHK-BOX-3 | B, vented, V_box = vas/sqrt(2) = 14.142 L, one port of radius 17.5 mm with L_eff = 126.86 mm, so f_b = 40.00 Hz. | The response equals a fourth-order Butterworth high-pass at 40 Hz scaled to the level the CHK-DRV-2 formula gives for B (88.21 dB), within 0.001 dB from 8 Hz to 800 Hz. `H_port -> 1` as `f -> 0`. |
+| CHK-BOX-4 | Same as CHK-BOX-3. | 20 Hz: 64.11 dB, x_peak 3.462 mm, port air speed 7.84 m/s peak. 40 Hz: 85.20 dB, impedance 6.00 ohm, x_peak under 0.001 mm, port 11.11 m/s. 80 Hz: 88.19 dB, 0.866 mm, 1.96 m/s. Impedance peaks at 22.8 and 70.4 Hz. Within 0.02 dB, 0.5 %, and 0.2 Hz. |
+| CHK-WG-1 | Lossless duct 0.5 m long, rigid far end. | Input impedance is zero at 171.6 and 514.8 Hz and unbounded at 343.2 Hz. |
+| CHK-WG-2 | 2 L chamber, neck radius 10 mm and length 30 mm, flush with the chamber wall inside, free end outside. | Resonance within 0.5 % of the `lumped` value, 102.5 Hz. |
+| CHK-WG-3 | The CHK-BOX-3 box with its port as a duct of physical length 101.27 mm, flush with the chamber wall inside, free end outside. | SPL within 0.1 dB of `lumped` below 200 Hz. First pipe resonance of the port, a peak in `H_port`, at 1355 Hz within 2 %. |
+| CHK-FDTD-1 | Rigid box 0.30 x 0.20 x 0.15 m, dx = 10 mm, source patch of 4 x 4 cells near a corner of a 0.20 x 0.15 wall. | Peaks of `Z_ab` at 572.0, 858.0, 1031.2, 1144.0, 1279.0, and 1430.0 Hz, each within 0.5 %. |
+| CHK-FDTD-2 | Same box. | At 10 Hz, `Z_ab` is within 1 % of `1 / (omega*C_ab)` in magnitude and within 1° of -90° in phase. |
+| CHK-FDTD-3 | Cavity 0.20 m cube. Neck 40 x 40 mm, 100 mm long, centered on one wall, opening into an exterior block with absorbing outer faces. Source patch 60 x 60 mm centered on the opposite wall. dx = 10 mm. | The run is stable. The peak of `Z_ab` is within 2 % of 65.7 Hz. `H_port` is 1.024 at 10 Hz and 1.103 at 20 Hz, real part within 1 %, imaginary part under 0.05 in size. |
+| CHK-FDTD-4 | `fdtd` at 5 mm against `waveguide` for the CHK-BOX-3 cabinet as the builder makes it. | Tuning frequency within 3 %. SPL within 1.5 dB below 300 Hz. |
+| CHK-DSP-1 | 48 kHz. Lowpass at 1 kHz with Q 0.7071. Peaking at 1 kHz, +6 dB, Q 2. | -3.01 dB and +6.00 dB at 1 kHz, within 0.01 dB. |
+| CHK-DSP-2 | 48 kHz, crossovers at 2 kHz. | LR4: each side is -6.02 dB at 2 kHz, and low plus high is 0 dB within 0.001 dB at every frequency. LR2: the sum is 0 dB within 0.001 dB only with one side inverted, and has a deep null at 2 kHz in phase. |
+| CHK-DSP-3 | Any block, fed an impulse through its process function. | The FFT of the output equals the block's reported frequency response within 0.01 dB and 0.1°. Block sizes 1, 128, and 4096 give identical output. |
+| CHK-EQ-1 | C1 on a flat response with one added peak: +5 dB, Q 2, at 1 kHz. | One cut, within 0.5 dB in gain, 5 % in frequency, and 20 % in Q. Remaining flatness under 0.2 dB. |
+| CHK-EQ-2 | A in the sealed 5 L box, default target, after C1 and C2. | No boost inside the protected band. A sine at the design level, at any frequency from 10 Hz to 20 kHz, stays within every limit of section 5.7. |
+| CHK-EQ-3 | C1 on an already flat response. | No filters, and a message saying why. |
+| CHK-GEO-1 | Every example design. | Air volume by formula and from the print solid agree within 0.5 %. Voxels at 5 mm agree within 2 %. |
+| CHK-GEO-2 | Every exported print file. | Each edge is shared by exactly two triangles, winding faces outward, volume is positive, coordinates are in millimeters, and re-importing gives the same volume within 0.1 %. |
+| CHK-COST-1 | Every example design. | Cost equals a hand calculation written out in the test. |
+| CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
 
-A fold or a new chamber is not a frequency response. The box formulas do not know about a bend. Until a mesh solver exists, that shape is exported and marked not simulated.
+## 14. Interface
 
-Auto EQ and the other DSP run on this graph later, with the existing rules: no bass boost, no boost from 3 to 5 kHz, and a process turns off when it does not help. They do not get a second audio path.
+- Plain language first. Labels use everyday words, with the technical term in the explanation, for example "Cone travel (excursion)". Section 16 lists the pairs.
+- Every control and every graph has a one-sentence explanation on hover or tap.
+- Every number shows its unit. Every graph shows its fidelity label. Every warning appears beside its cause and says what to do about it.
+- Editing feels instant. `lumped` and `waveguide` results update within 50 ms of a change. Slower work shows progress and can be canceled. Results that no longer match the design are grayed out until they are recomputed.
+- Interface work never makes the audio glitch.
+- Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
+- The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
+- A design is one file the owner can save, reopen, duplicate, and send to someone.
 
-## Build
+## 15. Not simulated
 
-```bash
-cargo test
-```
+Say so in the interface wherever it matters.
 
-The engine test checks that silence is written and counted. The other tests still assert that those crates have not claimed a result. A passing suite does not mean the lab sounds right.
+- Cabinet wall vibration. Printed walls flex. Until this is modeled, the builder enforces minimum wall thickness and offers bracing.
+- The listening room. All results are for free space or a baffle.
+- Tweeter horns and waveguides, which need a different solver.
+- Voice-coil heating over time, and, until Level 3, distortion.
+- Passive crossovers are out of scope by design.
 
-The Android app is `com.seatlock.listeninglab`, version 0.1.0. It loads `libseatlock_engine.so`, opens a mono float stream at 48 kHz, and keeps asking Rust for silence. The screen shows the frame count so you can see the callback running.
+## 16. Glossary
 
-```bash
-export ANDROID_NDK_HOME=/opt/android-sdk/ndk/27.2.12479018
-cargo ndk -t arm64-v8a -t x86_64 -o android/app/src/main/jniLibs build -p seatlock-jni --release
-```
-
-Then build the release APK from `android/`. The signing key is not in this repo.
-
-## What is not here
-
-- No filters
-- No driver numbers
-- No cabinet solid
-- No solver for novel geometry
-
-The order of work is in [HANDOFF.md](HANDOFF.md).
+| Interface wording | Technical term | Meaning |
+| --- | --- | --- |
+| Driver | Loudspeaker drive unit | A single woofer, tweeter, or full-range unit. |
+| Cone travel | Excursion, `x_peak`, limit `xmax_m` | How far the cone moves from rest. |
+| Port air speed | Port velocity | Peak speed of air in a port. Too fast and the port makes noise. |
+| Bass limit | `f6_hz` | The lowest frequency the speaker reproduces within 6 dB of its normal level. |
+| Evenness | `flatness_db` | How closely the response follows the target. |
+| Maximum clean level | `max_spl_db` | The loudest the speaker plays without exceeding a limit. |
+| Tuning | `f_b` | The frequency at which a port takes over from the cone. |
+| Crossover | Digital isolated crossover | The split of the signal between drivers, done digitally, one channel per driver. |
+| Correction | Auto EQ and the features of section 8 | Digital processing that improves the response within the hardware's limits. |
+| Quick, Detailed, Full 3D | `lumped`, `waveguide`, `fdtd` | The three enclosure models, from fastest to most complete. |
+| Thiele–Small parameters | `fs_hz`, `qes`, `qms`, `qts`, `vas_m3`, `re_ohm`, `le_h`, `sd_m2`, `bl`, `mms`, `cms`, `rms` | The published numbers that describe a driver: resonance frequency, electrical, mechanical, and total Q, equivalent air volume, coil resistance and inductance, cone area, force factor, moving mass, suspension compliance, mechanical resistance. |
