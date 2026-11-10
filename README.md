@@ -1,6 +1,6 @@
 # Seatlock Listening Lab
 
-Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a 3D-printable cabinet including its internal geometry, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build.
+Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a 3D-printable cabinet, both its outer form and its internal geometry, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them.
 
 The goal is hi-fi sound for the least money. Cheap digital processing and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. The simulator's job is to show which of those trades work before any money is spent.
 
@@ -9,7 +9,7 @@ The goal is hi-fi sound for the least money. Cheap digital processing and printe
 | Sections | Read when you work on |
 | --- | --- |
 | 1 Working here, 2 Product, 3 Architecture, 4 Conventions, 12 Build plan | anything |
-| 5 Physics, 13 Checks | driver, box, waveguide, or 3D solver code |
+| 5 Physics, 13 Checks | driver, box, waveguide, 3D solver, radiation, panel, or room code |
 | 6 Cabinet builder | geometry, the 3D view, print export |
 | 7 Crossover and DSP, 10 Listen mode | filters and real-time audio |
 | 8 Correction and auto EQ | correction |
@@ -59,27 +59,29 @@ Everything the lab shows comes from one design document passing through one chai
 ```
 music or test signal
   -> correction applied to the whole speaker
-  -> digital crossover: one branch per driver
-  -> per-driver correction, delay, gain, limiter
-  -> amplifier channel, one per driver
-  -> driver                electrical and mechanical model
-  -> cabinet air           box, ports, lines, chambers   <- from the 3D cabinet geometry
-  -> radiation             cone and openings, baffle, directivity
-  -> listening position
+  -> digital crossover: one branch per radiator
+  -> per-radiator correction, delay, gain, limiter
+  -> amplifier channel, one per radiator
+  -> radiator              a cone driver with its cabinet air, or another kind such as a DML panel
+  -> radiation             every moving surface and opening, around the cabinet's outer shape
+  -> listening position    directly and, from Level 3, by way of the room
   => graphs, score, cost, and sound
 ```
 
-"Digital isolated crossover" means every driver has its own DSP channel and its own amplifier channel. Drivers are electrically isolated from each other. There are no passive crossover parts between amplifier and driver.
+A **radiator** is anything that turns one amplifier channel into sound. The first kind is a cone or dome driver mounted in the cabinet, together with the cabinet air behind it: box, ports, lines, and chambers, all taken from the 3D cabinet geometry. Section 5.9 adds DML panels, and section 3.3 keeps the door open for more.
+
+"Digital isolated crossover" means every radiator has its own DSP channel and its own amplifier channel. Radiators are electrically isolated from each other. There are no passive crossover parts between an amplifier and what it drives.
 
 ### 2.2 What the user does
 
 1. Picks drivers from a catalog of real parts with prices.
-2. Shapes the cabinet: outer size, walls, chambers, ports, internal ducts and folds, bracing. Sees it in 3D. Exports it for printing.
-3. Sets the crossover, or has the lab propose one.
-4. Runs correction and auto EQ.
-5. Reads the results: frequency response, impedance, cone travel, port air speed, and maximum clean level, before and after correction, per driver and summed.
-6. Listens to the simulated speaker and switches between designs.
-7. Sees what the design costs and how it scores, and asks the optimizer for the cheapest design that meets a target.
+2. Shapes the cabinet: an outer shape that can be a plain box or a novel form, walls, chambers, ports, internal ducts and folds, bracing. Sees it in 3D. Exports it for printing.
+3. Places radiators on any surface, facing any way, including unconventional ones such as rear-facing DML panels.
+4. Sets the crossover, or has the lab propose one.
+5. Runs correction and auto EQ.
+6. Reads the results: frequency response, impedance, cone travel, port air speed, and maximum clean level, before and after correction, per radiator and summed.
+7. Listens to the simulated speaker and switches between designs.
+8. Sees what the design costs and how it scores, and asks the optimizer for the cheapest design that meets a target.
 
 ### 2.3 Why all parts are built together
 
@@ -92,6 +94,10 @@ The stages depend on each other in a line. Cabinet shape sets the air load on th
 - Drivers are chosen by simulated result per dollar, not by price or reputation.
 
 The lab must also show the limits of these trades: what correction cannot fix, and where money has to go into hardware.
+
+### 2.5 A playground stays open
+
+New ideas arrive after the code exists: a new outer shape, a new internal element, a new kind of radiator. Each must be addable as a module without rewriting what is already there. Section 3.3 makes that a rule.
 
 ## 3. Architecture
 
@@ -128,7 +134,7 @@ engine/            Rust workspace
   crates/
     seatlock-core        constants, units, complex helpers, frequency grids, design types, errors
     seatlock-geom        cabinet parameters -> air network, solid primitives, voxel grid, volumes
-    seatlock-acoustics   driver model, enclosure loads (lumped, waveguide), radiation, limits
+    seatlock-acoustics   radiators (cone driver, later DML panel), enclosure loads (lumped, waveguide), radiation, room, limits
     seatlock-fdtd        3D solver
     seatlock-dsp         filters, delay, FIR, limiter; frequency response and sample processing of each block
     seatlock-correct     targets, auto EQ, physics limits
@@ -150,13 +156,42 @@ Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock
 
 ```
 simulate(design, request) -> results
-  request:  { fidelity: "lumped" | "waveguide" | "fdtd", frequency grid, which outputs }
-  results:  per driver and summed: complex pressure response, impedance, cone travel,
+  request:  { enclosure: "lumped" | "waveguide" | "fdtd",
+              radiation: "point" | "baffle" | "exterior", space: "full" | "half" | "step",
+              frequency grid, which outputs }
+  results:  per radiator and summed: complex pressure response, impedance, cone travel,
             opening air speed, limits, maximum level; score; cost; warnings;
             and for every curve the fidelity label of section 5.8
 ```
 
 One function turns a design into results. The interface, the optimizer, the checks, and listen mode all use it. The other entry points (correct, optimize, export, impulse response) take a design and return a design, files, or samples.
+
+### 3.3 Extension points
+
+The lab is a playground, so new ideas will arrive after the code exists. Each family below has a contract and a registry. **Adding a member means adding its own files and one registration. It must not require editing the members that already exist.** CHK-EXT-1 enforces this.
+
+| Family | A member must provide | First members (level) |
+| --- | --- | --- |
+| Outer shape | The print solid; an inside test, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism` (2), `revolved` and `loft` (3), imported mesh (4) |
+| Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
+| Radiator | Its electrical impedance; its surface sources per volt (section 5.6); its limits; what it needs from its mount; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
+| Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
+| Radiation model | Pressure at any point and radiated sound power, from surface sources and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
+| Room model | The path from the speaker's radiation to the listening position (section 5.10). | `free` (1), `simple` (3) |
+| DSP block | Its frequency response, its sample process function, its parameters. | biquad, crossover, delay, gain, limiter (1 to 2), FIR, dynamic bass (3) |
+| Correction feature | Blocks with reasons, from responses, limits, and target, under the keep-only-if-it-helps rule. | C1 to C10 (section 8) |
+| Catalog kind | Record shape, sourcing rule, price. | driver, amplifier, DSP device, material (1 to 2), exciter, panel material (3) |
+| Exporter and importer | Files out and files in. | STL, filter text (1), 3MF (2), FIR WAV (3), measurements and hardware formats (4) |
+| Metric and target | A number computed from results, and its threshold. | section 11 |
+| Optimizer strategy | A search over a declared set of variables. | section 11.3 |
+
+How to build them:
+
+- Every member has a `kind` string. In a design file, a part that comes in kinds is `{ "kind": "...", ...its own fields }`.
+- Do not model a family as one closed list in code, such as a single Rust enum that every addition has to edit. Keep each part as its `kind` plus raw fields until the registered member for that kind parses it.
+- A design that uses a kind this build does not know still opens and still saves unchanged. The unknown part is shown as unsupported, the rest is simulated, and a warning names what was left out. CHK-EXT-2 enforces this.
+- A new member arrives with its checks, its fidelity label text, its glossary entry, and its place in the interface. If it adds fields to the design file, it also raises `schema_version` and adds a migration.
+- When an idea does not fit a contract, extend the contract in a way that keeps existing members working, and record the change in `STATUS.md`.
 
 ## 4. Conventions
 
@@ -167,7 +202,7 @@ One function turns a design into results. The interface, the optimizer, the chec
 - **Sample rate**: 48 kHz by default. Ask the audio context for the design's rate, read back the rate it actually gives, and compute coefficients for that rate.
 - **Number types**: `f64` for analysis and for filter coefficients and filter state. `f32` for audio samples and for the 3D solver's fields.
 - **Real-time code allocates nothing, takes no locks, and makes no system calls** inside the processing function.
-- **Coordinates**: right-handed, in meters. `x` runs left to right when facing the front baffle, `y` front to back, `z` bottom to top. The origin is the outer front-bottom-left corner. The listener is on the `-y` side. A position on a cabinet face is `[u, v]` from that face's lower-left corner as seen from outside.
+- **Coordinates**: right-handed, in meters. `x` runs left to right when facing the front baffle, `y` front to back, `z` bottom to top. The origin is the outer front-bottom-left corner. The listener is on the `-y` side. A position on a mounting surface is given in that surface's own coordinates, which the outer shape defines. On a flat face they are `[u, v]` from the face's lower-left corner as seen from outside.
 - **Determinism**: the same design and request give the same results. Anything random, such as optimizer starting points, takes a seed stored in the request.
 - **Errors and warnings are data**: a code, a plain-language sentence, and the design field they refer to. The interface shows them beside that field.
 
@@ -181,26 +216,25 @@ A design is one JSON file, `name.seatlock.json`. This is the Level 1 shape. Late
   "name": "sealed-test",
   "speaker": {
     "enclosure": {
-      "shell": { "width_m": 0.160, "height_m": 0.250, "depth_m": 0.180, "wall_m": 0.008, "edge_radius_m": 0.0 },
-      "chambers": [],        // empty: the whole shell interior is one chamber with id "main"
+      "outer": { "kind": "box", "width_m": 0.160, "height_m": 0.250, "depth_m": 0.180, "wall_m": 0.008, "edge_radius_m": 0.0 },
+      "chambers": [],        // empty: the whole interior is one chamber with id "main"
       "ducts": [],
-      "mounts": [ { "id": "m1", "face": "front", "center_m": [0.080, 0.150], "rear_into": "main", "recess_m": 0.0 } ],
+      "mounts": [ { "id": "m1", "surface": "front", "at_m": [0.080, 0.150], "rear_into": "main", "recess_m": 0.0 } ],
       "solids": []
     },
-    "drivers": [ { "catalog_id": "test-woofer-a", "mount": "m1" } ],   // ordered from lowest range to highest
-    "radiation": "baffle",   // "full" | "half" | "baffle", section 5.6
+    "radiators": [ { "kind": "cone", "driver_id": "test-woofer-a", "mount": "m1" } ],   // ordered from lowest range to highest
     "listening": { "distance_m": 1.0 }
   },
   "dsp": {
     "sample_rate_hz": 48000,
-    "whole_speaker": [],     // blocks applied before the split into drivers
-    "per_driver": [
+    "whole_speaker": [],     // blocks applied before the split into radiators
+    "per_radiator": [
       { "blocks": [ { "kind": "biquad", "type": "highpass", "f_hz": 35.0, "q": 0.707 } ],
         "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null }
     ],
     "correction": { "enabled": true, "protected_band_hz": [3000, 5000], "max_filters": 10 }
   },
-  "electronics": { "amplifiers": ["test-amp-a"], "dsp_device": null },   // one amplifier channel per driver
+  "electronics": { "amplifiers": ["test-amp-a"], "dsp_device": null },   // one amplifier channel per radiator
   "build": { "material": "pla", "infill_fraction": 1.0, "stereo_pair": true, "extras_cost": 0.0 },
   "target": "hifi-default"
 }
@@ -208,7 +242,7 @@ A design is one JSON file, `name.seatlock.json`. This is the Level 1 shape. Late
 
 ## 5. Physics
 
-### 5.1 Driver
+### 5.1 Cone driver, radiator kind `cone`
 
 The catalog stores what the manufacturer publishes: `fs_hz, qes, qms, vas_m3, re_ohm, le_h, sd_m2, xmax_m, pe_w`. Derive the mechanical parameters from those:
 
@@ -329,19 +363,31 @@ This model knows the full shape of the internal air, within its grid. Through Le
 
 ### 5.6 Radiation and summation
 
-Each source `s` is a cone or an opening, with volume velocity `U_s`, at distance `r_s` from the listening point:
+Every radiator hands the radiation model a list of **surface sources**. A surface source is a patch of moving surface: a position, an outward unit direction, an area, and a complex normal velocity per volt. Its volume velocity is `U_s = velocity * area`.
+
+- A cone is one source at its mount, facing along the mount's outward direction, with `U_s = U_d`.
+- Opening k of that cone's enclosure is one source at the opening, with `U_s = H_k * U_in = -H_k * U_d`. Keep that sign: it is what makes a port cancel the cone at low frequency.
+- A DML panel is a grid of sources (section 5.9).
+
+A radiation model turns the sources and the cabinet's outer shape into pressure at any point and into radiated sound power. There are three. A radiator does not care which one is in use.
+
+**`point`, Level 1.** Every source is a simple source:
 
 ```
-p_s     = j*omega*RHO0 * U_s * B(f) * D_s(theta, f) * e^(-j*k*r_s) / (4*pi*r_s)
-p_total = sum of p_s over all sources of all drivers, each multiplied by its DSP and amplifier transfer function
+p_s     = j*omega*RHO0 * U_s * B(f) * e^(-j*k*r_s) / (4*pi*r_s)
+p_total = sum of p_s over all sources of all radiators, each multiplied by its DSP and amplifier transfer function
 SPL     = 20*log10(|p_total| / P_REF)
 ```
 
-- For a cone, `U_s = U_d`. For opening k, `U_s = H_k * U_in = -H_k * U_d`. Keep that sign: it is what makes a port cancel the cone at low frequency.
-- `B(f)` is the baffle gain, from 1 when sound radiates all around to 2 when it radiates forward only. There are three modes. `full` is `B = 1`. `half` is `B = 2`, an infinite baffle, and is what the checks use. `baffle` at Level 1 is a shelf centered on `f3 = 115 / baffle_width_m`: `B = (1 + j*f/(f3/sqrt(2))) / (1 + j*f/(f3*sqrt(2)))`. Level 2 replaces that shelf with an edge-diffraction model computed from the baffle outline and the driver position.
-- `D` is directivity. Level 1 uses 1. Level 2 uses a rigid piston: `2*J1(k*a*sin(theta)) / (k*a*sin(theta))`.
-- Level 1 puts all sources of a driver at one point. Level 2 gives each source its real position.
-- The piston model has no cone break-up. Above roughly `k*a = 1`, a driver's real response comes from its published or measured curve. Level 2 adds a response file per driver, blended in above a chosen frequency. Until a curve is present, label that region accordingly (section 5.8).
+`B(f)` is the baffle gain, from 1 when sound radiates all around to 2 when it radiates forward only. The request's `space` picks it. `full` is `B = 1`. `half` is `B = 2`, an infinite baffle, and is what the checks use. `step` is a shelf centered on `f3 = 115 / baffle_width_m`: `B = (1 + j*f/(f3/sqrt(2))) / (1 + j*f/(f3*sqrt(2)))`. All sources of one radiator sit at one point, and the direction a source faces is ignored. A design with a source that does not face the listener gets a warning under this model.
+
+**`baffle`, Level 2.** Each source sits at its real position. A source on a flat surface that faces the listener gets piston directivity, `D = 2*J1(k*a*sin(theta)) / (k*a*sin(theta))` with `theta` measured from its outward direction, and edge diffraction computed from that surface's outline. This model is not valid for a source that faces away from the listener or sits on a curved surface. For those it falls back to `point` and says so in the fidelity label.
+
+**`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a point source at the listening position and the pressure recorded all over the cabinet's skin, gives the transfer from every possible surface source to that position at once. Sound power needs such runs for a set of directions around the cabinet. This model is an outline: nothing has validated it yet.
+
+Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field.
+
+The piston model has no cone break-up. Above roughly `k*a = 1`, a driver's real response comes from its published or measured curve. Level 2 adds a response file per driver, blended in above a chosen frequency. Until a curve is present, label that region accordingly (section 5.8).
 
 ### 5.7 Limits and maximum level
 
@@ -354,11 +400,68 @@ voice-coil heating  |I(f)|^2 * re_ohm              <= pe_w
 amplifier           V(f)                           <= sqrt(amp_power_w * amp_rated_load_ohm)
 ```
 
-`max_spl(f)` is the SPL at 1 m when the first limit is reached with a sine at frequency `f`. `headroom(f) = max_spl(f) - design_level`, where the design level is the target's `max_spl_db_min` (section 11).
+`max_spl(f)` is the SPL at 1 m when the first limit is reached with a sine at frequency `f`. `headroom(f) = max_spl(f) - design_level`, where the design level is the target's `max_spl_db_min` (section 11). The limits above belong to the `cone` radiator and its enclosure. Every radiator kind states its own (section 3.3).
 
 ### 5.8 Fidelity labels
 
-Every curve and number carries three things: the enclosure model (`lumped`, `waveguide`, `fdtd`, or `measured`), the radiation model, and a list of design features that model ignored, for example "two bends treated as straight", "no cone break-up above 2.1 kHz", or "chamber standing waves not modeled". The interface shows the label on every graph. When two models are available, draw both. Where they disagree is something the user needs to see.
+Every curve and number carries the models that produced it: the enclosure model (`lumped`, `waveguide`, `fdtd`, or `measured`), the radiation model (`point`, `baffle`, or `exterior`), and the room model. It also carries a list of design features those models ignored, for example "two bends treated as straight", "no cone break-up above 2.1 kHz", "chamber standing waves not modeled", or "rear-facing source treated as a point". The interface shows the label on every graph. When two models are available, draw both. Where they disagree is something the user needs to see.
+
+### 5.9 DML panels, radiator kind `dml_panel`, Level 3
+
+A distributed-mode loudspeaker is a stiff, light panel driven by an exciter. It radiates through many bending resonances at once, which spreads sound widely. A rear-facing panel reaches the listener mostly by way of the wall behind the speaker, so it can only be judged with the `exterior` radiation model and the room estimate of section 5.10.
+
+This section is an outline. Only its closed-form check (CHK-PLATE-1) has been computed. Validate each part as you build it and record what you find in `STATUS.md`.
+
+The panel is a thin plate in bending, with deflection `w`:
+
+```
+D = E*h^3 / (12*(1 - nu^2))            bending stiffness, N*m
+m = rho*h                              mass per area, kg/m^2
+D * del^4(w) + m * d2w/dt2 = pressure difference across the panel + exciter force per area
+simply supported panel a by b, mode (i, j):   f_ij = (pi/2) * sqrt(D/m) * ((i/a)^2 + (j/b)^2)
+```
+
+Loss enters as a complex stiffness `E*(1 + j*eta)`, with `eta` the material's loss factor. Each edge is free, simply supported, or clamped. Free edges are the usual DML case and have no closed form, so solve the plate numerically: find its modes by finite differences or finite elements, then sum them.
+
+The exciter is an inertial motor. Its coil is fixed to the panel and its magnet hangs on a suspension. With `v_p` the panel velocity at the exciter and `v_m` the magnet velocity:
+
+```
+V       = Ze*I + bl*(v_p - v_m)
+F_panel = bl*I + Zs*(v_m - v_p)                 Zs = k_s/(j*omega) + r_s, the exciter's suspension
+magnet:   j*omega*m_mag*v_m = -bl*I - Zs*(v_m - v_p)
+```
+
+The coil's mass is added to the panel at the exciter position.
+
+- **Backing.** `open`: both faces radiate. `sealed`: only the front face radiates, and the trapped air is a spring that puts a uniform pressure `-(RHO0*C0^2 / V_cavity) * integral of w over the panel` on the panel. A panel that opens into a cabinet chamber comes at Level 4.
+- **Radiation.** Each panel element is a surface source with velocity `j*omega*w`. An `open` panel also has a back-face source at each element with the opposite sign.
+- **Limits.** Panel deflection at the exciter against the exciter's travel, voice-coil heating, and amplifier voltage.
+- **Data.** The exciter comes from the catalog (section 9). The panel's `E`, `rho`, `nu`, and loss factor come from a source or a measurement. Printed panels vary with infill and print direction, so the interface says the result depends on those numbers.
+
+```jsonc
+{ "kind": "dml_panel", "exciter_id": "...", "mount": "m2", "backing": "open",
+  "panel": { "width_m": 0.30, "height_m": 0.20, "thickness_m": 0.003, "material": "...", "edges": "free" },
+  "exciter_at_m": [0.12, 0.09] }
+```
+
+### 5.10 Room estimate
+
+`free` is no room: only the direct sound of section 5.6. It is the default and the only member through Level 2.
+
+`simple`, Level 3, adds the two things a radiator needs when it does not face the listener: the wall behind the speaker, and the room's diffuse sound.
+
+```
+"room": { "kind": "simple", "wall_behind_m": 0.5, "wall_reflection": 0.9, "volume_m3": 50, "rt60_s": 0.4 }
+
+direct       the direct sound of section 5.6
+reflection   the cabinet mirrored in the wall behind it: the sound it sends toward that wall,
+             arriving later by the extra path and scaled by wall_reflection
+diffuse      p_rev^2 = 4 * W * RHO0*C0 / A,   A = 0.161 * volume_m3 / rt60_s,   W = radiated sound power
+
+in-room response: direct and reflection add as complex pressures; diffuse adds as energy
+```
+
+This is an estimate for comparing designs. It is not a room simulation.
 
 ## 6. Cabinet builder
 
@@ -368,7 +471,11 @@ A parametric model of the cabinet. The user edits numbers and drags handles, and
 
 ### 6.2 Geometry data
 
-Section 4.1 shows the Level 1 enclosure. From Level 2 the same fields describe ports, extra chambers, and internal ducts:
+**Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. Level 4 adds an imported mesh. The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
+
+**Mounts.** A mount names one of the outer shape's surfaces and a position on it. The outer shape returns the mount's position and outward direction, so a radiator can sit on any surface and face any way: front, back, side, top, or along a curve.
+
+**Inside.** Section 4.1 shows the Level 1 enclosure. From Level 2 the same fields describe ports, extra chambers, and internal ducts:
 
 ```jsonc
 "chambers": [ { "id": "main", "min_m": [0.008, 0.008, 0.008], "max_m": [0.152, 0.172, 0.242], "fill": null } ],
@@ -386,7 +493,7 @@ From the same parameters derive:
 
 1. The air network (volumes, lengths, areas) for `lumped` and `waveguide`, computed by formula in the engine.
 2. The print solid, built on the web side with constructive solid geometry using the `manifold-3d` package, the Manifold kernel compiled to WebAssembly. It guarantees manifold output. Run it in a worker. Call its `setup()` after loading, and release every object it creates with `.delete()`, because they are not garbage collected. Cost uses the engine's own solid volume, not this solid's.
-3. The voxel grid for `fdtd`, sampled in the engine directly from the primitives.
+3. The voxel grid for `fdtd`, sampled in the engine directly from the primitives, or from the print solid's mesh for an outer shape that has no formula.
 
 These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 
@@ -400,29 +507,30 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 
 ## 7. Crossover and DSP chain
 
-- Order for each driver: crossover filters, per-driver EQ, delay, gain and polarity, limiter. Blocks for the whole speaker come before the split.
+- Order for each radiator: crossover filters, per-radiator EQ, delay, gain and polarity, limiter. Blocks for the whole speaker come before the split.
 - Biquads follow the RBJ Audio EQ Cookbook, with `H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)`. Types: lowpass, highpass, peaking, low shelf, high shelf, allpass, notch.
 - Crossover families: Butterworth of order n, and Linkwitz–Riley of order 2n, which is two Butterworth filters of order n in cascade. LR4 and LR8 sum flat in phase. LR2 needs one side inverted. The lab sets polarity automatically and shows the summed response either way.
 - Every block provides its complex frequency response for simulation and a sample-by-sample process function for audio, from one implementation.
 - Delay is whole samples at Level 1 and fractional from Level 2. FIR blocks and linear-phase crossovers come at Level 3, with the added latency shown.
 - Changing a parameter during playback crossfades between old and new settings over about 20 ms.
-- Export for real hardware: for each driver, a text file of biquad coefficients at a chosen sample rate, and FIR filters as mono WAV files. Hardware-specific formats wait for the owner's choice of playback hardware (`STATUS.md`).
+- Export for real hardware: for each radiator, a text file of biquad coefficients at a chosen sample rate, and FIR filters as mono WAV files. Hardware-specific formats wait for the owner's choice of playback hardware (`STATUS.md`).
 
 ## 8. Correction and auto EQ
 
-Purpose: get the most out of cheap hardware and never ask it for more than it can do. Inputs are the simulated response per driver and summed (later a measured one), the limits of section 5.7, and the target.
+Purpose: get the most out of cheap hardware and never ask it for more than it can do. Inputs are the simulated response per radiator and summed (later a measured one), the limits of section 5.7, and the target.
 
 | | Feature | What it does | Level |
 | --- | --- | --- | --- |
 | C1 | Target fit | Parametric EQ that brings the response to the target curve. | 1 |
 | C2 | Physics-limited bass extension | Extends the bass by boosting only as far as cone travel, amplifier, heating, and port limits allow at the design level, with a protective high-pass below. | 1 |
 | C3 | Geometry-derived compensation | Baffle-step and edge-diffraction correction computed from the cabinet's outer shape. | 2 |
-| C4 | Time and phase alignment | Per-driver delay from the driver positions, and phase alignment through the crossover. | 2 |
+| C4 | Time and phase alignment | Per-radiator delay from the radiator positions, and phase alignment through the crossover. | 2 |
 | C5 | Cabinet-resonance correction | Finds internal resonances in the `fdtd` result that reach the listener through the cone or a port, cuts them, and tells the user which geometry change would remove the cause. | 3 |
 | C6 | Level-aware bass | Deep bass at normal volume that backs off as level rises: a look-ahead limiter driven by a running model of cone travel, `X/V = bl / (j*omega*(Ze*Zm + bl^2))`, realized as a digital filter. | 3 |
 | C7 | Linear-phase correction | FIR correction and crossovers, with latency reported. | 3 |
 | C8 | Pre-distortion, experimental | Cancels a driver's own distortion using a nonlinear driver model. The interface labels it unproven until a measurement confirms it. | 4 |
 | C9 | Correction from measurement | The same tools fed by a measured response instead of a simulated one. | 4 |
+| C10 | Indirect-radiator tuning | Sets level, band limits, and delay for radiators that do not face the listener, using the room estimate of section 5.10. | 3 |
 
 C1 works this way, so that behavior is the same from session to session:
 
@@ -470,17 +578,20 @@ Rules:
 
 Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing rules. An amplifier record holds channel count, power per channel at a rated load, and price. A DSP device record holds output channels, sample rates, filter capacity, and price. The synthetic amplifier `test-amp-a` has one channel of 50 W into 4 ohm.
 
+Exciters, from Level 3, are records like drivers. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint. Panel materials, also from Level 3, hold `E`, density, Poisson's ratio, and loss factor, each with a source or a note of how it was measured.
+
 `catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram and the printer's build volume and flow rate come from the owner.
 
 ### 9.2 Cost
 
 ```
-cost of one speaker = drivers + cabinet + extras
+cost of one speaker = drivers and exciters + cabinet + panels + extras
 cabinet             = print_mass_kg * price_per_kg
 print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
 print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600
+panels              = printed like the cabinet, or bought sheet area * price_per_m2
 cost of the system  = (2 if stereo_pair else 1) * cost of one speaker + electronics
-electronics         = the amplifiers and DSP devices needed to give every driver its own channel
+electronics         = the amplifiers and DSP devices needed to give every radiator its own channel
 ```
 
 Cost is shown beside performance at all times. Every figure in it traces to a catalog record with a source and a date.
@@ -489,12 +600,13 @@ Cost is shown beside performance at all times. Every figure in it traces to a ca
 
 The user hears the simulated speaker and switches between designs.
 
-- The AudioWorklet runs the design's own DSP chain in the `seatlock-rt` kernel and outputs one channel per driver. This is the part that would run on real hardware.
-- The virtual speaker follows it. Each driver's channel is convolved with that driver's simulated impulse response, from terminal voltage to pressure at the listening position, and the results are summed. The engine computes the impulse responses. Use one `ConvolverNode` per driver with `normalize = false`, because the default rescales the response.
+- The AudioWorklet runs the design's own DSP chain in the `seatlock-rt` kernel and outputs one channel per radiator. This is the part that would run on real hardware.
+- The virtual speaker follows it. Each radiator's channel is convolved with that radiator's simulated impulse response, from terminal voltage to pressure at the listening position, and the results are summed. The engine computes the impulse responses. Use one `ConvolverNode` per radiator with `normalize = false`, because the default rescales the response.
 - Sources are an audio file the user opens and built-in test signals: pink noise, sweeps, tones. Do not bundle music.
 - A/B: two designs are loaded at once and switched with a short crossfade, at matched level by default.
 - A volume control maps to amplifier voltage. The interface shows the simulated level at 1 m and lights a limit indicator when cone travel, opening air speed, or amplifier voltage would exceed section 5.7.
 - From Level 3 the virtual speaker reproduces limit behavior audibly, so an overdriven design sounds overdriven.
+- From Level 3, when the design has a room, the virtual speaker includes the room estimate, so a radiator that faces away from the listener can be heard doing its job.
 - Parameters reach the kernel as messages. The kernel applies them at a block boundary with a crossfade.
 
 Things that go wrong if ignored:
@@ -516,6 +628,8 @@ max_spl_db    minimum of max_spl(f) from f6_hz to 16 kHz: the loudest sine the s
               within every limit at every frequency in its range, at 1 m, one speaker
 cost          section 9.2
 ```
+
+From Level 3 the results also include sound power, a directivity index, and, when the design has a room, the in-room response of section 5.10. A design with a room is scored on its in-room response, using the target's tilt. A design without one is scored on its direct response.
 
 ### 11.2 Targets
 
@@ -550,7 +664,7 @@ shortfall = max(0, log2(f6_hz / f6_hz_max))
 Tracks:
 
 ```
-A  Design model and app shell     B  Catalog and cost           C  Driver and fast enclosure models
+A  Design model and app shell     B  Catalog and cost           C  Radiators and fast enclosure models
 D  3D solver                      E  Cabinet builder            F  Crossover and DSP chain
 G  Correction and auto EQ         H  Listen mode                I  Score and optimizer
 ```
@@ -561,11 +675,11 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 **Level 1, one driver in a sealed box, end to end.**
 
-- A: edit every Level 1 field; save and load; graphs for response, impedance, and cone travel; fidelity labels shown.
+- A: edit every Level 1 field; save and load; graphs for response, impedance, and cone travel; fidelity labels shown; every family of section 3.3 goes through its registry. CHK-EXT-1, CHK-EXT-2.
 - B: the two test drivers of section 13; at least three sourced real drivers if you have web access; cost from drivers and print material.
-- C: driver model, `lumped` sealed box, limits, maximum level. CHK-DRV-1, CHK-DRV-2, CHK-BOX-1, CHK-BOX-2.
-- D: solver core on a closed box; voxels from the Level 1 shell; `Z_ab` from `fdtd` drawn over the `lumped` curve. CHK-FDTD-1, CHK-FDTD-2.
-- E: shell with one driver cut-out, 3D view, air volume read from the solid, STL export. CHK-GEO-1, CHK-GEO-2.
+- C: `cone` radiator, `lumped` sealed box, `point` radiation, limits, maximum level. CHK-DRV-1, CHK-DRV-2, CHK-BOX-1, CHK-BOX-2.
+- D: solver core on a closed box; voxels from the `box` outer shape; `Z_ab` from `fdtd` drawn over the `lumped` curve. CHK-FDTD-1, CHK-FDTD-2.
+- E: `box` outer shape with one driver cut-out, 3D view, air volume read from the solid, STL export. CHK-GEO-1, CHK-GEO-2.
 - F: one-driver chain with high-pass, gain, and EQ biquads; chain response; coefficient export. CHK-DSP-1, CHK-DSP-3.
 - G: C1 and C2, with the keep-only-if-it-helps rule. CHK-EQ-1, CHK-EQ-2, CHK-EQ-3.
 - H: a music file or test signal through the chain and the virtual speaker; correction switched on and off; a cone-travel meter.
@@ -574,45 +688,46 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 **Level 2, a two-way vented speaker from real parts.**
 
-- A: several drivers per design; two designs side by side.
+- A: several radiators per design; two designs side by side.
 - B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data; sourced amplifiers and DSP devices; cost with electronics and stereo pairs; price dates shown.
-- C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; edge diffraction; piston directivity; separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3.
+- C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
-- E: round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
-- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-driver limiter. CHK-DSP-2.
-- G: C3 and C4; EQ per driver and for the whole speaker.
-- H: all drivers playing; A/B between two designs at matched level; live limit indicators.
+- E: outer shapes with rounded and chamfered edges, a sloped baffle, and `prism`; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
+- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter. CHK-DSP-2.
+- G: C3 and C4; EQ per radiator and for the whole speaker.
+- H: all radiators playing; A/B between two designs at matched level; live limit indicators.
 - I: optimizer over continuous variables for chosen drivers; cost-against-quality plot.
 - End to end, CHK-E2E-2: the example design `two-way-vented` passes the same sequence as CHK-E2E-1, and its three enclosure models agree within 1.5 dB below 200 Hz.
 
 **Level 3, novel geometry and advanced correction.**
 
 - A: undo and redo; design history.
-- B: stale-price warnings; alternative vendors per part.
-- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber.
-- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met.
-- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings.
+- B: exciters and panel materials; stale-price warnings; alternative vendors per part.
+- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
+- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing.
+- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
-- G: C5, C6, C7.
-- H: audible limit behavior in the virtual speaker.
-- I: optimizer chooses drivers from the catalog as well as geometry and DSP; finalists verified with `fdtd`.
-- End to end, CHK-E2E-3: the example design `folded-line` runs in all three models, and the report lists what each model ignored.
+- G: C5, C6, C7, C10.
+- H: audible limit behavior and the room estimate in the virtual speaker.
+- I: optimizer chooses drivers from the catalog as well as geometry and DSP; finalists verified with `fdtd`; designs with a room scored on the in-room response.
+- End to end, CHK-E2E-3: the example design `folded-line` runs in all three enclosure models, and the report lists what each model ignored. The example design `rear-panel`, a rear-facing DML panel on an outer shape that is not a box, runs with `exterior` radiation and the `simple` room, and its in-room response differs from its direct response.
 
-**Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, and export for the owner's chosen playback hardware. Plan this level with the owner when Level 3 is done.
+**Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, imported meshes as outer shapes, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.
 
 ## 13. Checks
 
 Each check becomes an automated test named after its id. The numbers were produced on 2026-11-09 by a separate reference implementation of the equations in section 5, including a small 3D solver. Identity checks (CHK-DRV-2, CHK-BOX-1, CHK-BOX-3, CHK-DSP-2) compare the implementation with closed-form results that are known independently of this code. The value checks anchor your implementation to the same equations. Stored expected values in the end-to-end checks catch regressions only. They never prove correctness.
 
-Test drivers:
+Test parts:
 
 ```
 test-woofer-a   fs 50 Hz, Qes 0.45,   Qms 4.0, Vas 10 L, Re 6.0 ohm, Le 0.5 mH, Sd 85 cm^2,  Xmax 4 mm, Pe 30 W
 test-woofer-b   fs 40 Hz, Qes 0.4144, Qms 5.0, Vas 20 L, Re 6.0 ohm, Le 0,      Sd 130 cm^2, Xmax 6 mm, Pe 50 W
 test-amp-a      1 channel, 50 W into 4 ohm
+test-panel-a    0.40 x 0.30 m, 3 mm thick, E 3.5 GPa, 1240 kg/m^3, Poisson's ratio 0.35
 ```
 
-Unless a check says otherwise: 2.83 V RMS at the terminals, radiation mode `half`, distance 1 m, model `lumped`, no leak, no port loss.
+Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `point` with space `half`, distance 1 m, enclosure model `lumped`, no leak, no port loss.
 
 | Id | Setup | Must hold |
 | --- | --- | --- |
@@ -638,6 +753,11 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation mode `half
 | CHK-GEO-1 | Every example design. | Air volume by formula and from the print solid agree within 0.5 %. Voxels at 5 mm agree within 2 %. |
 | CHK-GEO-2 | Every exported print file. | Each edge is shared by exactly two triangles, winding faces outward, volume is positive, coordinates are in millimeters, and re-importing gives the same volume within 0.1 %. |
 | CHK-COST-1 | Every example design. | Cost equals a hand calculation written out in the test. |
+| CHK-EXT-1 | A test-only crate registers a new outer shape, a new radiator, and a new DSP block, then runs `simulate` on a design that uses them. | It works, and no file outside that crate changes. |
+| CHK-EXT-2 | A design file containing a part of a kind this build does not know. | It opens, saves unchanged, simulates the rest, and reports a warning naming the unknown part. |
+| CHK-RAD-1 | `baffle` radiation, a rigid piston of radius 50 mm on a very large flat surface, at `k*a = 3` (3277 Hz). | 30° off axis the level is 2.57 dB below the on-axis level, and 60° off axis it is 8.81 dB below. Within 0.1 dB. |
+| CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
+| CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
 
 ## 14. Interface
@@ -650,13 +770,15 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation mode `half
 - Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
+- A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.
 
 ## 15. Not simulated
 
 Say so in the interface wherever it matters.
 
 - Cabinet wall vibration. Printed walls flex. Until this is modeled, the builder enforces minimum wall thickness and offers bracing.
-- The listening room. All results are for free space or a baffle.
+- The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
+- DML panels until Level 3. After that, a panel's result still depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
 - Voice-coil heating over time, and, until Level 3, distortion.
 - Passive crossovers are out of scope by design.
@@ -666,13 +788,18 @@ Say so in the interface wherever it matters.
 | Interface wording | Technical term | Meaning |
 | --- | --- | --- |
 | Driver | Loudspeaker drive unit | A single woofer, tweeter, or full-range unit. |
+| Sound source | Radiator | Anything driven by one amplifier channel that makes sound: a cone driver with its enclosure, or a DML panel. |
+| Panel speaker | DML panel, `dml_panel` | A stiff, light panel made to vibrate by an exciter. It radiates through many bending resonances at once. |
+| Exciter | Inertial exciter | The small motor fixed to a panel that makes it vibrate. |
+| Sound power | `W` | All the sound a speaker sends out, in every direction. |
+| In-room response | Section 5.10 | The sound that reaches the listener directly and by way of the room. |
 | Cone travel | Excursion, `x_peak`, limit `xmax_m` | How far the cone moves from rest. |
 | Port air speed | Port velocity | Peak speed of air in a port. Too fast and the port makes noise. |
 | Bass limit | `f6_hz` | The lowest frequency the speaker reproduces within 6 dB of its normal level. |
 | Evenness | `flatness_db` | How closely the response follows the target. |
 | Maximum clean level | `max_spl_db` | The loudest the speaker plays without exceeding a limit. |
 | Tuning | `f_b` | The frequency at which a port takes over from the cone. |
-| Crossover | Digital isolated crossover | The split of the signal between drivers, done digitally, one channel per driver. |
+| Crossover | Digital isolated crossover | The split of the signal between radiators, done digitally, one channel per radiator. |
 | Correction | Auto EQ and the features of section 8 | Digital processing that improves the response within the hardware's limits. |
 | Quick, Detailed, Full 3D | `lumped`, `waveguide`, `fdtd` | The three enclosure models, from fastest to most complete. |
 | Thiele–Small parameters | `fs_hz`, `qes`, `qms`, `qts`, `vas_m3`, `re_ohm`, `le_h`, `sd_m2`, `bl`, `mms`, `cms`, `rms` | The published numbers that describe a driver: resonance frequency, electrical, mechanical, and total Q, equivalent air volume, coil resistance and inductance, cone area, force factor, moving mass, suspension compliance, mechanical resistance. |

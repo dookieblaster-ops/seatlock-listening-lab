@@ -8,6 +8,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 - **Level 0 has not started.** The `main` branch holds the specification only: `README.md`, this file, and the agent pointer files. There is no program yet.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
+- Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
 - An earlier browser prototype existed outside this repository. It is not a reference for this build.
 
@@ -21,6 +22,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
+- CHK-PLATE-1 is the closed-form result, cross-checked with a finite-difference eigenvalue solve (within 0.1 %). CHK-RAD-1 and CHK-ROOM-1 were computed from their formulas.
+- Not validated by anything yet: the exciter and backing equations of section 5.9, the `exterior` radiation model and its reciprocity run (5.6), the `baffle` model's edge diffraction, and the `simple` room's reflection term. Treat them as starting designs.
 - Three tool facts were checked against current documentation on 2026-11-09: the status of `wasm-pack` and `wasm-bindgen`, how `manifold-3d` is loaded and released, and how Claude Code loads `AGENTS.md` and its imports. The other tool choices are long established and were not rechecked. Nothing has been built with any of them yet.
 
 ## Decisions log
@@ -42,4 +45,5 @@ Ask each one when its answer starts to matter. Record the answer here and in the
 3. **Printer.** Build volume, usual material, and filament price per kilogram. Needed for cost at Level 1 and for splitting cabinets into parts at Level 2. Until answered, use clearly labeled placeholder values.
 4. **Protected band.** The rule "no EQ boost from 3 kHz to 5 kHz" was carried over from the owner's earlier notes and is on by default. The earlier rule "no boost below 150 Hz" was replaced by the physics limit of README section 8. Confirm both.
 5. **Budget.** Is there a ceiling per pair of speakers? Optional. It becomes `budget_max` in the target.
-6. **Hosting.** Should the lab also be reachable as a web link, in addition to running on the laptop? The build is static files, so this is possible at any time.
+6. **Rear-facing DML panels.** What will the panels be made of (printed, or bought sheet such as foam board or plywood)? How far from the wall will the speakers stand? Should in-room results aim for a gently falling response rather than a flat one (the target's tilt)? Needed at Level 3.
+7. **Hosting.** Should the lab also be reachable as a web link, in addition to running on the laptop? The build is static files, so this is possible at any time.
