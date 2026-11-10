@@ -1,0 +1,28 @@
+{
+  "id": "test-woofer-b",
+  "status": "synthetic",
+  "maker": "Test",
+  "model": "Woofer B",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 40.0,
+    "qes": 0.4144,
+    "qms": 5.0,
+    "vas_m3": 0.02,
+    "re_ohm": 6.0,
+    "le_h": 0.0,
+    "sd_m2": 0.013,
+    "xmax_m": 0.006,
+    "pe_w": 50.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.15,
+    "outer_diameter_m": 0.17,
+    "bolt_circle_m": 0.155,
+    "bolt_count": 4,
+    "depth_m": 0.07
+  },
+  "response_file": null,
+  "source": null,
+  "price": null
+}

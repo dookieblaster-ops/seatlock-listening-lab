@@ -1,0 +1,9 @@
+[package]
+name = "seatlock-correct"
+description = "Auto EQ targets, correction features, and physics-aware limits."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }
+seatlock-dsp = { path = "../seatlock-dsp" }

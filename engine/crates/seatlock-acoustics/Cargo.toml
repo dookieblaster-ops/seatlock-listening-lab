@@ -1,0 +1,9 @@
+[package]
+name = "seatlock-acoustics"
+description = "Radiators, enclosure loads, radiation, room, and limits."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }
+seatlock-geom = { path = "../seatlock-geom" }

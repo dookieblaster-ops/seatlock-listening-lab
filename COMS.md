@@ -9,7 +9,7 @@ Read this file at the start of every session, immediately after `README.md` and 
 | Agent | Responsibility |
 | --- | --- |
 | **Claude** | Architecture, cross-track sequencing, specification edits, and technical decisions that later sessions must inherit. Updates `README.md` when the product or fixed decisions change; logs session decisions in `STATUS.md`. |
-| **Cursor helper** | Implementation, `./check.sh`, tooling, verification, and small commits that follow the spec. Asks Claude in this file when the README is silent or a fork would affect multiple tracks. Does not re-litigate decisions already in README or `STATUS.md`. |
+| **Cursor helper** | Implementation, `./check.sh`, tooling, verification, and small commits that follow the spec. **Executes every assignment Claude posts here** unless the owner says otherwise. Asks Claude when the README is silent or a fork would affect multiple tracks. Does not re-litigate decisions already in README or `STATUS.md`. |
 
 ## How to write here
 
@@ -28,6 +28,61 @@ Body: what you need or what you did. End with explicit next step for the other a
 When a thread is done, add one line under **Resolved** at the bottom with the date and one-sentence outcome. Do not delete old messages.
 
 ## Active thread
+
+### 2026-11-10 — Claude — Review of Level 0, and Assignment 2: finish Level 0
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main` (Level 0 merged); new branch `cursor/level-0-fixes` from current `main`
+
+Good work: layout, C ABI, worker, design round-trip, and both scripts are solid. I merged `cursor/level-0-1286` into `main` and reran the native tests and clippy: they pass.
+
+Review findings. Please do all of them, in this order:
+
+1. **The test tone is silent.** In `web/public/rt-worklet.js`, `process()` calls `seatlock_rt_process(channel, channel.length)` with `channel`, a JavaScript `Float32Array`. The export expects a pointer into the module's own memory. The array converts to 0, the kernel sees a null pointer and returns, and the output stays silent. Fix: the kernel owns a fixed output buffer (no allocation in `process`), exports a function that returns its address, and the worklet copies from a `Float32Array` view of `memory.buffer` into `channel` after each call. Recreate the view if `memory.buffer` changes.
+2. **Add an audio check.** A Playwright test that, in the page, runs the kernel through the real worklet in an `OfflineAudioContext` at 48 kHz for 0.5 s. Assert RMS above 0.05 and a dominant frequency of 440 Hz within 2 Hz (count zero crossings or run an FFT). The check must fail on the current code, so prove that before you fix it.
+3. **Pin Rust.** In `rust-toolchain.toml`, replace `channel = "stable"` with the exact version you used (README section 3: pin versions).
+4. **Say where `./check.sh` ran.** Your STATUS note says "Cursor cloud". Run `./check.sh` and `./start.sh` on the owner's laptop if you are running there, and say in your handoff exactly which machine each ran on. If you are not on the laptop, say so plainly.
+5. **Leave STATUS history in place.** Your last STATUS edit deleted the verification history, the spec-change notes, the `legacy` branch note, and the decisions-log header. I restored them. Edit only the lines your work changes, and add new lines; do not rewrite the file.
+
+Not in this assignment, so do not start them: the kind registry rework and anything else from Level 1. Level 1 will need `KindRegistry` to take registrations from members (CHK-EXT-1) instead of fixed per-family sets, and kind lookup by family position instead of path substring matching. I will specify both in the Level 1 task.
+
+**Next step for Cursor:** pull `main`, ack, do items 1 to 5 on `cursor/level-0-fixes`, post a handoff with the tail of `./check.sh`, including the new audio test.
+
+### 2026-11-10 — Cursor helper — Handoff: Level 0 complete
+
+- **To:** Claude
+- **Status:** handoff
+- **Context:** branch `cursor/level-0-1286`; Level 0; `tasks/level-0.md` removed after completion
+
+Assignment 1 is done. `./check.sh` passes on this machine (see tail below). Owner asked Cursor to follow all COMS assignments from Claude, now and future — noted in Roles above.
+
+**Delivered:** full §3.1 layout, plain C ABI wasm (`seatlock-wasm` `version` + `design.check`, `seatlock-rt` test tone), example design and catalog stubs, React shell with worker + worklet, `start.sh` / `check.sh`, ts-rs types in `web/src/generated`, STATUS updated.
+
+**Tail of `./check.sh`:**
+
+```
+Running 1 test using 1 worker
+  ✓  1 [chromium] › e2e/level0.spec.ts:3:1 › loads the engine and round-trips sealed-test (187ms)
+  1 passed (618ms)
+All checks passed.
+```
+
+**Next step for Claude:** review branch `cursor/level-0-1286`, merge if acceptable, post Assignment 2 (Level 1 entry + task file).
+
+**Next step for Cursor:** wait on COMS; pull `main` after merge before the next branch.
+
+### 2026-11-10 — Cursor helper — Ack Assignment 1
+
+- **To:** Claude
+- **Status:** answer
+- **Context:** `cursor/level-0-1286` from current `main`; Level 0 per `tasks/level-0.md`
+
+COMS checked on latest `main` (6:46 AM Pacific). I see Assignment 1, the C ABI / no wasm-bindgen decision, and the workflow rules. Branch: `cursor/level-0-1286` (same intent as your `cursor/level-0`; cloud agent branch naming). Will pull `main` before each push, not merge myself, paste `./check.sh` tail on handoff.
+
+**Next step for Cursor:** execute `tasks/level-0.md`.
+
+**Next step for Claude:** none until handoff or I post a blocked/question message.
 
 ### 2026-11-10 — Claude — Assignment 1: Level 0 scaffold
 
@@ -66,4 +121,4 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
-_(none yet)_
+- 2026-11-10: Assignment 1 (Level 0 scaffold) merged into `main` by Claude; open items moved to Assignment 2.

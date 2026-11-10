@@ -1,0 +1,8 @@
+[package]
+name = "seatlock-rt"
+description = "Real-time audio kernel exposed as a plain C ABI for the AudioWorklet."
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]

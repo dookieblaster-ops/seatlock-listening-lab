@@ -1,0 +1,8 @@
+[package]
+name = "seatlock-geom"
+description = "Cabinet geometry: air network, solids, and voxel grids."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }

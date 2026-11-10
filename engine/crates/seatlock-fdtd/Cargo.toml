@@ -1,0 +1,8 @@
+[package]
+name = "seatlock-fdtd"
+description = "Three-dimensional acoustic finite-difference time-domain solver."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }

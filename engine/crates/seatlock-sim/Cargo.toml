@@ -1,0 +1,13 @@
+[package]
+name = "seatlock-sim"
+description = "Design to results: simulation, scoring, cost, and optimization."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }
+seatlock-geom = { path = "../seatlock-geom" }
+seatlock-acoustics = { path = "../seatlock-acoustics" }
+seatlock-fdtd = { path = "../seatlock-fdtd" }
+seatlock-dsp = { path = "../seatlock-dsp" }
+seatlock-correct = { path = "../seatlock-correct" }

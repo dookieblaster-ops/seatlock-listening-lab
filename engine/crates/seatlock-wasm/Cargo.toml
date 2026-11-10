@@ -1,0 +1,13 @@
+[package]
+name = "seatlock-wasm"
+description = "WebAssembly worker entry point with a plain C ABI JSON API."
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }
+serde.workspace = true
+serde_json.workspace = true
