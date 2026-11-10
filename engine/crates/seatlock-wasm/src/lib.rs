@@ -2,6 +2,7 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+use seatlock_core::catalog;
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
 use seatlock_fdtd::{aperture_cells, run_grid};
 use seatlock_sim::{builtin, correction_plan, geometry_report, listen_package, simulate_json};
@@ -199,6 +200,17 @@ fn dispatch(method: &str, request: &str) -> String {
                 Ok(design) => correction_plan(&design, &builtin()).to_string(),
                 Err(error) => serde_json::to_string(&ErrorReply {
                     error: error.to_string(),
+                })
+                .unwrap(),
+            }
+        }
+        "catalog.driver" => {
+            let parsed = parse_request(request);
+            let id = parsed.text.unwrap_or_default();
+            match catalog::driver(id.trim()) {
+                Some(record) => record.to_string(),
+                None => serde_json::to_string(&ErrorReply {
+                    error: format!("unknown driver {id}"),
                 })
                 .unwrap(),
             }

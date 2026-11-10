@@ -19,9 +19,14 @@ class SeatlockRtProcessor extends AudioWorkletProcessor {
     this.inView = null;
     this.useInput = false;
     this.bindOutput();
+    const preset = options.processorOptions?.coeffs;
+    if (preset && typeof preset.length === "number" && preset.length > 1) {
+      this.loadCoefficients(preset);
+    }
     this.port.onmessage = (event) => {
       const data = event.data;
-      if (!(data instanceof Float64Array) || data.length < 1) {
+      // A typed array posted from the page fails `instanceof` inside the worklet.
+      if (!data || typeof data.length !== "number" || data.length < 1 || typeof data[0] !== "number") {
         return;
       }
       const command = data[0];

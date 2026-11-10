@@ -37,7 +37,7 @@ mkdir -p web/public
 cp engine/target/wasm32-unknown-unknown/release/seatlock_wasm.wasm web/public/
 cp engine/target/wasm32-unknown-unknown/release/seatlock_rt.wasm web/public/
 mkdir -p web/public/examples
-cp designs/examples/sealed-test.seatlock.json web/public/examples/
+cp designs/examples/*.seatlock.json web/public/examples/
 
 echo "==> web checks"
 (

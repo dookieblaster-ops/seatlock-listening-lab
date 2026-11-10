@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "name": "two-way-vented",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "box",
+        "width_m": 0.274,
+        "height_m": 0.344,
+        "depth_m": 0.274,
+        "wall_m": 0.012,
+        "edge_radius_m": 0.0
+      },
+      "chambers": [],
+      "ducts": [
+        {
+          "id": "port",
+          "from": "main",
+          "to": "outside",
+          "path_m": [
+            [
+              0.137,
+              0.2,
+              0.08
+            ],
+            [
+              0.137,
+              0.11202,
+              0.08
+            ]
+          ],
+          "section": {
+            "shape": "round",
+            "start_m": [
+              0.04
+            ],
+            "end_m": [
+              0.04
+            ]
+          }
+        }
+      ],
+      "mounts": [
+        {
+          "id": "woofer",
+          "surface": "front",
+          "at_m": [
+            0.137,
+            0.12
+          ],
+          "rear_into": "main",
+          "recess_m": 0.0
+        },
+        {
+          "id": "tweeter",
+          "surface": "front",
+          "at_m": [
+            0.137,
+            0.28
+          ],
+          "rear_into": "main",
+          "recess_m": 0.0
+        }
+      ],
+      "solids": []
+    },
+    "radiators": [
+      {
+        "kind": "cone",
+        "driver_id": "test-woofer-b",
+        "mount": "woofer"
+      },
+      {
+        "kind": "cone",
+        "driver_id": "test-tweeter-a",
+        "mount": "tweeter"
+      }
+    ],
+    "listening": {
+      "distance_m": 1.0
+    }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [
+      {
+        "blocks": [
+          {
+            "kind": "crossover",
+            "family": "linkwitz-riley",
+            "order": 4,
+            "f_hz": 2500.0,
+            "band": "low"
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      },
+      {
+        "blocks": [
+          {
+            "kind": "crossover",
+            "family": "linkwitz-riley",
+            "order": 4,
+            "f_hz": 2500.0,
+            "band": "high"
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      }
+    ],
+    "correction": {
+      "enabled": true,
+      "protected_band_hz": [
+        3000.0,
+        5000.0
+      ],
+      "max_filters": 8
+    }
+  },
+  "electronics": {
+    "amplifiers": [
+      "test-amp-a",
+      "test-amp-a"
+    ],
+    "dsp_device": null
+  },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": false,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}

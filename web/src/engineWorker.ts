@@ -17,7 +17,8 @@ export type WorkerRequest =
       correction: boolean;
       impulseLen: number;
       sampleRate: number;
-    };
+    }
+  | { type: "catalog.driver"; id: number; driverId: string };
 
 export type WorkerResponse =
   | { type: "ready"; version: string }
@@ -63,6 +64,13 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     if (msg.type === "correct") {
       const eng = await ensureEngine();
       const json = eng.call("correct", JSON.stringify({ text: msg.text }));
+      self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
+      return;
+    }
+
+    if (msg.type === "catalog.driver") {
+      const eng = await ensureEngine();
+      const json = eng.call("catalog.driver", JSON.stringify({ text: msg.driverId }));
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
       return;
     }

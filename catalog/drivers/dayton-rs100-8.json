@@ -1,0 +1,41 @@
+{
+  "id": "dayton-rs100-8",
+  "status": "sourced",
+  "maker": "Dayton Audio",
+  "model": "RS100-8",
+  "kind": "fullrange",
+  "published": {
+    "fs_hz": 92.2,
+    "qes": 0.76,
+    "qms": 2.37,
+    "vas_m3": 0.00143,
+    "re_ohm": 6.4,
+    "le_h": 0.0005,
+    "sd_m2": 0.00353,
+    "xmax_m": 0.0035,
+    "pe_w": 30.0,
+    "mms_kg": 0.00363,
+    "cms_m_per_n": 0.00082,
+    "bl_tm": 4.2
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.077216,
+    "outer_diameter_m": 0.098044,
+    "bolt_circle_m": 0.089916,
+    "bolt_count": 6,
+    "depth_m": 0.051054
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-352--dayton-audio-rs100-8-spec-sheet.pdf",
+    "title": "Dayton Audio RS100-8 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 35.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-RS100-8-4-Reference-Full-Range-Driver-295-352",
+    "read_on": "2026-11-10"
+  }
+}

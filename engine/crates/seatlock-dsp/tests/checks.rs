@@ -1,5 +1,6 @@
+use seatlock_core::grid::log_grid;
 use seatlock_core::registry::DspBlock;
-use seatlock_dsp::{biquad_block, response_db};
+use seatlock_dsp::{biquad_block, crossover_block, response_db};
 use std::f64::consts::PI;
 
 fn run_impulse(block: &mut dyn DspBlock, length: usize, chunk: usize) -> Vec<f64> {
@@ -108,4 +109,40 @@ fn chk_dsp_3_impulse_matches_response_for_every_block_size() {
     assert_eq!(by_one, by_128);
     assert_eq!(by_one, by_4096);
     fft_matches(reference.as_ref(), &by_one, sample_rate);
+}
+
+#[test]
+fn chk_dsp_2_linkwitz_riley_sums() {
+    let rate = 48_000.0;
+    let low = crossover_block("linkwitz-riley", 4, false, 2_000.0, rate);
+    let high = crossover_block("linkwitz-riley", 4, true, 2_000.0, rate);
+    let low_db = response_db(low.as_ref(), 2_000.0, rate);
+    let high_db = response_db(high.as_ref(), 2_000.0, rate);
+    assert!((low_db - -6.02).abs() <= 0.02, "lr4 low {low_db}");
+    assert!((high_db - -6.02).abs() <= 0.02, "lr4 high {high_db}");
+    let mut freqs = log_grid(20.0, 20_000.0, 12.0);
+    freqs.push(2_000.0);
+    for freq in freqs {
+        let low_h = low.frequency_response(&[freq], rate)[0];
+        let high_h = high.frequency_response(&[freq], rate)[0];
+        let sum_db = 20.0 * (low_h + high_h).norm().max(1e-20).log10();
+        assert!(sum_db.abs() <= 0.001, "lr4 sum at {freq} is {sum_db}");
+    }
+    let lr2_low = crossover_block("linkwitz-riley", 2, false, 2_000.0, rate);
+    let lr2_high = crossover_block("linkwitz-riley", 2, true, 2_000.0, rate);
+    let low_h = lr2_low.frequency_response(&[2_000.0], rate)[0];
+    let high_h = lr2_high.frequency_response(&[2_000.0], rate)[0];
+    let in_phase = 20.0 * (low_h + high_h).norm().max(1e-20).log10();
+    let flipped = 20.0 * (low_h - high_h).norm().max(1e-20).log10();
+    assert!(in_phase < -40.0, "lr2 in phase at 2 kHz is {in_phase}");
+    assert!(flipped.abs() <= 0.001, "lr2 flipped at 2 kHz is {flipped}");
+    for freq in [100.0, 500.0, 2_000.0, 8_000.0, 16_000.0] {
+        let left = lr2_low.frequency_response(&[freq], rate)[0];
+        let right = lr2_high.frequency_response(&[freq], rate)[0];
+        let sum_db = 20.0 * (left - right).norm().max(1e-20).log10();
+        assert!(
+            sum_db.abs() <= 0.001,
+            "lr2 flipped sum at {freq} is {sum_db}"
+        );
+    }
 }

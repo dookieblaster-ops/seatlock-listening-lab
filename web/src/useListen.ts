@@ -26,6 +26,8 @@ export function useListen() {
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const extrasRef = useRef<AudioNode[]>([]);
   const workletReady = useRef(false);
+  const mainGainRef = useRef<GainNode | null>(null);
+  const otherGainRef = useRef<GainNode | null>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +98,7 @@ export function useListen() {
         extrasRef.current.push(convolver);
       }
       sum.connect(context.destination);
+      mainGainRef.current = sum;
       extrasRef.current.push(splitter, sum);
 
       send(coefficientMessage(prepared.channels.slice(0, count)));
@@ -118,5 +121,61 @@ export function useListen() {
     [send, stop],
   );
 
-  return { playing, error, setError, start, stop, send };
+  const armOther = useCallback(
+    async (prepare: (sampleRate: number) => Promise<{ channels: ListenChannel[]; impulses: number[][] }>) => {
+      const context = contextRef.current;
+      if (!context) {
+        return;
+      }
+      const prepared = await prepare(context.sampleRate);
+      const wasmBytes = await fetch("/seatlock_rt.wasm").then((response) => response.arrayBuffer());
+      const count = Math.max(1, Math.min(4, prepared.channels.length));
+      const node = new AudioWorkletNode(context, "seatlock-rt", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [count],
+        processorOptions: { wasmBytes },
+      });
+      const splitter = context.createChannelSplitter(count);
+      const sum = context.createGain();
+      sum.gain.value = 0;
+      node.connect(splitter);
+      for (let index = 0; index < count; index += 1) {
+        const convolver = context.createConvolver();
+        convolver.normalize = false;
+        const samples = prepared.impulses[index] ?? [1];
+        const buffer = context.createBuffer(1, samples.length, context.sampleRate);
+        buffer.getChannelData(0).set(samples);
+        convolver.buffer = buffer;
+        splitter.connect(convolver, index);
+        convolver.connect(sum);
+        extrasRef.current.push(convolver);
+      }
+      sum.connect(context.destination);
+      extrasRef.current.push(node, splitter, sum);
+      otherGainRef.current = sum;
+      node.port.postMessage(coefficientMessage(prepared.channels.slice(0, count)));
+      node.port.postMessage(new Float64Array([2, 2.83]));
+      node.port.postMessage(new Float64Array([1, 1, 0, 0.2]));
+    },
+    [],
+  );
+
+  const crossfade = useCallback((toOther: boolean, otherLevel: number) => {
+    const context = contextRef.current;
+    const main = mainGainRef.current;
+    const other = otherGainRef.current;
+    if (!context || !main || !other) {
+      return;
+    }
+    const now = context.currentTime;
+    main.gain.cancelScheduledValues(now);
+    other.gain.cancelScheduledValues(now);
+    main.gain.setValueAtTime(main.gain.value, now);
+    other.gain.setValueAtTime(other.gain.value, now);
+    main.gain.linearRampToValueAtTime(toOther ? 0 : 0.25, now + 0.02);
+    other.gain.linearRampToValueAtTime(toOther ? otherLevel : 0, now + 0.02);
+  }, []);
+
+  return { playing, error, setError, start, stop, send, armOther, crossfade };
 }

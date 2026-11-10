@@ -1,5 +1,6 @@
 use seatlock_acoustics::{
-    derive_mechanical, reference_half_space_spl_db, sealed_alignment, sealed_point, Published,
+    derive_mechanical, reference_half_space_spl_db, sealed_alignment, sealed_point, vented_point,
+    PortSpec, Published,
 };
 use seatlock_core::grid::log_grid;
 
@@ -89,6 +90,135 @@ fn chk_box_1_sealed_highpass() {
             (spl - expected).abs() <= 0.001,
             "{freq} Hz: {spl} vs {expected}"
         );
+    }
+}
+
+fn chk_box_3_port() -> PortSpec {
+    let radius = 0.0175;
+    PortSpec {
+        area_m2: std::f64::consts::PI * radius * radius,
+        length_eff_m: 0.12686,
+    }
+}
+
+#[test]
+fn chk_box_3_vented_butterworth() {
+    let published = woofer_b();
+    let volume = 0.020 / 2.0_f64.sqrt();
+    let level = reference_half_space_spl_db(&published, 2.83, 1.0);
+    assert!((level - 88.21).abs() < 0.02, "level {level}");
+    let (low_spl, _, _, _, h) = vented_point(
+        &published,
+        volume,
+        chk_box_3_port(),
+        2.83,
+        1.0,
+        "half",
+        1.0,
+        0.2,
+    );
+    assert!((h - 1.0).abs() < 0.01, "H_port at 1 Hz is {h}");
+    let _ = low_spl;
+    for freq in log_grid(8.0, 800.0, 24.0) {
+        let (spl, _, _, _, _) = vented_point(
+            &published,
+            volume,
+            chk_box_3_port(),
+            2.83,
+            freq,
+            "half",
+            1.0,
+            0.2,
+        );
+        let ratio = 40.0 / freq;
+        let magnitude = 1.0 / (1.0 + ratio.powi(8)).sqrt();
+        let expected = level + 20.0 * magnitude.max(1e-30).log10();
+        assert!(
+            (spl - expected).abs() <= 0.001,
+            "{freq} Hz: {spl} vs {expected}"
+        );
+    }
+}
+
+#[test]
+fn chk_box_4_vented_samples() {
+    let published = woofer_b();
+    let volume = 0.020 / 2.0_f64.sqrt();
+    let cases = [
+        (20.0, 64.11, 3.462e-3, 7.84),
+        (40.0, 85.20, 0.0005e-3, 11.11),
+        (80.0, 88.19, 0.866e-3, 1.96),
+    ];
+    for (freq, spl_db, excursion_m, speed) in cases {
+        let (spl, impedance, excursion, port, _) = vented_point(
+            &published,
+            volume,
+            chk_box_3_port(),
+            2.83,
+            freq,
+            "half",
+            1.0,
+            0.2,
+        );
+        assert!((spl - spl_db).abs() <= 0.02, "{freq} spl {spl}");
+        if freq == 40.0 {
+            assert!((impedance - 6.0).abs() <= 0.03, "z {impedance}");
+            assert!(excursion < 0.001e-3, "x {excursion}");
+        } else {
+            let travel_tol = excursion_m * 0.005;
+            assert!(
+                (excursion - excursion_m).abs() <= travel_tol.max(1e-6),
+                "{freq} x {excursion} vs {excursion_m}"
+            );
+        }
+        let speed_tol = speed * 0.005;
+        assert!(
+            (port - speed).abs() <= speed_tol,
+            "{freq} port {port} vs {speed}"
+        );
+    }
+    let peak_near = |low: f64, high: f64| {
+        let mut best_f = low;
+        let mut best_z = 0.0;
+        let mut freq = low;
+        while freq <= high {
+            let (_, impedance, _, _, _) = vented_point(
+                &published,
+                volume,
+                chk_box_3_port(),
+                2.83,
+                freq,
+                "half",
+                1.0,
+                0.2,
+            );
+            if impedance > best_z {
+                best_z = impedance;
+                best_f = freq;
+            }
+            freq += 0.02;
+        }
+        best_f
+    };
+    let low_peak = peak_near(18.0, 30.0);
+    let high_peak = peak_near(60.0, 85.0);
+    assert!((low_peak - 22.8).abs() <= 0.2, "low peak {low_peak}");
+    assert!((high_peak - 70.4).abs() <= 0.2, "high peak {high_peak}");
+}
+
+#[test]
+fn sourced_drivers_match_printed_mechanics_or_would_warn() {
+    for id in ["dayton-tcp115-4", "dayton-ps95-8", "dayton-rs100-8"] {
+        let record = seatlock_core::catalog::driver(id).expect(id);
+        assert_eq!(record["status"], "sourced");
+        assert_eq!(record["source"]["read_on"], "2026-11-10");
+        assert_eq!(record["price"]["read_on"], "2026-11-10");
+        let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
+        let mech = derive_mechanical(&published);
+        let printed = &record["published"];
+        close_rel(mech.mms, printed["mms_kg"].as_f64().unwrap(), 0.1);
+        close_rel(mech.cms, printed["cms_m_per_n"].as_f64().unwrap(), 0.1);
+        close_rel(mech.bl, printed["bl_tm"].as_f64().unwrap(), 0.1);
     }
 }
 

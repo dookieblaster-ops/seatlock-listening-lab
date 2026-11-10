@@ -1,0 +1,41 @@
+{
+  "id": "dayton-ps95-8",
+  "status": "sourced",
+  "maker": "Dayton Audio",
+  "model": "PS95-8",
+  "kind": "fullrange",
+  "published": {
+    "fs_hz": 119.8,
+    "qes": 0.8,
+    "qms": 7.33,
+    "vas_m3": 0.00094,
+    "re_ohm": 7.1,
+    "le_h": 0.00063,
+    "sd_m2": 0.00283,
+    "xmax_m": 0.0025,
+    "pe_w": 10.0,
+    "mms_kg": 0.0022,
+    "cms_m_per_n": 0.00079,
+    "bl_tm": 3.83
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.07747,
+    "outer_diameter_m": 0.098298,
+    "bolt_circle_m": 0.08636,
+    "bolt_count": 4,
+    "depth_m": 0.05334
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-349--dayton-audio-ps95-8-spec-sheet.pdf",
+    "title": "Dayton Audio PS95-8 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 29.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-PS95-8-3-1-2-Point-Source-Full-Range-Driver-8-295-349",
+    "read_on": "2026-11-10"
+  }
+}

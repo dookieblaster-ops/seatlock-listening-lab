@@ -32,6 +32,9 @@ fn chk_eq_2_correction_respects_limits_and_protected_band() {
         48_000.0,
         86.60,
         0.7006,
+        false,
+        0.0,
+        &[],
     );
     for filter in &outcome.filters {
         if filter.gain_db > 0.0 {
@@ -180,6 +183,9 @@ fn woofer_b_extends_bass_at_85_db() {
         48_000.0,
         56.6,
         0.54,
+        false,
+        0.0,
+        &[],
     );
     let mut spl = before.radiators[0].spl_db.clone();
     for filter in &outcome.filters {
@@ -516,4 +522,61 @@ fn unknown_request_space_uses_its_own_code() {
         .issues
         .iter()
         .all(|issue| issue.field != "request.space" || issue.code == "unsupported_request"));
+}
+
+#[test]
+fn chk_box_3_and_4_through_simulate() {
+    let volume = 0.020 / 2.0_f64.sqrt();
+    let depth = volume / (0.25 * 0.24);
+    let text = format!(
+        r#"{{
+          "schema_version": 1, "name": "vented-check",
+          "speaker": {{
+            "enclosure": {{
+              "outer": {{"kind":"box","width_m":0.27,"height_m":0.26,"depth_m":{},"wall_m":0.01,"edge_radius_m":0.0}},
+              "chambers":[],
+              "ducts":[{{"id":"port","from":"main","to":"outside","path_m":[[0.1,0.2,0.1],[0.1,0.098725,0.1]],"section":{{"shape":"round","start_m":[0.035],"end_m":[0.035]}}}}],
+              "mounts":[{{"id":"m1","surface":"front","at_m":[0.1,0.1],"rear_into":"main","recess_m":0.0}}],
+              "solids":[]
+            }},
+            "radiators":[{{"kind":"cone","driver_id":"test-woofer-b","mount":"m1"}}],
+            "listening":{{"distance_m":1.0}}
+          }},
+          "dsp":{{"sample_rate_hz":48000,"whole_speaker":[],"per_radiator":[{{"blocks":[],"delay_s":0.0,"gain_db":0.0,"invert":false,"limiter":null}}],
+            "correction":{{"enabled":false,"protected_band_hz":[3000.0,5000.0],"max_filters":8}}}},
+          "electronics":{{"amplifiers":["test-amp-a"],"dsp_device":null}},
+          "build":{{"material":"pla","infill_fraction":1.0,"stereo_pair":false,"extras_cost":0.0}},
+          "target":"hifi-default"
+        }}"#,
+        depth + 0.02
+    );
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            frequencies_hz: Some(vec![20.0, 40.0, 80.0]),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let spl = &result.radiators[0].spl_db;
+    assert!((spl[0] - 64.11).abs() <= 0.05, "20 Hz {}", spl[0]);
+    assert!((spl[1] - 85.20).abs() <= 0.05, "40 Hz {}", spl[1]);
+    assert!((spl[2] - 88.19).abs() <= 0.05, "80 Hz {}", spl[2]);
+    assert!(result.radiators[0].port_speed_m[1] > 1.0);
+}
+
+#[test]
+fn two_way_example_is_canonical_and_tuned_near_40_hz() {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../designs/examples/two-way-vented.seatlock.json"
+    ))
+    .unwrap();
+    let checked = seatlock_core::design_check(&text, &builtin()).unwrap();
+    assert_eq!(checked.canonical_json, text);
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let result = simulate(&design, &SimulateRequest::default(), &builtin());
+    assert_eq!(result.radiators.len(), 2);
+    assert!(result.radiators[1].spl_db.iter().any(|level| *level > 0.0));
 }

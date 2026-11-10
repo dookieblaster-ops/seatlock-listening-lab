@@ -44,6 +44,7 @@ fn chk_eq_1_rolloff_does_not_hide_the_peak() {
         [3000.0, 5000.0],
         6,
         48_000.0,
+        20.0,
     );
     let cut = filters
         .iter()
@@ -68,6 +69,7 @@ fn chk_eq_1_one_cut_removes_the_peak() {
         [3000.0, 5000.0],
         4,
         48_000.0,
+        20.0,
     );
     let peaking: Vec<_> = filters
         .iter()
@@ -118,6 +120,7 @@ fn chk_eq_3_flat_response_adds_nothing() {
         [3000.0, 5000.0],
         8,
         48_000.0,
+        20.0,
     );
     assert!(filters.is_empty(), "{message}");
     assert!(!message.is_empty(), "{message}");

@@ -3,10 +3,12 @@
 mod cone;
 mod point;
 mod sealed;
+mod vented;
 
 pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
 pub use point::{baffle_gain, pressure_from_volume_velocity};
 pub use sealed::z_ab_sealed;
+pub use vented::{effective_port_length_m, tuning_hz, vented_sample, PortSpec, VentedSample};
 
 use num_complex::Complex64;
 use seatlock_core::catalog;
@@ -29,6 +31,7 @@ struct ConeRadiator {
     published: Published,
     missing_displacement: bool,
     driver_id: String,
+    loads_box: bool,
 }
 
 impl Radiator for ConeRadiator {
@@ -66,6 +69,7 @@ impl Radiator for ConeRadiator {
             xmax_m: self.published.xmax_m,
             pe_w: self.published.pe_w,
             has_excursion_limit: true,
+            loads_box: self.loads_box,
             warnings,
         }
     }
@@ -97,10 +101,15 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
     let record = catalog::driver(driver_id).ok_or_else(|| format!("unknown driver {driver_id}"))?;
     let published = published_from_catalog(&record)?;
     let (_displacement_m3, missing_displacement, driver_id) = cone_displacement_m3(fields);
+    let loads_box = !record
+        .get("sealed_back")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     Ok(Box::new(ConeRadiator {
         published,
         missing_displacement,
         driver_id,
+        loads_box,
     }))
 }
 
@@ -221,6 +230,35 @@ pub fn sealed_point(
         spl_db(pressure),
         terminal.impedance.norm(),
         terminal.excursion_m,
+    )
+}
+
+/// Vented box at one frequency. Returns SPL, impedance magnitude, cone travel, and peak port air speed.
+#[allow(clippy::too_many_arguments)]
+pub fn vented_point(
+    published: &Published,
+    volume_m3: f64,
+    port: PortSpec,
+    voltage_v: f64,
+    freq_hz: f64,
+    space: &str,
+    distance_m: f64,
+    baffle_width_m: f64,
+) -> (f64, f64, f64, f64, f64) {
+    let mech = derive_mechanical(published);
+    let sample = vented_sample(volume_m3, &[port], freq_hz, false);
+    let terminal = terminal_at(published, &mech, sample.z_ab, voltage_v, freq_hz);
+    let into_room = terminal.volume_velocity * (Complex64::new(1.0, 0.0) - sample.h_sum);
+    let pressure =
+        pressure_from_volume_velocity(into_room, freq_hz, distance_m, space, baffle_width_m);
+    let port_speed = std::f64::consts::SQRT_2 * (sample.h_sum * terminal.volume_velocity).norm()
+        / port.area_m2.max(1e-12);
+    (
+        spl_db(pressure),
+        terminal.impedance.norm(),
+        terminal.excursion_m,
+        port_speed,
+        sample.h_sum.norm(),
     )
 }
 

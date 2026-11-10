@@ -80,6 +80,7 @@ export function useEngine() {
       return JSON.parse(json) as {
         message: string;
         filters: Array<Record<string, unknown>>;
+        per_radiator?: Array<{ message: string; filters: Array<Record<string, unknown>> }>;
         error?: string;
       };
     },
@@ -100,6 +101,20 @@ export function useEngine() {
     [call],
   );
 
+  const driverRecord = useCallback(
+    async (driverId: string) => {
+      const json = await call({ type: "catalog.driver", driverId });
+      return JSON.parse(json) as {
+        status?: string;
+        maker?: string;
+        model?: string;
+        price?: { amount?: number; currency?: string; vendor?: string; read_on?: string } | null;
+        error?: string;
+      };
+    },
+    [call],
+  );
+
   const geometry = useCallback(
     async (text: string) => {
       const json = await call({ type: "geometry", text });
@@ -116,7 +131,7 @@ export function useEngine() {
     [call],
   );
 
-  return { version, ready, error, designCheck, simulate, geometry, correct, listen };
+  return { version, ready, error, designCheck, simulate, geometry, correct, listen, driverRecord };
 }
 
 export type ListenPackage = {
@@ -155,6 +170,7 @@ export type SimulateResult = {
     spl_db: number[];
     impedance_ohm: number[];
     cone_travel_m: number[];
+    port_speed_m?: number[];
     max_spl_db: number[];
     fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
   }>;
