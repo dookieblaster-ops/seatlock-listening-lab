@@ -29,7 +29,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Claude reviews `cursor/level-1-m4-1286` (Assignment 6: correction rework and Level 1 M4).
+1. Assignment 7 in `COMS.md`: Level 1 close-out (three sourced real drivers, README section 12 track B), then Level 2 milestone M1 of `tasks/level-2.md`.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -51,6 +51,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - Claude ran correction on sealed-test and on the 5 L fixture on 2026-11-10. Both returned only a high-pass at 80 Hz and the message "No filter improved the response enough to keep". Flatness stayed at 6.44 dB. Causes are listed in Assignment 6: C1 stops at the first region it may not touch, its target is flat below `f_low`, and C2 only adds a high-pass instead of extending the bass.
 - 2026-11-10, Assignment 6 on a Cursor cloud agent: the new rolloff-plus-peak check failed on the old C1 with "No filter improved the response enough to keep", then passed after C1 learned to skip that region. The 5 L limit check then failed on cone travel (4.05 mm at 44 Hz) because a bass limit of 71 Hz still boosted, and the sealed-test headroom check failed on a 0.47 dB boost where the driver had no headroom. Both pass after the bass limit is chosen from the filters that are actually used. Woofer B in 20 L at 85 dB extends the bass and stays inside its limits. CHK-EQ-1, CHK-EQ-2, and CHK-EQ-3 pass. `./check.sh` passed, including CHK-E2E-1. It was not run on the owner's laptop.
 - The 10 mm solver time for sealed-test is about 115 ms in a release build on the Cursor cloud agent. The earlier 2.2 s figure was a debug build.
+- Claude reran all 34 engine tests (release), clippy, and rustfmt on the Assignment 6 branch on 2026-11-10: all pass. Correction on sealed-test now gives a Linkwitz transform (84 Hz to 85 Hz) and a protective high-pass at 42 Hz, keeps no C1 filter, and explains why. The lumped `le_h` inductance model makes the high treble fall steeply, which limits evenness (6.5 dB) and maximum clean level (83 dB) for the test drivers. Published response curves at Level 2 replace that region.
+- 2026-11-10: README section 5.6 gained the edge diffraction model for `baffle` radiation, section 13 gained `test-tweeter-a` and CHK-RAD-2 (-6.02 dB at 10 Hz, +3.52 dB at 1716 Hz, -6.02 dB at 3432 Hz for a 0.10 m circular baffle; computed from the model's formula).
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
@@ -65,6 +67,7 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: Both WebAssembly modules use a plain C ABI, and `wasm-bindgen` is not used. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version. README section 3 was updated to match.
 - 2026-11-10: The real-time kernel writes the test tone into a fixed 128-frame buffer and exports its address. Reason: a JavaScript array cannot be used as a wasm pointer, so the earlier call produced silence.
 - 2026-11-10: `rust-toolchain.toml` pins Rust 1.99.1. Reason: README section 3 says to pin the version used to scaffold.
+- 2026-11-10: Level 2 is built in four milestones (M1 to M4 in `tasks/level-2.md`). Reason: same as Level 1.
 - 2026-11-10: Level 1 is built in four milestones (M1 to M4 in `tasks/level-1.md`), each reviewed before the next. Reason: Level 1 is too large to review well in one piece, and each milestone still connects every track.
 - 2026-11-10: Vite worker bundles use ES module format. Reason: the engine Web Worker must run in Chrome headless and in production preview; IIFE workers hung with a stale `DataView` on wasm memory.
 - 2026-11-10: `web/` uses vitest 3.x instead of 4.x. Reason: npm install failed on vitest 4 with this Node/npm combination in the cloud check environment.

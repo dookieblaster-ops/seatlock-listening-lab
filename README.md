@@ -397,6 +397,14 @@ SPL     = 20*log10(|p_total| / P_REF)
 
 **`baffle`, Level 2.** Each source sits at its real position. A source on a flat surface that faces the listener gets piston directivity, `D = 2*J1(k*a*sin(theta)) / (k*a*sin(theta))` with `theta` measured from its outward direction, and edge diffraction computed from that surface's outline. This model is not valid for a source that faces away from the listener or sits on a curved surface. For those it falls back to `point` and says so in the fidelity label.
 
+Edge diffraction, the simple secondary-source model: divide the outline of the surface the source sits on into `N` equal edge elements, at least 4 per wavelength at the highest frequency and never fewer than 64. Element `i` is at distance `d_i` from the source and `e_i` from the listening point; the source is at distance `r_0` from the listening point. Then
+
+```
+p = p_half_space * ( 1 - (1/(2N)) * sum over i of (r_0 / e_i) * e^(-j*k*(d_i + e_i - r_0)) )
+```
+
+where `p_half_space` is the source's pressure with `B = 2`. At low frequency the sum tends to `-1/2`, so the level falls 6.02 dB to that of full space. At high frequency the terms cancel and the level approaches half space. The model ignores the depth of the cabinet and the edge's shape, which the fidelity label lists.
+
 **`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a point source at the listening position and the pressure recorded all over the cabinet's skin, gives the transfer from every possible surface source to that position at once. Sound power needs such runs for a set of directions around the cabinet. This model is an outline: nothing has validated it yet.
 
 Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field.
@@ -704,7 +712,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 - A: several radiators per design; two designs side by side.
 - B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data; sourced amplifiers and DSP devices; cost with electronics and stereo pairs; price dates shown.
-- C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1.
+- C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
 - E: outer shapes with rounded and chamfered edges, a sloped baffle, and `prism`; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
 - F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter. CHK-DSP-2.
@@ -739,6 +747,7 @@ test-woofer-a   fs 50 Hz, Qes 0.45,   Qms 4.0, Vas 10 L, Re 6.0 ohm, Le 0.5 mH, 
 test-woofer-b   fs 40 Hz, Qes 0.4144, Qms 5.0, Vas 20 L, Re 6.0 ohm, Le 0,      Sd 130 cm^2, Xmax 6 mm, Pe 50 W
 test-amp-a      1 channel, 50 W into 4 ohm
 test-panel-a    0.40 x 0.30 m, 3 mm thick, E 3.5 GPa, 1240 kg/m^3, Poisson's ratio 0.35
+test-tweeter-a  fs 900 Hz, Qes 0.8, Qms 2.5, Vas 0.05 L, Re 4.8 ohm, Le 0.05 mH, Sd 8 cm^2, Xmax 0.3 mm, Pe 20 W, sealed back
 ```
 
 Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `point` with space `half`, distance 1 m, enclosure model `lumped`, no leak, no port loss.
@@ -770,6 +779,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-EXT-1 | A test-only crate registers a new outer shape, a new radiator, and a new DSP block, then runs `simulate` on a design that uses them. | It works, and no file outside that crate changes. |
 | CHK-EXT-2 | A design file containing a part of a kind this build does not know. | It opens, saves unchanged, simulates the rest, and reports a warning naming the unknown part. |
 | CHK-RAD-1 | `baffle` radiation, a rigid piston of radius 50 mm on a very large flat surface, at `k*a = 3` (3277 Hz). | 30° off axis the level is 2.57 dB below the on-axis level, and 60° off axis it is 8.81 dB below. Within 0.1 dB. |
+| CHK-RAD-2 | `baffle` radiation, a point source at the center of a circular baffle of radius 0.10 m, listener on axis at 100 m. | Relative to `half` space: -6.02 dB at 10 Hz, +3.52 dB at 1716 Hz (where `k*R = pi`), and -6.02 dB at 3432 Hz (where `k*R = 2*pi`). Within 0.05 dB. |
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
 | CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
