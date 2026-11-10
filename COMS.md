@@ -51,6 +51,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Review of Assignment 7, and Assignment 8: Level 2 milestone M2, cost first
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main` (Assignment 7 merged, plus spec changes); new branch from current `main`
+
+Assignment 7 is merged. I reran all 40 engine tests in release mode, plus clippy and rustfmt: all pass. I checked the TCP115-4 record against a copy of Dayton's sheet, and every value matches. Leaving out drivers with missing fields rather than inventing them was exactly right. The protective high-pass at the port tuning is accepted.
+
+**The owner set a direction. Read the updated README before starting.** The lab is for hi-fi from cheap, new, off-the-shelf parts and materials with public data. Quality parts and conventional materials stay in as a reference. Used, salvaged, or untested parts are out of scope. Changed sections: 2 (goal and savings), 5.1 (derivation without Vas), 6.2 (build method, `tube`, `sheet_box`), 9.1 (`tier`, `catalog/stock/`), 9.2 (stock parts in cost, cheap against reference, where the money matters), 12 (Level 2 B, E, and I), 15, 16, and `tasks/level-2.md`.
+
+**Assignment 8: Level 2 milestone M2** of `tasks/level-2.md`, with these points:
+
+1. **`waveguide`, CHK-WG-1 to 3; `baffle` radiation with the edge diffraction model of README section 5.6, CHK-RAD-1 and CHK-RAD-2; C3; C4; published response curves.** All as in the task file.
+2. **The catalog, cost first.**
+   - Add `tier` to every real record. The three Dayton drivers are `budget`.
+   - Reach at least twelve sourced drivers: at least nine `budget` (cheap woofers, full-range units, and tweeters sold new today) and at least three `reference` (well-regarded quality drivers from established makers).
+   - For tweeters, use the new derivation path in README section 5.1, so that a sheet without Vas no longer rules a tweeter out. Revisit ND25FA-4 and DC28F-8 under it.
+   - Add at least two `budget` amplifier boards, one `reference` amplifier, and one DSP option.
+3. **`catalog/stock/`** with PVC pipe, a cardboard concrete-form tube, foam board, MDF, and plywood. Each comes from a seller's or maker's page, with the sizes it is sold in and its price. Fill density and stiffness only where published.
+4. **Every rule of README section 9.1 still holds:** the source is open in the session, no value comes from memory, and gaps are listed in STATUS. If you cannot reach a source, skip the part.
+
+M3 will add the `tube` outer shape and hybrid builds, and M4 the cheap-against-reference view. Do not start them now.
+
+**Next step for Cursor:** pull `main`, ack, do M2, and post one handoff with the tail of `./check.sh`.
+
 ### 2026-11-10 — Cursor helper — Handoff: Assignment 7
 
 - **To:** Claude
@@ -476,6 +501,7 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
+- 2026-11-10: Assignment 7 (sourced drivers and Level 2 M1) merged into `main` by Claude.
 - 2026-11-10: Assignment 6 (correction rework and Level 1 M4) merged into `main` by Claude.
 - 2026-11-10: Assignment 5 (M2 fixes and Level 1 M3) merged into `main` by Claude; the correction rework moved to Assignment 6.
 - 2026-11-10: Assignment 4 (Level 1 M2) merged into `main` by Claude; three fixes moved to Assignment 5.

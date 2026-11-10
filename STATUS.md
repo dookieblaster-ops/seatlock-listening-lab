@@ -11,7 +11,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Level 1 milestone M2** is merged into `main` (Assignment 4, merged by Claude on 2026-11-10). The cabinet can be viewed and exported for printing, and cost says the price is unknown until prices are filled in.
 - **Level 1 milestone M3**, with the M2 browser fixes, is merged into `main` (Assignment 5, merged by Claude on 2026-11-10). The 3D air model runs in the browser, correction was reworked in Assignment 6, and bass limit, evenness, and maximum clean level are on screen. Full listening is still later.
 - **Assignment 6** (correction rework and Level 1 M4) is merged into `main` (merged by Claude on 2026-11-10). Level 1 is complete except three sourced real drivers (Assignment 7) and the laptop run. Correction skips regions it cannot fix, aims at the bass-shaped target, and keeps the filters it actually uses inside the driver's limits. Listen mode plays pink noise, a log sweep, a tone, or a file through the real-time kernel and one convolver per radiator.
-- **Assignment 7** (three sourced drivers and Level 2 M1) is on `cursor/level-2-m1-1286`, waiting for Claude's review. It is not on `main`. The catalog has three Dayton Audio drivers copied from sheets opened on 2026-11-10. A vented two-way can be simulated, graphed per driver, and compared with a second design.
+- **Assignment 7** (three sourced drivers and Level 2 M1) is merged into `main` (merged by Claude on 2026-11-10). Level 1 is complete apart from the laptop run. The catalog has three Dayton Audio drivers copied from sheets opened on 2026-11-10. A vented two-way can be simulated, graphed per driver, and compared with a second design.
 - **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
@@ -30,7 +30,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Claude reviews `cursor/level-2-m1-1286` (Assignment 7: sourced drivers and Level 2 M1).
+1. Assignment 8 in `COMS.md`: Level 2 milestone M2 of `tasks/level-2.md`, with the owner's cost-first direction.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -56,6 +56,9 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - Datasheets opened on 2026-11-10 and copied into the catalog: Dayton Audio TCP115-4, PS95-8, and RS100-8, plus Parts Express pages for mounting dimensions and prices ($15.98, $29.98, and $35.98). Tweeter sheets that were opened (ND25FA-4 and DC28F-8) print Vas, Xmax, Mms, and Cms as N/A, so those drivers were not added.
 - Claude reran all 34 engine tests (release), clippy, and rustfmt on the Assignment 6 branch on 2026-11-10: all pass. Correction on sealed-test now gives a Linkwitz transform (84 Hz to 85 Hz) and a protective high-pass at 42 Hz, keeps no C1 filter, and explains why. The lumped `le_h` inductance model makes the high treble fall steeply, which limits evenness (6.5 dB) and maximum clean level (83 dB) for the test drivers. Published response curves at Level 2 replace that region.
 - 2026-11-10: README section 5.6 gained the edge diffraction model for `baffle` radiation, section 13 gained `test-tweeter-a` and CHK-RAD-2 (-6.02 dB at 10 Hz, +3.52 dB at 1716 Hz, -6.02 dB at 3432 Hz for a 0.10 m circular baffle; computed from the model's formula).
+- Claude reran all 40 engine tests (release), clippy, and rustfmt on the Assignment 7 branch on 2026-11-10: all pass. Claude checked the TCP115-4 record against a copy of the Dayton specification sheet: every Thiele–Small value matches as printed.
+- 2026-11-10: the owner set the product direction: hi-fi from cheap, new, off-the-shelf parts and materials with public data, with quality parts and conventional materials as a reference. Used, salvaged, or untested parts are out of scope. README sections 2, 6.2, 9, 12, 15, and 16 and `tasks/level-2.md` were updated.
+- 2026-11-10: README section 5.1 gained a derivation path for drivers whose sheets do not print `vas_m3` (from `mms_kg` or `bl_tm`), and a rule for drivers without `xmax_m`. Reason: two tweeters were left out of the catalog for lack of Vas.
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
 - CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
@@ -70,6 +73,7 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: Both WebAssembly modules use a plain C ABI, and `wasm-bindgen` is not used. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version. README section 3 was updated to match.
 - 2026-11-10: The real-time kernel writes the test tone into a fixed 128-frame buffer and exports its address. Reason: a JavaScript array cannot be used as a wasm pointer, so the earlier call produced silence.
 - 2026-11-10: `rust-toolchain.toml` pins Rust 1.99.1. Reason: README section 3 says to pin the version used to scaffold.
+- 2026-11-10: Cost-first direction (owner): every real catalog record has a `tier` of `budget` or `reference`; budget parts come first. Reason: the lab exists to reach hi-fi cheaply, and reference parts show how close it gets.
 - 2026-11-10: Level 2 is built in four milestones (M1 to M4 in `tasks/level-2.md`). Reason: same as Level 1.
 - 2026-11-10: Level 1 is built in four milestones (M1 to M4 in `tasks/level-1.md`), each reviewed before the next. Reason: Level 1 is too large to review well in one piece, and each milestone still connects every track.
 - 2026-11-10: Vite worker bundles use ES module format. Reason: the engine Web Worker must run in Chrome headless and in production preview; IIFE workers hung with a stale `DataView` on wasm memory.

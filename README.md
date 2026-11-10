@@ -272,6 +272,8 @@ qts = qes*qms / (qes + qms)
 
 If the source also prints `bl`, `mms`, or `cms` and one differs from the derived value by more than 10 %, keep computing from the list above and attach a warning to the driver.
 
+Some data sheets, mostly for tweeters, do not print `vas_m3`. Then derive `mms` from the first one printed, in this order: `mms_kg` as printed, or `bl_tm` through `mms = bl^2 * qes / (2*pi*fs*re)`. Then `cms = 1 / ((2*pi*fs)^2 * mms)`, and the rest as above. Record which path was used. If `xmax_m` is not printed, `max_spl` leaves cone travel out for that driver, and a warning says so beside the maximum clean level.
+
 With voltage `V` at the terminals, and the enclosure presenting acoustic impedance `Z_ab` to the back of the cone (section 5.2):
 
 ```
