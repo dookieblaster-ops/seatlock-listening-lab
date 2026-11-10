@@ -1,0 +1,8 @@
+{
+  "id": "test-amp-a",
+  "status": "synthetic",
+  "channels": 1,
+  "power_w": 50.0,
+  "rated_load_ohm": 4.0,
+  "price": null
+}

@@ -1,0 +1,12 @@
+[package]
+name = "seatlock-ext-example"
+description = "Test-only kinds used to prove a new member can register without editing the others."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+num-complex.workspace = true
+seatlock-core = { path = "../seatlock-core" }
+seatlock-sim = { path = "../seatlock-sim" }
+serde_json.workspace = true

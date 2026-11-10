@@ -5,9 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-seatlock-core = { path = "../seatlock-core" }
-seatlock-geom = { path = "../seatlock-geom" }
+num-complex.workspace = true
 seatlock-acoustics = { path = "../seatlock-acoustics" }
-seatlock-fdtd = { path = "../seatlock-fdtd" }
+seatlock-core = { path = "../seatlock-core" }
 seatlock-dsp = { path = "../seatlock-dsp" }
-seatlock-correct = { path = "../seatlock-correct" }
+seatlock-geom = { path = "../seatlock-geom" }
+serde.workspace = true
+serde_json.workspace = true

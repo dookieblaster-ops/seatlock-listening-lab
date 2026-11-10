@@ -5,6 +5,6 @@ import type { ElectronicsSection } from "./ElectronicsSection";
 import type { SpeakerSection } from "./SpeakerSection";
 
 /**
- * Level 1 design file root (README section 4.1).
+ * Level 1 design file. Unknown keys on every struct are kept and written back.
  */
 export type DesignFile = { schema_version: number, name: string, speaker: SpeakerSection, dsp: DspSection, electronics: ElectronicsSection, build: BuildSection, target: string, };

@@ -1,0 +1,12 @@
+{
+  "pla": {
+    "density_kg_m3": 1240.0,
+    "price_per_kg": null,
+    "note": "Typical density. Confirm against the filament data sheet."
+  },
+  "petg": {
+    "density_kg_m3": 1270.0,
+    "price_per_kg": null,
+    "note": "Typical density. Confirm against the filament data sheet."
+  }
+}

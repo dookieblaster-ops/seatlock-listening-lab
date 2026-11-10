@@ -54,17 +54,49 @@ export function useEngine() {
     };
   }, []);
 
-  const designCheck = useCallback(async (text: string): Promise<DesignCheckResult> => {
+  const call = useCallback(async (message: object): Promise<string> => {
     if (!workerRef.current) {
       throw new Error("Engine worker not ready");
     }
     const id = nextId.current++;
     const json = await new Promise<string>((resolve, reject) => {
       pending.current.set(id, { resolve, reject });
-      workerRef.current?.postMessage({ type: "design.check", id, text });
+      workerRef.current?.postMessage({ ...message, id });
     });
-    return JSON.parse(json) as DesignCheckResult;
+    return json;
   }, []);
 
-  return { version, ready, error, designCheck };
+  const designCheck = useCallback(
+    async (text: string): Promise<DesignCheckResult> => {
+      const json = await call({ type: "design.check", text });
+      return JSON.parse(json) as DesignCheckResult;
+    },
+    [call],
+  );
+
+  const simulate = useCallback(
+    async (text: string, revision: number, frequencies: number[]) => {
+      const json = await call({ type: "simulate", text, revision, frequencies });
+      return JSON.parse(json) as SimulateResult;
+    },
+    [call],
+  );
+
+  return { version, ready, error, designCheck, simulate };
 }
+
+export type SimulateResult = {
+  revision: number;
+  frequencies_hz: number[];
+  summed_spl_db: number[];
+  radiators: Array<{
+    spl_db: number[];
+    impedance_ohm: number[];
+    cone_travel_m: number[];
+    fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
+  }>;
+  issues: Array<{ severity: string; code: string; message: string; field: string }>;
+  fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
+  cost_note: string;
+  error?: string;
+};

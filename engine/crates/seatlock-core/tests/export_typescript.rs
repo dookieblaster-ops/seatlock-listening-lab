@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use seatlock_core::design::{
     BuildSection, CorrectionSettings, DesignFile, DspSection, ElectronicsSection, EnclosureSection,
-    ListeningSection, MountRecord, PerRadiatorDsp, SpeakerSection,
+    KindPart, ListeningSection, MountRecord, PerRadiatorDsp, SpeakerSection,
 };
-use seatlock_core::issue::Issue;
+use seatlock_core::issue::{Issue, Severity};
 use ts_rs::TS;
 
 #[test]
@@ -15,6 +15,8 @@ fn export_typescript_bindings() {
     std::fs::create_dir_all(&out).expect("create generated dir");
 
     DesignFile::export().expect("export DesignFile");
+    KindPart::export().expect("export KindPart");
+    Severity::export().expect("export Severity");
     Issue::export().expect("export Issue");
     SpeakerSection::export().expect("export SpeakerSection");
     EnclosureSection::export().expect("export EnclosureSection");

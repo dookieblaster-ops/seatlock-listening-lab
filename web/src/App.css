@@ -66,3 +66,48 @@ button:disabled {
 .error {
   color: #8a1f1f;
 }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+}
+
+input,
+textarea {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #c8bbaa;
+  border-radius: 0.4rem;
+  background: white;
+}
+
+textarea {
+  min-height: 3.5rem;
+}
+
+.check {
+  flex-direction: row;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+
+.graph svg {
+  width: 100%;
+  height: auto;
+  border: 1px solid #d8cec0;
+  border-radius: 0.5rem;
+}
+
+.fidelity,
+.explain {
+  color: #3f4b57;
+  font-size: 0.92rem;
+}

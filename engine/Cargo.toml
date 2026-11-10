@@ -1,16 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "crates/seatlock-core",
-    "crates/seatlock-geom",
-    "crates/seatlock-acoustics",
-    "crates/seatlock-fdtd",
-    "crates/seatlock-dsp",
-    "crates/seatlock-correct",
-    "crates/seatlock-sim",
-    "crates/seatlock-wasm",
-    "crates/seatlock-rt",
-]
+members = ["crates/*"]
 
 [workspace.package]
 edition = "2021"
@@ -19,4 +9,5 @@ version = "0.1.0"
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = { version = "1.0.145", features = ["preserve_order"] }
+num-complex = "0.4"
