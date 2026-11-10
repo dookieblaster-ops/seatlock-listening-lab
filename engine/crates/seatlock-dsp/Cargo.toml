@@ -1,0 +1,8 @@
+[package]
+name = "seatlock-dsp"
+description = "Digital filters, delay, limiting, and sample processing for DSP."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+seatlock-core = { path = "../seatlock-core" }

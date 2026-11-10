@@ -6,12 +6,9 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Where things stand
 
-- **Level 0 has not started.** The `main` branch holds the specification only: `README.md`, this file, `COMS.md`, and the agent pointer files. There is no program yet.
-- **Agent coordination:** Claude (lead architect) and the Cursor helper use `COMS.md` per README section 1.4. Assignment 1 (Level 0, `tasks/level-0.md`) posted there on 2026-11-10. Cursor works on its own branch; Claude reviews and merges into `main`.
-- The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
-- Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
-- The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
-- An earlier browser prototype existed outside this repository. It is not a reference for this build.
+- **Level 0 is complete** on branch `cursor/level-0-1286`. The layout from README section 3.1 exists, `./start.sh` and `./check.sh` pass here (including both wasm builds, vitest, and the Playwright test).
+- You can run `./start.sh`, open or load the example sealed-box design, save it back, and hear a short test tone. Simulation graphs and listen mode beyond the tone are not built yet (Level 1).
+- **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude’s requests on the board, current and future.
 
 ## How the work is done
 
@@ -23,28 +20,28 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Level 0, written up as a ready-to-run task in `tasks/level-0.md`. Level 0 from README section 12: the repository layout, `start.sh`, `check.sh`, the engine answering a call from a worker, the worklet test tone, and design file round-trip.
-2. Then Level 1, all tracks together, following the level rule.
+1. Claude review and merge Level 0; then **Level 1** on all tracks together, per README section 12 and the next task file Claude writes.
+2. Owner product questions in **Questions for the owner** below still open when they start to matter.
 
 ## What has been verified
 
-- The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
-- That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
-- CHK-FDTD-4 and the time budgets in section 5.5 are estimates. Nothing has measured them yet.
-- CHK-PLATE-1 is the closed-form result, cross-checked with a finite-difference eigenvalue solve (within 0.1 %). CHK-RAD-1 and CHK-ROOM-1 were computed from their formulas.
-- Not validated by anything yet: the exciter and backing equations of section 5.9, the `exterior` radiation model and its reciprocity run (5.6), the `baffle` model's edge diffraction, and the `simple` room's reflection term. Treat them as starting designs.
-- Three tool facts were checked against current documentation on 2026-11-09: the status of `wasm-pack` and `wasm-bindgen`, how `manifold-3d` is loaded and released, and how Claude Code loads `AGENTS.md` and its imports. The other tool choices are long established and were not rechecked. Nothing has been built with any of them yet.
+- **`./check.sh` on 2026-11-10 (Cursor cloud, UTC):** rustfmt, clippy, `cargo test --workspace`, ts-rs export test, release wasm builds for `seatlock-wasm` and `seatlock-rt`, TypeScript check, vitest, production build, Playwright headless test (engine version + example design load).
+- Design `sealed-test` round-trips through `design.check` in native tests; unknown radiator kinds warn and still round-trip (CHK-EXT-2 early).
+- Reference numbers in README section 13 remain as documented on 2026-11-09; no new physics validation in this scaffold.
 
 ## Decisions log
 
-One line per decision: date, decision, reason. Decisions that define the product live in the README, not here.
-
 - 2026-11-09: The starting decisions are in README section 3 with their reasons.
 - 2026-11-10: Both WebAssembly modules use a plain C ABI, and `wasm-bindgen` is not used. Reason: the owner's laptop then needs only Rust and Node, with no extra build tool to install and keep at a matching version. README section 3 was updated to match.
+- 2026-11-10: Vite worker bundles use ES module format. Reason: the engine Web Worker must run in Chrome headless and in production preview; IIFE workers hung with a stale `DataView` on wasm memory.
+- 2026-11-10: `web/` uses vitest 3.x instead of 4.x. Reason: npm install failed on vitest 4 with this Node/npm combination in the cloud check environment.
 
 ## Tool versions
 
-Record pinned versions here at Level 0.
+- Rust **1.99.1** (`rust-toolchain.toml`: stable, `rustfmt`, `clippy`, target `wasm32-unknown-unknown`).
+- Node **22.23.4** (engine requirement >= 22.12).
+- web: **vite 7.3.8**, **react 19.3.1**, **typescript 5.9.3**, **vitest 3.2.7**, **@playwright/test 1.65.0** (see `web/package-lock.json`).
+- ts-rs **10.1.0** (typescript feature on `seatlock-core` only, not wasm builds).
 
 ## Questions for the owner
 

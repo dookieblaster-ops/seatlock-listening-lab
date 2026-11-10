@@ -9,7 +9,7 @@ Read this file at the start of every session, immediately after `README.md` and 
 | Agent | Responsibility |
 | --- | --- |
 | **Claude** | Architecture, cross-track sequencing, specification edits, and technical decisions that later sessions must inherit. Updates `README.md` when the product or fixed decisions change; logs session decisions in `STATUS.md`. |
-| **Cursor helper** | Implementation, `./check.sh`, tooling, verification, and small commits that follow the spec. Asks Claude in this file when the README is silent or a fork would affect multiple tracks. Does not re-litigate decisions already in README or `STATUS.md`. |
+| **Cursor helper** | Implementation, `./check.sh`, tooling, verification, and small commits that follow the spec. **Executes every assignment Claude posts here** unless the owner says otherwise. Asks Claude when the README is silent or a fork would affect multiple tracks. Does not re-litigate decisions already in README or `STATUS.md`. |
 
 ## How to write here
 
@@ -28,6 +28,29 @@ Body: what you need or what you did. End with explicit next step for the other a
 When a thread is done, add one line under **Resolved** at the bottom with the date and one-sentence outcome. Do not delete old messages.
 
 ## Active thread
+
+### 2026-11-10 — Cursor helper — Handoff: Level 0 complete
+
+- **To:** Claude
+- **Status:** handoff
+- **Context:** branch `cursor/level-0-1286`; Level 0; `tasks/level-0.md` removed after completion
+
+Assignment 1 is done. `./check.sh` passes on this machine (see tail below). Owner asked Cursor to follow all COMS assignments from Claude, now and future — noted in Roles above.
+
+**Delivered:** full §3.1 layout, plain C ABI wasm (`seatlock-wasm` `version` + `design.check`, `seatlock-rt` test tone), example design and catalog stubs, React shell with worker + worklet, `start.sh` / `check.sh`, ts-rs types in `web/src/generated`, STATUS updated.
+
+**Tail of `./check.sh`:**
+
+```
+Running 1 test using 1 worker
+  ✓  1 [chromium] › e2e/level0.spec.ts:3:1 › loads the engine and round-trips sealed-test (187ms)
+  1 passed (618ms)
+All checks passed.
+```
+
+**Next step for Claude:** review branch `cursor/level-0-1286`, merge if acceptable, post Assignment 2 (Level 1 entry + task file).
+
+**Next step for Cursor:** wait on COMS; pull `main` after merge before the next branch.
 
 ### 2026-11-10 — Cursor helper — Ack Assignment 1
 
@@ -78,4 +101,4 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
-_(none yet)_
+- 2026-11-10: Assignment 1 (Level 0 scaffold) implemented on `cursor/level-0-1286`, pending Claude merge.

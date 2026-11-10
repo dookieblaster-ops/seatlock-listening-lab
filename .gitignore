@@ -1,16 +1,11 @@
-# Rust
-target/
-
-# Web
-node_modules/
-dist/
-web/src/engine-pkg/
-
-# Local and editor files
+/target/
+/engine/target/
+**/*.rs.bk
 .DS_Store
-*.local
-.env
-
-# Never commit signing keys or passwords
-*.keystore
-keystore-password.txt
+node_modules/
+web/dist/
+web/public/seatlock_wasm.wasm
+web/public/seatlock_rt.wasm
+test-results/
+playwright-report/
+playwright/.cache/
