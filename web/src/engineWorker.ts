@@ -8,7 +8,8 @@ export type WorkerRequest =
   | { type: "call"; id: number; method: string; request: string }
   | { type: "design.check"; id: number; text: string }
   | { type: "simulate"; id: number; text: string; revision: number; frequencies: number[] }
-  | { type: "geometry"; id: number; text: string };
+  | { type: "geometry"; id: number; text: string }
+  | { type: "correct"; id: number; text: string };
 
 export type WorkerResponse =
   | { type: "ready"; version: string }
@@ -47,6 +48,13 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
       const eng = await ensureEngine();
       const request = JSON.stringify({ text: msg.text });
       const json = eng.call("design.check", request);
+      self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
+      return;
+    }
+
+    if (msg.type === "correct") {
+      const eng = await ensureEngine();
+      const json = eng.call("correct", JSON.stringify({ text: msg.text }));
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
       return;
     }

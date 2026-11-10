@@ -52,6 +52,7 @@ fn chk_fdtd_2_low_frequency_compliance() {
         "{mag} vs {expected_mag}"
     );
     assert!((phase + 90.0).abs() <= 1.0, "phase {phase}");
+    assert!(curve.warning.is_none(), "{:?}", curve.warning);
 }
 
 #[test]
@@ -64,7 +65,11 @@ fn sealed_test_box_at_10mm() {
     let ny = (width / dx).round() as usize;
     let nz = (height / dx).round() as usize;
     let source = aperture_cells(ny, nz, dx, [0.080 - 0.008, 0.150 - 0.008], 0.059);
-    let curve = run_grid(nx, ny, nz, dx, &source);
+    let true_volume = depth * width * height;
+    let curve = run_grid(nx, ny, nz, dx, &source, true_volume);
     eprintln!("SEALED_TEST_10MM_MS {}", curve.elapsed_ms);
     assert!(curve.steps > 100);
+    let warning = curve.warning.expect("sealed-test grid should warn");
+    assert!(warning.contains("L"), "{warning}");
+    assert!(curve.ignored.iter().any(|item| item.contains("differs by")));
 }

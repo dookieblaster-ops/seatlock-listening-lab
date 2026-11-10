@@ -44,13 +44,14 @@ test("print solid matches the air volume and exports a solid STL", async ({ page
       edges.set(key, (edges.get(key) ?? 0) + 1);
     }
   }
-  volume = Math.abs(volume) / 6;
+  const signed = volume / 6;
+  expect(signed).toBeGreaterThan(0);
+  volume = signed;
   expect(maxCoord).toBeGreaterThan(10);
   expect(maxCoord).toBeLessThan(1000);
   for (const count of edges.values()) {
     expect(count).toBe(2);
   }
-  expect(volume).toBeGreaterThan(0);
   const solidM3 = Number(await page.getByTestId("solid-volume").innerText());
   expect(Math.abs(volume / 1e9 - solidM3) / solidM3).toBeLessThan(0.001);
 });
