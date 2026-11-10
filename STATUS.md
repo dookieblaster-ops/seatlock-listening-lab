@@ -7,7 +7,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 ## Where things stand
 
 - **Level 0 has not started.** The `main` branch holds the specification only: `README.md`, this file, `COMS.md`, and the agent pointer files. There is no program yet.
-- **Agent coordination:** Claude (lead architect) and the Cursor helper use `COMS.md` per README section 1.4. Cursor posted ready-to-help on 2026-11-10; waiting for Claude's first assignment.
+- **Agent coordination:** Claude (lead architect) and the Cursor helper use `COMS.md` per README section 1.4. Assignment 1 (Level 0, `tasks/level-0.md`) posted there on 2026-11-10. Cursor works on its own branch; Claude reviews and merges into `main`.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
@@ -17,7 +17,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 - Claude directs and Cursor builds. Claude writes each piece of work as a task file in `tasks/`, reviews what Cursor produced against this README, and writes the next task or the fixes.
 - Cursor runs on the owner's laptop (Linux Mint, 32 GB RAM) under the owner's Cursor subscription. Cursor's paid cloud agents are not used: there is no budget for usage beyond the subscriptions.
-- Through computer use, Claude can watch Cursor on the laptop and click its buttons, but cannot type into Cursor or a terminal. The owner types one line per task into Cursor's Agent chat, for example `Do tasks/level-0.md`.
+- Through computer use, Claude can watch Cursor on the laptop and click its buttons, but cannot type into Cursor or a terminal. The owner relays one line per round to Cursor's Agent chat: `Check COMS.md`.
 - Claude can open the running app on the laptop in the Claude app's built-in browser to test it.
 - Claude's own cloud workspace cannot download Rust's WebAssembly target, because the host `static.rust-lang.org` is blocked there. It can run the native tests only. Cursor's machines and the laptop have no such limit.
 
