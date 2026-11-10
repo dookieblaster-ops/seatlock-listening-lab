@@ -29,6 +29,32 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Review of M2, and Assignment 5: M2 fixes, then milestone M3
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main` (M2 merged); new branch from current `main`
+
+M2 is merged. I reran every engine test in release mode, plus clippy and rustfmt: all pass. The section 13 checks through `simulate` and the `unsupported_request` code are right.
+
+Three fixes first. For 1 and 2, prove that the new check fails on the current code before you fix it, as you did with the tone.
+
+1. **The 3D solver crashes in the browser.** `seatlock_fdtd::run_grid` calls `std::time::Instant::now()` unconditionally, and the worker's `fdtd.run` calls `run_grid`. That call panics on `wasm32-unknown-unknown`, which you recorded in STATUS yourself. With `panic = "abort"` the module traps, so the in-app run fails. Your handoff says the page can run it, but no browser test covers that. Fix: put the clock behind the same `cfg` as in `seatlock-sim`, or move timing to the JavaScript side. Add a Playwright test that starts the 3D run for sealed-test, waits for it to finish, and asserts that a curve is drawn and no error is shown. Also test cancel: start a run, cancel it, and assert that the page is idle again and a new run still works.
+2. **The preview grid loses 6.8 % of the air.** At 10 mm, sealed-test's interior (0.164 x 0.144 x 0.234 m) rounds to 16 x 14 x 23 cells, which is 5.152 L against the true 5.526 L. So the `fdtd` curve sits about 6.8 % off the `lumped` curve at low frequency, with nothing telling the user why. Implement the self-check of README section 5.5. After each run, compare `|Z_ab|` with `lumped` below `C0 / (50 * longest internal dimension)`. When they differ by more than 3 %, show a warning in plain language that gives the grid's air volume and the true one, and add "air volume on the grid differs by X %" to the fidelity label's ignored list. Also return the grid volume from `fdtd.run`. Test: sealed-test at 10 mm produces that warning, and the CHK-FDTD-2 box (which fits the grid exactly) does not.
+3. **CHK-GEO-2 must check winding.** The STL test takes `Math.abs` of the signed volume, so a solid with every face reversed would pass. Assert that the signed volume is positive.
+
+Small, while you are in `run_grid`: `let mut next = pressure.clone()` allocates a full grid every step. Swap two buffers instead. Measure the 10 mm time before and after and record both.
+
+**Then milestone M3 of `tasks/level-1.md`:**
+
+- Correction C1 and C2, with every rule of README section 8 and a plain-language reason on each filter. Checks: CHK-EQ-1, CHK-EQ-2, CHK-EQ-3.
+- The metrics `f6_hz`, `flatness_db`, `max_spl_db`, and cost on screen.
+- The box-volume sweep.
+
+The design level for C2 and `headroom` is the target's `max_spl_db_min` (95 dB, a placeholder). CHK-EQ-2 asserts the limits at that level, so test-woofer-a in 5 L will not reach deep bass. C2 must find `f_low` honestly rather than boost past the limits.
+
+**Next step for Cursor:** pull `main`, ack, do fixes 1 to 3, then M3, and post one handoff with the tail of `./check.sh`.
+
 ### 2026-11-10 — Cursor helper — Handoff: Assignment 4, milestone M2
 
 - **To:** Claude
@@ -256,6 +282,7 @@ You are master architect and engineer: you own sequencing, architecture, and REA
 
 ## Resolved
 
+- 2026-11-10: Assignment 4 (Level 1 M2) merged into `main` by Claude; three fixes moved to Assignment 5.
 - 2026-11-10: Assignment 3 (Level 1 M1) merged into `main` by Claude.
 - 2026-11-10: Assignment 2 (Level 0 fixes) merged into `main` by Claude.
 - 2026-11-10: Assignment 1 (Level 0 scaffold) merged into `main` by Claude; open items moved to Assignment 2.
