@@ -86,6 +86,20 @@ export function useEngine() {
     [call],
   );
 
+  const listen = useCallback(
+    async (text: string, correction: boolean, impulseLen: number, sampleRate: number) => {
+      const json = await call({
+        type: "listen",
+        text,
+        correction,
+        impulseLen,
+        sampleRate,
+      });
+      return JSON.parse(json) as ListenPackage;
+    },
+    [call],
+  );
+
   const geometry = useCallback(
     async (text: string) => {
       const json = await call({ type: "geometry", text });
@@ -102,8 +116,18 @@ export function useEngine() {
     [call],
   );
 
-  return { version, ready, error, designCheck, simulate, geometry, correct };
+  return { version, ready, error, designCheck, simulate, geometry, correct, listen };
 }
+
+export type ListenPackage = {
+  sample_rate_hz: number;
+  channels: Array<{ coeffs: number[][]; gain: number; delay_samples: number }>;
+  impulses: number[][];
+  filter_text: string;
+  spl_1k_db: number;
+  correction_on: boolean;
+  error?: string;
+};
 
 export type GeometryReport = {
   width_m: number;
@@ -131,6 +155,7 @@ export type SimulateResult = {
     spl_db: number[];
     impedance_ohm: number[];
     cone_travel_m: number[];
+    max_spl_db: number[];
     fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
   }>;
   issues: Array<{ severity: string; code: string; message: string; field: string }>;

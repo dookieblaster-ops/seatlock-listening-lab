@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 num-complex.workspace = true
+rustfft.workspace = true
 seatlock-acoustics = { path = "../seatlock-acoustics" }
 seatlock-correct = { path = "../seatlock-correct" }
 seatlock-core = { path = "../seatlock-core" }

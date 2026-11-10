@@ -4,7 +4,7 @@
 
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
 use seatlock_fdtd::{aperture_cells, run_grid};
-use seatlock_sim::{builtin, correction_plan, geometry_report, simulate_json};
+use seatlock_sim::{builtin, correction_plan, geometry_report, listen_package, simulate_json};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -23,6 +23,12 @@ struct CallRequest {
     voltage_v: Option<f64>,
     #[serde(default)]
     frequencies_hz: Option<Vec<f64>>,
+    #[serde(default)]
+    correction: Option<bool>,
+    #[serde(default)]
+    impulse_len: Option<usize>,
+    #[serde(default)]
+    sample_rate_hz: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -91,6 +97,9 @@ fn parse_request(request: &str) -> CallRequest {
         space: None,
         voltage_v: None,
         frequencies_hz: None,
+        correction: None,
+        impulse_len: None,
+        sample_rate_hz: None,
     })
 }
 
@@ -188,6 +197,24 @@ fn dispatch(method: &str, request: &str) -> String {
             let text = parsed.text.unwrap_or_default();
             match serde_json::from_str(&text) {
                 Ok(design) => correction_plan(&design, &builtin()).to_string(),
+                Err(error) => serde_json::to_string(&ErrorReply {
+                    error: error.to_string(),
+                })
+                .unwrap(),
+            }
+        }
+        "listen" => {
+            let parsed = parse_request(request);
+            let text = parsed.text.unwrap_or_default();
+            match serde_json::from_str(&text) {
+                Ok(design) => listen_package(
+                    &design,
+                    &builtin(),
+                    parsed.sample_rate_hz.unwrap_or(0.0),
+                    parsed.correction.unwrap_or(true),
+                    parsed.impulse_len.unwrap_or(0),
+                )
+                .to_string(),
                 Err(error) => serde_json::to_string(&ErrorReply {
                     error: error.to_string(),
                 })

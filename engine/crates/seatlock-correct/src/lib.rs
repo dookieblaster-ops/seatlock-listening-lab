@@ -8,6 +8,8 @@ pub struct CorrectionFilter {
     pub f_hz: f64,
     pub q: f64,
     pub gain_db: f64,
+    pub from_hz: f64,
+    pub from_q: f64,
     pub reason: String,
 }
 
@@ -60,6 +62,7 @@ pub fn metrics(freqs: &[f64], spl_db: &[f64], max_spl_db: &[f64]) -> (f64, f64, 
     (f6, flatness, loudest)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn correct(
     freqs: &[f64],
     response_db: &[f64],
@@ -68,50 +71,198 @@ pub fn correct(
     protected_hz: [f64; 2],
     max_filters: usize,
     sample_rate_hz: f64,
+    box_fc_hz: f64,
+    box_qtc: f64,
 ) -> CorrectionOutcome {
-    let bass = c2(freqs, max_spl_db, design_level_db);
-    let mut working = response_db.to_vec();
+    let (natural_f6, _, _) = metrics(freqs, response_db, max_spl_db);
+    let (bass, f_low, bass_message) = c2(
+        freqs,
+        response_db,
+        max_spl_db,
+        design_level_db,
+        box_fc_hz,
+        box_qtc,
+        natural_f6,
+        sample_rate_hz,
+    );
+    let mut with_bass = response_db.to_vec();
     for filter in &bass {
-        add_filter(&mut working, freqs, filter, sample_rate_hz);
+        add_filter(&mut with_bass, freqs, filter, sample_rate_hz);
     }
+    let anchor = mean_db(freqs, &with_bass);
+    let target: Vec<f64> = freqs
+        .iter()
+        .map(|freq| anchor + target_shape_db(*freq, f_low))
+        .collect();
     let headroom: Vec<f64> = max_spl_db
         .iter()
         .map(|level| level - design_level_db)
         .collect();
-    let target_level = mean_db(freqs, &working);
-    let target = vec![target_level; freqs.len()];
-    let (fit, message) = c1(
+    let before = metrics(freqs, &with_bass, max_spl_db);
+    let (mut fit, fit_message) = c1(
         freqs,
-        &working,
+        &with_bass,
         &target,
         &headroom,
         protected_hz,
         max_filters,
         sample_rate_hz,
     );
+    trim_to_headroom(&mut fit, freqs, &bass, &headroom, sample_rate_hz);
+    let mut after_curve = with_bass.clone();
+    for filter in &fit {
+        add_filter(&mut after_curve, freqs, filter, sample_rate_hz);
+    }
+    let boosted_max: Vec<f64> = max_spl_db
+        .iter()
+        .enumerate()
+        .map(|(index, level)| {
+            let boost: f64 = fit
+                .iter()
+                .map(|filter| filter_db(filter, freqs[index], sample_rate_hz))
+                .sum();
+            level - boost.max(0.0)
+        })
+        .collect();
+    let after = metrics(freqs, &after_curve, &boosted_max);
+    let mut message = bass_message;
+    if !fit.is_empty()
+        && (before.1 - after.1 < 0.2 || after.0 > before.0 + 0.5 || after.2 + 0.2 < before.2)
+    {
+        fit.clear();
+        message = format!(
+            "{message} The extra filters were dropped because they did not help the scores."
+        );
+    } else if !fit_message.is_empty() {
+        message = format!("{message} {fit_message}");
+    }
     let mut filters = bass;
     filters.extend(fit);
     CorrectionOutcome { filters, message }
 }
 
-fn c2(freqs: &[f64], max_spl_db: &[f64], design_level_db: f64) -> Vec<CorrectionFilter> {
-    let mut f_low = *freqs.last().unwrap_or(&20.0);
-    for (freq, level) in freqs.iter().zip(max_spl_db) {
-        if *freq >= 10.0 && *level >= design_level_db {
+#[allow(clippy::too_many_arguments)]
+fn c2(
+    freqs: &[f64],
+    response_db: &[f64],
+    max_spl_db: &[f64],
+    design_level_db: f64,
+    box_fc_hz: f64,
+    box_qtc: f64,
+    natural_f6_hz: f64,
+    sample_rate_hz: f64,
+) -> (Vec<CorrectionFilter>, f64, String) {
+    // The analog shape can fit while the Linkwitz biquad still boosts the bass.
+    // Keep walking up until the filters that will actually be used stay inside the limits.
+    let mut f_low = freqs.last().copied().unwrap_or(80.0);
+    for freq in freqs {
+        if *freq < 20.0 {
+            continue;
+        }
+        if !shape_fits(freqs, max_spl_db, design_level_db, *freq) {
+            continue;
+        }
+        let trial = bass_filters(*freq, box_fc_hz, box_qtc);
+        if filters_stay_inside(
+            freqs,
+            response_db,
+            max_spl_db,
+            &trial,
+            design_level_db,
+            sample_rate_hz,
+        ) {
             f_low = *freq;
             break;
         }
     }
-    f_low = f_low.clamp(20.0, 250.0);
-    vec![CorrectionFilter {
-        filter_type: "highpass".into(),
-        f_hz: f_low,
-        q: 0.707,
-        gain_db: 0.0,
-        reason: format!(
-            "Protective high-pass at {f_low:.0} Hz so a loud note stays within what the driver can do."
-        ),
-    }]
+    let natural = natural_f6_hz;
+    let message = if f_low + 1.0 < natural {
+        format!("Bass extended from {natural:.0} Hz to {f_low:.0} Hz, staying inside the driver's limits.")
+    } else {
+        format!(
+            "Bass now starts at {f_low:.0} Hz instead of {natural:.0} Hz, so a {design_level_db:.0} dB note never exceeds the cone's travel."
+        )
+    };
+    (bass_filters(f_low, box_fc_hz, box_qtc), f_low, message)
+}
+
+fn bass_filters(f_low: f64, box_fc_hz: f64, box_qtc: f64) -> Vec<CorrectionFilter> {
+    let protect = (f_low / 2.0).max(15.0);
+    vec![
+        CorrectionFilter {
+            filter_type: "linkwitz".into(),
+            f_hz: f_low,
+            q: 0.707,
+            gain_db: 0.0,
+            from_hz: box_fc_hz.max(20.0),
+            from_q: box_qtc.max(0.3),
+            reason: format!(
+                "Moves the box resonance from {box_fc_hz:.0} Hz to {f_low:.0} Hz so the bass follows a clean shape."
+            ),
+        },
+        CorrectionFilter {
+            filter_type: "highpass".into(),
+            f_hz: protect,
+            q: 0.707,
+            gain_db: 0.0,
+            from_hz: 0.0,
+            from_q: 0.0,
+            reason: format!("Protective high-pass at {protect:.0} Hz below the new bass limit."),
+        },
+    ]
+}
+
+fn filters_stay_inside(
+    freqs: &[f64],
+    response_db: &[f64],
+    max_spl_db: &[f64],
+    filters: &[CorrectionFilter],
+    design_level_db: f64,
+    sample_rate_hz: f64,
+) -> bool {
+    let Some(reference) = freqs.iter().position(|freq| *freq >= 1_000.0) else {
+        return false;
+    };
+    let spl_ref = response_db.get(reference).copied().unwrap_or(0.0);
+    let h_ref: f64 = filters
+        .iter()
+        .map(|filter| filter_db(filter, 1_000.0, sample_rate_hz))
+        .sum();
+    freqs.iter().enumerate().all(|(index, freq)| {
+        if *freq < 10.0 {
+            return true;
+        }
+        let gain: f64 = filters
+            .iter()
+            .map(|filter| filter_db(filter, *freq, sample_rate_hz))
+            .sum();
+        let room = (max_spl_db[index] - design_level_db).max(0.0);
+        if gain > room + 0.05 {
+            return false;
+        }
+        let played = response_db[index] + (design_level_db - spl_ref - h_ref) + gain;
+        played <= max_spl_db[index] + 0.02
+    })
+}
+
+fn target_shape_db(freq: f64, f_low: f64) -> f64 {
+    highpass_db(freq, f_low, 0.707) + highpass_db(freq, (f_low / 2.0).max(10.0), 0.707)
+}
+
+fn highpass_db(freq: f64, fc: f64, q: f64) -> f64 {
+    let f2 = freq * freq;
+    let fc2 = fc * fc;
+    let mag = f2 / ((f2 - fc2).powi(2) + (freq * fc / q).powi(2)).sqrt();
+    20.0 * mag.max(1e-12).log10()
+}
+
+fn shape_fits(freqs: &[f64], max_spl_db: &[f64], design_level_db: f64, f_low: f64) -> bool {
+    freqs.iter().zip(max_spl_db).all(|(freq, limit)| {
+        // Above a few kilohertz the coil inductance, not the bass shape, sets the clean level.
+        *freq < 10.0
+            || *freq > 3_000.0
+            || design_level_db + target_shape_db(*freq, f_low) <= *limit + 0.2
+    })
 }
 
 pub fn c1(
@@ -132,23 +283,33 @@ pub fn c1(
     }
     let mut filters = Vec::new();
     let mut current = response_db.to_vec();
+    let mut excluded = vec![false; freqs.len()];
     let mut previous = initial;
     let mut notes = Vec::new();
-    for _ in 0..max_filters {
+    for _ in 0..max_filters.max(8) * 2 {
+        if filters.len() >= max_filters {
+            break;
+        }
         let smoothed_now = smooth(freqs, &current);
         let error: Vec<f64> = target_db
             .iter()
             .zip(&smoothed_now)
             .map(|(target, level)| target - level)
             .collect();
-        let Some((index, peak)) = error.iter().enumerate().max_by(|left, right| {
-            left.1
-                .abs()
-                .partial_cmp(&right.1.abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        }) else {
+        let Some((index, peak)) = error
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !excluded[*i])
+            .max_by(|left, right| {
+                left.1
+                    .abs()
+                    .partial_cmp(&right.1.abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+        else {
             break;
         };
+        let peak = *peak;
         if peak.abs() < 0.3 {
             break;
         }
@@ -167,22 +328,33 @@ pub fn c1(
         }
         let bandwidth = (freqs[right] - freqs[left]).max(center * 0.05);
         let mut q = (center / bandwidth).clamp(0.4, 8.0);
-        let mut gain = (*peak).clamp(-12.0, 6.0);
+        let mut gain = peak.clamp(-12.0, 6.0);
         if gain > 0.0 {
             if center >= protected_hz[0] && center <= protected_hz[1] {
-                notes.push("A bump was left alone between 3 kHz and 5 kHz.".to_string());
-                break;
+                notes.push(format!(
+                    "The region near {center:.0} Hz was left alone: no boost between 3 kHz and 5 kHz."
+                ));
+                exclude_region(&mut excluded, left, right);
+                previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
+                continue;
             }
             if q > 4.0 {
                 notes.push(format!(
                     "A narrow dip near {center:.0} Hz was left alone. That is a cancellation, not something EQ can fill."
                 ));
-                break;
+                exclude_region(&mut excluded, left, right);
+                previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
+                continue;
             }
             q = q.min(4.0);
             let room = headroom_db.get(index).copied().unwrap_or(0.0);
             if room <= 0.0 {
-                break;
+                notes.push(format!(
+                    "The region near {center:.0} Hz was left alone: boosting it would exceed what the driver can do."
+                ));
+                exclude_region(&mut excluded, left, right);
+                previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
+                continue;
             }
             gain = gain.min(room).min(6.0);
         }
@@ -198,13 +370,17 @@ pub fn c1(
             headroom_db,
         );
         if gain.abs() < 0.2 {
-            break;
+            exclude_region(&mut excluded, left, right);
+            previous = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
+            continue;
         }
         let candidate = CorrectionFilter {
             filter_type: "peaking".into(),
             f_hz: center,
             q,
             gain_db: gain,
+            from_hz: 0.0,
+            from_q: 0.0,
             reason: if gain < 0.0 {
                 format!("Cuts {:.1} dB at {center:.0} Hz to flatten a peak.", -gain)
             } else {
@@ -213,7 +389,7 @@ pub fn c1(
         };
         let mut trial = current.clone();
         add_filter(&mut trial, freqs, &candidate, sample_rate_hz);
-        let improved = rms_error(freqs, &smooth(freqs, &trial), target_db);
+        let improved = rms_allowed(freqs, &smooth(freqs, &trial), target_db, &excluded);
         if previous - improved < 0.1 {
             break;
         }
@@ -221,7 +397,8 @@ pub fn c1(
         previous = improved;
         filters.push(candidate);
     }
-    let after = rms_error(freqs, &smooth(freqs, &current), target_db);
+    let after = rms_allowed(freqs, &smooth(freqs, &current), target_db, &excluded);
+    let before_allowed = rms_allowed(freqs, &smooth(freqs, response_db), target_db, &excluded);
     if filters.is_empty() {
         let message = if notes.is_empty() {
             "No filter improved the response enough to keep.".into()
@@ -230,7 +407,7 @@ pub fn c1(
         };
         return (Vec::new(), message);
     }
-    if initial - after < 0.2 {
+    if before_allowed - after < 0.2 {
         return (
             Vec::new(),
             "Correction was dropped because it did not make the response meaningfully more even."
@@ -280,6 +457,8 @@ fn refine(
                 f_hz: center,
                 q: q_value,
                 gain_db: gain_value,
+                from_hz: 0.0,
+                from_q: 0.0,
                 reason: String::new(),
             };
             let mut trial = response.to_vec();
@@ -297,15 +476,8 @@ fn refine(
 }
 
 fn add_filter(curve: &mut [f64], freqs: &[f64], filter: &CorrectionFilter, sample_rate_hz: f64) {
-    let block = biquad_block(
-        &filter.filter_type,
-        filter.f_hz,
-        filter.q,
-        filter.gain_db,
-        sample_rate_hz,
-    );
     for (level, freq) in curve.iter_mut().zip(freqs) {
-        *level += response_db(block.as_ref(), *freq, sample_rate_hz);
+        *level += filter_db(filter, *freq, sample_rate_hz);
     }
 }
 
@@ -329,6 +501,30 @@ fn smooth(freqs: &[f64], db: &[f64]) -> Vec<f64> {
             }
         })
         .collect()
+}
+
+fn exclude_region(excluded: &mut [bool], left: usize, right: usize) {
+    for slot in excluded.iter_mut().take(right.saturating_add(1)).skip(left) {
+        *slot = true;
+    }
+}
+
+fn rms_allowed(freqs: &[f64], response: &[f64], target: &[f64], excluded: &[bool]) -> f64 {
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for index in 0..freqs.len() {
+        if excluded[index] || freqs[index] < 20.0 || freqs[index] > 20_000.0 {
+            continue;
+        }
+        let error = target[index] - response[index];
+        sum += error * error;
+        count += 1.0;
+    }
+    if count == 0.0 {
+        0.0
+    } else {
+        (sum / count).sqrt()
+    }
 }
 
 fn rms_error(freqs: &[f64], response: &[f64], target: &[f64]) -> f64 {
@@ -366,6 +562,16 @@ fn mean_db(freqs: &[f64], db: &[f64]) -> f64 {
 }
 
 pub fn filter_db(filter: &CorrectionFilter, freq_hz: f64, sample_rate_hz: f64) -> f64 {
+    if filter.filter_type == "linkwitz" {
+        let (b0, b1, b2, a1, a2) = linkwitz_coeffs(
+            filter.from_hz,
+            filter.from_q,
+            filter.f_hz,
+            filter.q,
+            sample_rate_hz,
+        );
+        return biquad_db(b0, b1, b2, a1, a2, freq_hz, sample_rate_hz);
+    }
     let block = biquad_block(
         &filter.filter_type,
         filter.f_hz,
@@ -374,4 +580,89 @@ pub fn filter_db(filter: &CorrectionFilter, freq_hz: f64, sample_rate_hz: f64) -
         sample_rate_hz,
     );
     response_db(block.as_ref(), freq_hz, sample_rate_hz)
+}
+
+fn linkwitz_coeffs(
+    from_hz: f64,
+    from_q: f64,
+    to_hz: f64,
+    to_q: f64,
+    sample_rate_hz: f64,
+) -> (f64, f64, f64, f64, f64) {
+    let w0 = 2.0 * sample_rate_hz * (std::f64::consts::PI * from_hz / sample_rate_hz).tan();
+    let w1 = 2.0 * sample_rate_hz * (std::f64::consts::PI * to_hz / sample_rate_hz).tan();
+    let c = 2.0 * sample_rate_hz;
+    let (b0, b1, b2) = analog_bilinear(w0, from_q, c);
+    let (a0, a1, a2) = analog_bilinear(w1, to_q, c);
+    (b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0)
+}
+
+fn analog_bilinear(omega: f64, q: f64, c: f64) -> (f64, f64, f64) {
+    let b0 = c * c + (omega / q) * c + omega * omega;
+    let b1 = -2.0 * c * c + 2.0 * omega * omega;
+    let b2 = c * c - (omega / q) * c + omega * omega;
+    (b0, b1, b2)
+}
+
+fn biquad_db(
+    b0: f64,
+    b1: f64,
+    b2: f64,
+    a1: f64,
+    a2: f64,
+    freq_hz: f64,
+    sample_rate_hz: f64,
+) -> f64 {
+    let zm1 = num_polar(freq_hz, sample_rate_hz);
+    let zm2 = (zm1.0 * zm1.0 - zm1.1 * zm1.1, 2.0 * zm1.0 * zm1.1);
+    let num = (b0 + b1 * zm1.0 + b2 * zm2.0, b1 * zm1.1 + b2 * zm2.1);
+    let den = (1.0 + a1 * zm1.0 + a2 * zm2.0, a1 * zm1.1 + a2 * zm2.1);
+    let den_mag = (den.0 * den.0 + den.1 * den.1).sqrt().max(1e-20);
+    let num_mag = (num.0 * num.0 + num.1 * num.1).sqrt();
+    20.0 * (num_mag / den_mag).log10()
+}
+
+fn num_polar(freq_hz: f64, sample_rate_hz: f64) -> (f64, f64) {
+    let angle = -2.0 * std::f64::consts::PI * freq_hz / sample_rate_hz;
+    (angle.cos(), angle.sin())
+}
+
+fn trim_to_headroom(
+    fit: &mut [CorrectionFilter],
+    freqs: &[f64],
+    bass: &[CorrectionFilter],
+    headroom_db: &[f64],
+    sample_rate_hz: f64,
+) {
+    for _ in 0..8 {
+        let mut worst_freq = 0.0;
+        let mut worst_over = 0.0;
+        for (index, freq) in freqs.iter().enumerate() {
+            let total: f64 = bass
+                .iter()
+                .chain(fit.iter())
+                .map(|filter| filter_db(filter, *freq, sample_rate_hz))
+                .sum();
+            let over = total.max(0.0) - headroom_db.get(index).copied().unwrap_or(0.0);
+            if over > worst_over {
+                worst_over = over;
+                worst_freq = *freq;
+            }
+        }
+        if worst_over <= 0.05 {
+            break;
+        }
+        let Some(filter) =
+            fit.iter_mut()
+                .filter(|filter| filter.gain_db > 0.0)
+                .max_by(|left, right| {
+                    filter_db(left, worst_freq, sample_rate_hz)
+                        .partial_cmp(&filter_db(right, worst_freq, sample_rate_hz))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        else {
+            break;
+        };
+        filter.gain_db = (filter.gain_db - worst_over).max(0.0);
+    }
 }

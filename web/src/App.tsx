@@ -5,7 +5,7 @@ import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
 import { buildCabinetMesh, meshToStl, type SolidMesh } from "./printSolid";
 import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
-import { useTestTone } from "./useTestTone";
+import { coefficientMessage, useListen, type ListenSource } from "./useListen";
 import "./App.css";
 
 type Design = {
@@ -51,9 +51,10 @@ function fidelityText(label: SimulateResult["fidelity"]) {
 }
 
 export default function App() {
-  const { version, ready, error: engineError, designCheck, simulate, geometry, correct } = useEngine();
-  const tone = useTestTone();
+  const { version, ready, error: engineError, designCheck, simulate, geometry, correct, listen } = useEngine();
+  const playback = useListen();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioFileRef = useRef<HTMLInputElement>(null);
   const revision = useRef(0);
 
   const [designName, setDesignName] = useState("No design loaded");
@@ -69,6 +70,11 @@ export default function App() {
   const [fdtdWarning, setFdtdWarning] = useState("");
   const [correctionNote, setCorrectionNote] = useState("");
   const [sweep, setSweep] = useState<Array<{ volume: number; bass: number }>>([]);
+  const [filterText, setFilterText] = useState("");
+  const [source, setSource] = useState<ListenSource>("pink");
+  const [volts, setVolts] = useState(2.83);
+  const [hearCorrection, setHearCorrection] = useState(true);
+  const [audioFile, setAudioFile] = useState<ArrayBuffer | null>(null);
   const [fdtdCurve, setFdtdCurve] = useState<{
     freq: number[];
     mag: number[];
@@ -180,6 +186,12 @@ export default function App() {
   const block = chain?.blocks[0];
   const curve = sim?.radiators[0];
   const spl40 = curve ? nearestValue(sim.frequencies_hz, curve.spl_db, 40) : Number.NaN;
+  const voltageDb = 20 * Math.log10(volts / 2.83);
+  const levelAtOneMeter =
+    curve && sim ? nearestValue(sim.frequencies_hz, curve.spl_db, 1000) + voltageDb : null;
+  const limitHot = curve
+    ? curve.spl_db.some((level, index) => level + voltageDb > (curve.max_spl_db[index] ?? Infinity) + 0.05)
+    : false;
 
   return (
     <main className="app">
@@ -434,6 +446,7 @@ export default function App() {
           <div className="row">
             <button
               type="button"
+              data-testid="export-stl"
               onClick={() => {
                 const bytes = meshToStl(solid.positions, solid.indices);
                 const blob = new Blob([bytes], { type: "model/stl" });
@@ -565,6 +578,32 @@ export default function App() {
             </button>
             <button
               type="button"
+              data-testid="export-filters"
+              onClick={() => {
+                if (!canonical) {
+                  return;
+                }
+                void (async () => {
+                  const pack = await listen(canonical, true, 0, design?.dsp.sample_rate_hz ?? 48000);
+                  if (pack.error) {
+                    setCorrectionNote(pack.error);
+                    return;
+                  }
+                  setFilterText(pack.filter_text);
+                  const blob = new Blob([pack.filter_text], { type: "text/plain" });
+                  const url = URL.createObjectURL(blob);
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "filters.txt";
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                })();
+              }}
+            >
+              Export filters
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 if (!design) {
                   return;
@@ -588,7 +627,12 @@ export default function App() {
               Sweep box depth
             </button>
           </div>
-          {correctionNote && <p>{correctionNote}</p>}
+          {correctionNote && <p data-testid="correction-note">{correctionNote}</p>}
+          {filterText && (
+            <pre data-testid="filter-text" className="filter-text">
+              {filterText}
+            </pre>
+          )}
           {sweep.length > 0 && (
             <svg data-testid="volume-sweep" viewBox="0 0 320 140" role="img" aria-label="Bass limit against box volume">
               <text x="8" y="16" fontSize="12">
@@ -650,16 +694,127 @@ export default function App() {
 
       <section className="panel">
         <h2>Listen</h2>
-        <p>A short test tone from the same sound code the lab will use for playback later.</p>
+        <p data-testid="listen-note">
+          You are hearing the simulated speaker through your own headphones or speakers. Differences
+          between designs are reliable. Absolute tone is not.
+        </p>
         <div className="row">
-          <button type="button" onClick={() => void tone.start()} disabled={tone.playing}>
-            Play test tone
+          <label>
+            Source
+            <select
+              data-testid="listen-source"
+              value={source}
+              onChange={(event) => setSource(event.target.value as ListenSource)}
+            >
+              <option value="pink">Pink noise</option>
+              <option value="sweep">Log sweep</option>
+              <option value="tone">Tone</option>
+              <option value="file">Audio file</option>
+            </select>
+          </label>
+          <label>
+            Amplifier voltage (V)
+            <input
+              data-testid="listen-voltage"
+              type="range"
+              min={0.5}
+              max={20}
+              step={0.1}
+              value={volts}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                setVolts(next);
+                playback.send(new Float64Array([2, next]));
+              }}
+            />
+          </label>
+        </div>
+        <p>
+          {volts.toFixed(1)} V.{" "}
+          <span data-testid="listen-level">
+            {levelAtOneMeter === null
+              ? "Load a design to see the level at 1 m."
+              : `Level at 1 m: ${levelAtOneMeter.toFixed(0)} dB.`}
+          </span>{" "}
+          <span data-testid="cone-limit" className={limitHot ? "limit-light lit" : "limit-light"}>
+            {limitHot ? "Limit exceeded" : "Within limits"}
+          </span>
+        </p>
+        <label className="check">
+          <input
+            data-testid="hear-correction"
+            type="checkbox"
+            checked={hearCorrection}
+            onChange={(event) => {
+              const on = event.target.checked;
+              setHearCorrection(on);
+              if (!canonical || !playback.playing) {
+                return;
+              }
+              void listen(canonical, on, 0, design?.dsp.sample_rate_hz ?? 48000).then((pack) => {
+                if (!pack.error) {
+                  playback.send(
+                    coefficientMessage(pack.channels),
+                  );
+                }
+              });
+            }}
+          />
+          Hear correction (short crossfade)
+        </label>
+        <div className="row">
+          <button
+            type="button"
+            data-testid="listen-play"
+            onClick={() => {
+              if (!canonical) {
+                playback.setError("Load a design before listening.");
+                return;
+              }
+              void playback.start({
+                source,
+                volts,
+                file: audioFile,
+                prepare: async (sampleRate) => {
+                  const pack = await listen(canonical, hearCorrection, 2048, sampleRate);
+                  if (pack.error) {
+                    throw new Error(pack.error);
+                  }
+                  return { channels: pack.channels, impulses: pack.impulses };
+                },
+              }).catch((err: unknown) => {
+                playback.setError(err instanceof Error ? err.message : String(err));
+              });
+            }}
+            disabled={playback.playing}
+          >
+            Play
           </button>
-          <button type="button" onClick={() => void tone.stop()} disabled={!tone.playing}>
+          <button type="button" data-testid="listen-stop" onClick={() => void playback.stop()} disabled={!playback.playing}>
             Stop
           </button>
+          <button type="button" onClick={() => audioFileRef.current?.click()}>
+            Open audio file
+          </button>
+          <input
+            ref={audioFileRef}
+            data-testid="listen-file"
+            type="file"
+            accept="audio/*"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (!file) {
+                return;
+              }
+              void file.arrayBuffer().then((buffer) => {
+                setAudioFile(buffer);
+                setSource("file");
+              });
+            }}
+          />
         </div>
-        {tone.error && <p className="error">{tone.error}</p>}
+        {playback.error && <p className="error">{playback.error}</p>}
       </section>
     </main>
   );

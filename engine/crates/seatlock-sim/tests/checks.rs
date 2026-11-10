@@ -30,6 +30,8 @@ fn chk_eq_2_correction_respects_limits_and_protected_band() {
         [3000.0, 5000.0],
         8,
         48_000.0,
+        86.60,
+        0.7006,
     );
     for filter in &outcome.filters {
         if filter.gain_db > 0.0 {
@@ -78,7 +80,147 @@ fn chk_eq_2_correction_respects_limits_and_protected_band() {
         let current = drive / curve.impedance_ohm[index];
         assert!(travel <= 0.004 * 1.001, "travel {travel} at {freq}");
         assert!(current * current * 6.0 <= 30.0 * 1.001, "heat at {freq}");
-        assert!(drive <= (200.0_f64).sqrt() * 1.001, "amp at {freq}");
+        assert!(
+            drive <= (200.0_f64).sqrt() * 1.001,
+            "amp at {freq} drive {drive}"
+        );
+    }
+}
+
+#[test]
+fn sealed_test_correction_keeps_a_midrange_fix_or_names_the_region() {
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let plan = seatlock_sim::correction_plan(&design, &builtin());
+    let filters = plan["filters"].as_array().unwrap();
+    let message = plan["message"].as_str().unwrap_or("");
+    let has_peaking = filters.iter().any(|filter| filter["type"] == "peaking");
+    assert!(
+        has_peaking || message.contains("Hz"),
+        "{message} {filters:?}"
+    );
+    let freqs = log_grid(10.0, 20_000.0, 24.0);
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let headroom: Vec<f64> = result.radiators[0]
+        .max_spl_db
+        .iter()
+        .map(|level| level - 95.0)
+        .collect();
+    for (index, freq) in freqs.iter().enumerate() {
+        let mut boost = 0.0;
+        for filter in filters {
+            let kind = filter["type"].as_str().unwrap_or("peaking");
+            let f_hz = filter["f_hz"].as_f64().unwrap_or(1000.0);
+            let q = filter["q"].as_f64().unwrap_or(0.707);
+            let gain = filter["gain_db"].as_f64().unwrap_or(0.0);
+            let from_hz = filter["from_hz"].as_f64().unwrap_or(0.0);
+            let from_q = filter["from_q"].as_f64().unwrap_or(0.0);
+            boost += filter_db(
+                &seatlock_correct::CorrectionFilter {
+                    filter_type: kind.into(),
+                    f_hz,
+                    q,
+                    gain_db: gain,
+                    from_hz,
+                    from_q,
+                    reason: String::new(),
+                },
+                *freq,
+                48_000.0,
+            );
+        }
+        let allowed = headroom[index].max(0.0);
+        assert!(
+            boost.max(0.0) <= allowed + 0.3,
+            "boost {boost} headroom {} at {freq}",
+            headroom[index]
+        );
+    }
+}
+
+#[test]
+fn woofer_b_extends_bass_at_85_db() {
+    let text = r#"{
+      "schema_version": 1, "name": "b20",
+      "speaker": {"enclosure": {"outer": {"kind":"box","width_m":0.27,"height_m":0.42,"depth_m":0.22,"wall_m":0.01,"edge_radius_m":0.0},
+        "chambers":[],"ducts":[],"mounts":[],"solids":[]},
+        "radiators":[{"kind":"cone","driver_id":"test-woofer-b","mount":"m1"}],
+        "listening":{"distance_m":1.0}},
+      "dsp":{"sample_rate_hz":48000,"whole_speaker":[],"per_radiator":[],
+        "correction":{"enabled":true,"protected_band_hz":[3000.0,5000.0],"max_filters":8}},
+      "electronics":{"amplifiers":["test-amp-a"],"dsp_device":null},
+      "build":{"material":"pla","infill_fraction":1.0,"stereo_pair":false,"extras_cost":0.0},
+      "target":"hifi-default"
+    }"#;
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(text).unwrap();
+    let freqs = log_grid(10.0, 20_000.0, 12.0);
+    let before = simulate(
+        &design,
+        &SimulateRequest {
+            frequencies_hz: Some(freqs.clone()),
+            voltage_v: 2.83,
+            space: "half".into(),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let outcome = correct(
+        &freqs,
+        &before.radiators[0].spl_db,
+        &before.radiators[0].max_spl_db,
+        85.0,
+        [3000.0, 5000.0],
+        8,
+        48_000.0,
+        56.6,
+        0.54,
+    );
+    let mut spl = before.radiators[0].spl_db.clone();
+    for filter in &outcome.filters {
+        for (level, freq) in spl.iter_mut().zip(&freqs) {
+            *level += filter_db(filter, *freq, 48_000.0);
+        }
+    }
+    let (f6_before, _, _) = seatlock_correct::metrics(
+        &freqs,
+        &before.radiators[0].spl_db,
+        &before.radiators[0].max_spl_db,
+    );
+    let (f6_after, _, _) = seatlock_correct::metrics(&freqs, &spl, &before.radiators[0].max_spl_db);
+    assert!(
+        f6_after < f6_before,
+        "f6 {f6_after} vs {f6_before} {}",
+        outcome.message
+    );
+    let curve = &before.radiators[0];
+    let h_ref: f64 = outcome
+        .filters
+        .iter()
+        .map(|filter| filter_db(filter, 1000.0, 48_000.0))
+        .sum();
+    let spl_1k = curve.spl_db[freqs.iter().position(|freq| *freq >= 1000.0).unwrap()];
+    let voltage = 2.83 * 10_f64.powf((85.0 - spl_1k - h_ref) / 20.0);
+    for (index, freq) in freqs.iter().enumerate() {
+        let gain: f64 = outcome
+            .filters
+            .iter()
+            .map(|filter| filter_db(filter, *freq, 48_000.0))
+            .sum();
+        let drive = voltage * 10_f64.powf(gain / 20.0);
+        let travel = curve.cone_travel_m[index] * (drive / 2.83);
+        let current = drive / curve.impedance_ohm[index];
+        assert!(travel <= 0.006 * 1.001, "travel {travel} at {freq}");
+        assert!(current * current * 6.0 <= 50.0 * 1.001, "heat at {freq}");
+        assert!(
+            drive <= (200.0_f64).sqrt() * 1.001,
+            "amp at {freq} drive {drive}"
+        );
     }
 }
 
@@ -149,6 +291,56 @@ fn chk_cost_1_sealed_test_hand_calculation() {
         (report.voxel_air_volume_m3 - report.interior_volume_m3).abs()
             <= 0.02 * report.interior_volume_m3
     );
+}
+
+#[test]
+fn page_grid_scores_after_correction() {
+    let mut design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let plan = seatlock_sim::correction_plan(&design, &builtin());
+    let filters = plan["filters"].as_array().unwrap();
+    for filter in filters {
+        let part =
+            serde_json::from_value::<seatlock_core::design::KindPart>(filter.clone()).unwrap();
+        design.dsp.per_radiator[0].blocks.push(part);
+    }
+    let start = 20.0_f64;
+    let end = 20_000.0_f64;
+    let per = 48.0_f64;
+    let steps = ((end / start).log2() * per).round() as i32;
+    let mut freqs = Vec::new();
+    for i in 0..=steps {
+        let freq = start * 2_f64.powf(i as f64 / per);
+        if freq < end {
+            freqs.push(freq);
+        }
+    }
+    freqs.push(end);
+    let result = simulate(
+        &design,
+        &SimulateRequest {
+            frequencies_hz: Some(freqs),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert_eq!(format!("{:.0}", result.f6_hz), "65");
+    assert_eq!(format!("{:.1}", result.flatness_db), "6.5");
+    assert_eq!(format!("{:.0}", result.max_spl_metric_db), "83");
+    assert_eq!(result.cost_note, "price unknown");
+}
+
+#[test]
+fn listen_package_has_an_impulse_and_filter_text() {
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let value = seatlock_sim::listen_package(&design, &builtin(), 48_000.0, true, 1024);
+    let text = value["filter_text"].as_str().unwrap();
+    assert!(text.contains("Radiator 1"), "{text}");
+    assert!(text.contains("biquad"), "{text}");
+    let impulse = value["impulses"][0].as_array().unwrap();
+    assert_eq!(impulse.len(), 1024);
+    assert!(impulse
+        .iter()
+        .any(|sample| sample.as_f64().unwrap_or(0.0).abs() > 1e-8));
 }
 
 fn read_example() -> String {

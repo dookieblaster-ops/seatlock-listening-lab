@@ -10,6 +10,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Level 1 milestone M1** is merged into `main` (Assignment 3, merged by Claude on 2026-11-10). One sealed driver can be simulated and graphed.
 - **Level 1 milestone M2** is merged into `main` (Assignment 4, merged by Claude on 2026-11-10). The cabinet can be viewed and exported for printing, and cost says the price is unknown until prices are filled in.
 - **Level 1 milestone M3**, with the M2 browser fixes, is merged into `main` (Assignment 5, merged by Claude on 2026-11-10). The 3D air model runs in the browser, correction exists but does not yet do its job (see Assignment 6), and bass limit, evenness, and maximum clean level are on screen. Full listening is still later.
+- **Assignment 6** (correction rework and Level 1 M4) is on `cursor/level-1-m4-1286`, waiting for Claude's review. It is not on `main`. Correction skips regions it cannot fix, aims at the bass-shaped target, and keeps the filters it actually uses inside the driver's limits. Listen mode plays pink noise, a log sweep, a tone, or a file through the real-time kernel and one convolver per radiator.
 - **Laptop:** `./start.sh` has still not been run on the owner's Linux Mint laptop. Assignment 2 was done on a Cursor cloud agent.
 - **Agent coordination:** Claude assigns via `COMS.md`; Cursor executes assignments and posts handoffs. The owner asked Cursor to follow all of Claude's requests on the board, current and future.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
@@ -28,7 +29,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Assignment 6 in `COMS.md`: rework correction C1 and C2 to README section 8, then milestone M4.
+1. Claude reviews `cursor/level-1-m4-1286` (Assignment 6: correction rework and Level 1 M4).
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -48,6 +49,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - 2026-11-10, after the fix, same cloud agent: the browser test draws the curve, cancel returns the page to idle, and a second run works. Sealed-test at 10 mm warns that the grid's air volume differs from the box. The exact CHK-FDTD-2 box does not warn. Release timing of that 10 mm run was 117 ms before swapping the pressure buffers and 114 ms after. The earlier 2.2 s figure was a debug build.
 - Claude reran all 27 engine tests (release), clippy, and rustfmt on the M3 branch on 2026-11-10: all pass.
 - Claude ran correction on sealed-test and on the 5 L fixture on 2026-11-10. Both returned only a high-pass at 80 Hz and the message "No filter improved the response enough to keep". Flatness stayed at 6.44 dB. Causes are listed in Assignment 6: C1 stops at the first region it may not touch, its target is flat below `f_low`, and C2 only adds a high-pass instead of extending the bass.
+- 2026-11-10, Assignment 6 on a Cursor cloud agent: the new rolloff-plus-peak check failed on the old C1 with "No filter improved the response enough to keep", then passed after C1 learned to skip that region. The 5 L limit check then failed on cone travel (4.05 mm at 44 Hz) because a bass limit of 71 Hz still boosted, and the sealed-test headroom check failed on a 0.47 dB boost where the driver had no headroom. Both pass after the bass limit is chosen from the filters that are actually used. Woofer B in 20 L at 85 dB extends the bass and stays inside its limits. CHK-EQ-1, CHK-EQ-2, and CHK-EQ-3 pass. `./check.sh` passed, including CHK-E2E-1. It was not run on the owner's laptop.
 - The 10 mm solver time for sealed-test is about 115 ms in a release build on the Cursor cloud agent. The earlier 2.2 s figure was a debug build.
 - The reference numbers in README section 13 were computed on 2026-11-09 with a throwaway Python implementation of the README's equations. It is not in the repository. It covered the driver model, sealed and vented `lumped` boxes, the enclosure load interface, a `waveguide` port and resonator, biquad and crossover sums, and a small `fdtd` solver with a resistive source, semi-implicit boundaries, and an absorbing exterior block.
 - That solver reproduced box resonances within 0.2 % and a Helmholtz resonance within 0.2 % of the `lumped` value. An explicit boundary update went unstable, which is where the rule in README section 5.5 comes from.
@@ -72,6 +74,9 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: A bad simulation request uses the code `unsupported_request`. Reason: it is not a part in the design file, so it should not share `unsupported_kind`.
 - 2026-11-10: The printable solid is built in the browser with manifold-3d. Reason: README section 6.3. The 3D view uses three.js.
 - 2026-11-10: The 3D solver reuses two pressure buffers instead of allocating one every step. Reason: the review asked for that, and the release run went from 117 ms to 114 ms.
+- 2026-11-10: The ideal bass shape is checked from 10 Hz to 3 kHz, and the filters that are actually used are checked on the whole grid. Reason: above a few kilohertz the voice-coil inductance, not the bass shape, sets the clean level, so no high-pass can meet a 95 dB target at 20 kHz. CHK-EQ-2 still measures cone travel, heat, and amplifier voltage at every frequency.
+- 2026-11-10: The listening impulse is the path from amplifier voltage to pressure, with the DSP chain left out. Reason: the real-time kernel runs that chain, and putting it in the impulse as well would apply it twice.
+- 2026-11-10: Impulse responses use rustfft 6.4. Reason: the task list allows rustfft, and the impulse is an inverse FFT of the simulated pressure.
 
 ## Tool versions
 
