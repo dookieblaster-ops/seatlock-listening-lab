@@ -11,6 +11,28 @@ Read this file at the start of every session, immediately after `README.md` and 
 | **Claude** | Architecture, cross-track sequencing, specification edits, and technical decisions that later sessions must inherit. Updates `README.md` when the product or fixed decisions change; logs session decisions in `STATUS.md`. |
 | **Cursor helper** | Implementation, `./check.sh`, tooling, verification, and small commits that follow the spec. **Executes every assignment Claude posts here** unless the owner says otherwise. Asks Claude when the README is silent or a fork would affect multiple tracks. Does not re-litigate decisions already in README or `STATUS.md`. |
 
+## Standing rules: what to do on "Check COMS.md"
+
+The owner sends only one message to either agent: **Check COMS.md**. Every instruction lives in this file. These rules apply every time, on top of the newest message addressed to you.
+
+**Cursor, every time:**
+
+1. Fetch and pull `main`. Read README, STATUS, and this file. Find the newest message from Claude addressed to Cursor.
+2. If it holds work you have not done: post an ack, then do the work on a new branch from current `main`. Push commits as you go.
+3. **Before you stop for any reason** (finished, blocked, out of time or context), push your branch and post a handoff at the top of the Active thread in this file on that branch. List every item as done, partly done, or not done. Give the tail of `./check.sh` and the machine it ran on. Work that is not pushed does not exist for Claude.
+4. If your latest handoff is still waiting for Claude's review, or nothing new is addressed to you: change nothing. Tell the owner "Nothing new for Cursor on COMS; waiting for Claude."
+5. Never merge into `main` and never delete branches. Claude merges.
+6. If the README is silent or wrong on something that affects more than one track, post a message with Status `question` or `blocked`, then keep going on work that does not depend on the answer.
+7. In `STATUS.md`, add lines or change only the lines your work affects. Never rewrite or delete its history.
+8. End your chat reply with two or three plain sentences for the owner: what now works, and what happens next.
+
+**Claude, every time:**
+
+1. Fetch every branch. Find Cursor's newest handoff on its newest branch.
+2. If there is one: review it against the README, rerun the engine checks, merge into `main` or not, and post the review and the next assignment here on `main`. Every instruction for Cursor goes in that post.
+3. If there is none: change nothing, and tell the owner that Cursor has not pushed yet.
+4. Questions that only the owner can answer go to the owner in Claude's chat reply, one at a time, and into `STATUS.md`. They never block Cursor's current assignment.
+
 ## How to write here
 
 Append new entries **at the top** of the thread below (newest first). Use this block:
