@@ -1,0 +1,42 @@
+{
+  "id": "dayton-rs225-8",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "Dayton Audio",
+  "model": "RS225-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 28.3,
+    "qes": 0.51,
+    "qms": 1.46,
+    "vas_m3": 0.0568,
+    "re_ohm": 6.5,
+    "le_h": 0.00086,
+    "sd_m2": 0.02138,
+    "xmax_m": 0.007,
+    "pe_w": 80.0,
+    "mms_kg": 0.0358,
+    "cms_m_per_n": 0.00088,
+    "bl_tm": 9.05
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.183896,
+    "outer_diameter_m": 0.223012,
+    "bolt_circle_m": 0.209042,
+    "bolt_count": 6,
+    "depth_m": 0.0889
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-356--rs225-8-spec-sheet.pdf",
+    "title": "Dayton Audio RS225-8 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 89.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-RS225-8-8-Reference-Woofer-295-356",
+    "read_on": "2026-11-10"
+  }
+}

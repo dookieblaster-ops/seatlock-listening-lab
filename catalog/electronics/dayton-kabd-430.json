@@ -1,0 +1,22 @@
+{
+  "id": "dayton-kabd-430",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "KABD-430",
+  "kind": "amplifier",
+  "channels": 4,
+  "power_w": 30.0,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/manuals/325-434--dayton-audio-kabd-4100-user-manual-v1.pdf",
+    "title": "KABD-4100 user guide, which also states the KABD-430 is 4 x 30 W",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 64.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-KABD-4100-4-x-100W-Bluetooth-Amp-Board-with-DSP-325-434",
+    "read_on": "2026-11-10"
+  }
+}

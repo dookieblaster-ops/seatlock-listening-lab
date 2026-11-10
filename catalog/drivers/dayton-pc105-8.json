@@ -1,0 +1,42 @@
+{
+  "id": "dayton-pc105-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "PC105-8",
+  "kind": "fullrange",
+  "published": {
+    "fs_hz": 84.8,
+    "qes": 0.88,
+    "qms": 2.29,
+    "vas_m3": 0.003398,
+    "re_ohm": 6.7,
+    "le_h": 0.00054,
+    "sd_m2": 0.00528,
+    "xmax_m": 0.002,
+    "pe_w": 40.0,
+    "mms_kg": 0.0042,
+    "cms_m_per_n": 0.00084,
+    "bl_tm": 4.1
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.1016,
+    "outer_diameter_m": 0.125984,
+    "bolt_circle_m": 0.11303,
+    "bolt_count": 4,
+    "depth_m": 0.059944
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-160--dayton-audio-pc105-8-specifications.pdf",
+    "title": "Dayton Audio PC105-8 specification sheet. Vas on the sheet is 0.12 cubic feet.",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 17.79,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-PC105-8-4-Full-Range-Poly-Cone-Driver-295-160",
+    "read_on": "2026-11-10"
+  }
+}

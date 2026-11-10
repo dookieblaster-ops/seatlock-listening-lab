@@ -1,6 +1,6 @@
 use seatlock_acoustics::{
-    derive_mechanical, reference_half_space_spl_db, sealed_alignment, sealed_point, vented_point,
-    PortSpec, Published,
+    derive_mechanical, piston_directivity, reference_half_space_spl_db, sealed_alignment,
+    sealed_point, vented_point, PortSpec, Published,
 };
 use seatlock_core::grid::log_grid;
 
@@ -207,18 +207,237 @@ fn chk_box_4_vented_samples() {
 }
 
 #[test]
+fn chk_wg_1_closed_duct_impedance() {
+    let area = 0.001;
+    let zero = seatlock_acoustics::closed_duct_impedance(0.5, area, 171.6);
+    let pole = seatlock_acoustics::closed_duct_impedance(0.5, area, 343.2);
+    let zero_3 = seatlock_acoustics::closed_duct_impedance(0.5, area, 514.8);
+    assert!(zero.norm() < 1.0, "171.6 Hz {}", zero.norm());
+    assert!(pole.norm() > 1.0e6, "343.2 Hz {}", pole.norm());
+    assert!(zero_3.norm() < 1.0, "514.8 Hz {}", zero_3.norm());
+}
+
+#[test]
+fn chk_wg_2_helmholtz_matches_lumped() {
+    let volume = 0.002;
+    let radius = 0.010;
+    let length = 0.030;
+    let mut best_f = 0.0;
+    let mut best = 0.0;
+    let mut freq = 90.0;
+    while freq < 115.0 {
+        let result = seatlock_acoustics::helmholtz(volume, radius, length, freq);
+        if result.z_in.norm() > best {
+            best = result.z_in.norm();
+            best_f = freq;
+        }
+        freq += 0.05;
+    }
+    assert!(
+        (best_f - 102.5).abs() / 102.5 <= 0.005,
+        "resonance {best_f}"
+    );
+}
+
+#[test]
+fn chk_wg_3_ported_box_matches_lumped_and_shows_the_pipe() {
+    let published = woofer_b();
+    let volume = 0.020 / 2.0_f64.sqrt();
+    let radius = 0.0175;
+    let physical = 0.10127;
+    let mech = derive_mechanical(&published);
+    for freq in [20.0, 40.0, 80.0, 160.0] {
+        let lumped = vented_point(
+            &published,
+            volume,
+            PortSpec {
+                area_m2: std::f64::consts::PI * radius * radius,
+                length_eff_m: physical + (0.849 + 0.613) * radius,
+            },
+            2.83,
+            freq,
+            "half",
+            1.0,
+            0.2,
+        );
+        let wave = seatlock_acoustics::ported_box(volume, radius, physical, freq);
+        let terminal = seatlock_acoustics::terminal_at(&published, &mech, wave.z_in, 2.83, freq);
+        let h = wave.openings.first().copied().unwrap_or_default();
+        let into_room = terminal.volume_velocity * (num_complex::Complex64::new(1.0, 0.0) - h);
+        let pressure =
+            seatlock_acoustics::pressure_from_volume_velocity(into_room, freq, 1.0, "half", 0.2);
+        let spl = seatlock_acoustics::spl_db(pressure);
+        assert!(
+            (spl - lumped.0).abs() <= 0.1,
+            "{freq} Hz waveguide {spl} lumped {}",
+            lumped.0
+        );
+    }
+    let mut best_f = 0.0;
+    let mut best = 0.0;
+    let mut freq = 1100.0;
+    while freq < 1600.0 {
+        let wave = seatlock_acoustics::ported_box(volume, radius, physical, freq);
+        let mag = wave
+            .openings
+            .first()
+            .map(|value| value.norm())
+            .unwrap_or(0.0);
+        if mag > best {
+            best = mag;
+            best_f = freq;
+        }
+        freq += 1.0;
+    }
+    assert!(
+        (best_f - 1355.0).abs() / 1355.0 <= 0.02,
+        "pipe peak {best_f}"
+    );
+}
+
+#[test]
+fn chk_rad_1_piston_directivity() {
+    let on = piston_directivity(0.0);
+    let at_30 = piston_directivity(3.0 * 30.0_f64.to_radians().sin());
+    let at_60 = piston_directivity(3.0 * 60.0_f64.to_radians().sin());
+    let db30 = 20.0 * (at_30.abs() / on).log10();
+    let db60 = 20.0 * (at_60.abs() / on).log10();
+    assert!((db30 - -2.57).abs() <= 0.1, "30 deg {db30}");
+    assert!((db60 - -8.81).abs() <= 0.1, "60 deg {db60}");
+}
+
+#[test]
+fn chk_rad_2_circular_baffle_on_axis() {
+    use seatlock_acoustics::{circular_outline, diffraction_factor};
+    let outline = circular_outline([0.0, 0.0, 0.0], 0.10, [0.0, -1.0, 0.0], 128);
+    let listener = [0.0, -100.0, 0.0];
+    let source = [0.0, 0.0, 0.0];
+    let cases = [(10.0, -6.02), (1716.0, 3.52), (3432.0, -6.02)];
+    for (freq, expected) in cases {
+        let factor = diffraction_factor(source, listener, &outline, freq);
+        let db = 20.0 * factor.norm().log10();
+        assert!((db - expected).abs() <= 0.05, "{freq} Hz {db}");
+    }
+}
+
+#[test]
+fn a_measured_curve_sets_the_shape_above_ka_equals_one() {
+    use num_complex::Complex64;
+    use seatlock_acoustics::blend_measured_curve;
+    use seatlock_core::constants::C0;
+    let blend_hz = 849.0;
+    let radius = C0 / (2.0 * std::f64::consts::PI * blend_hz);
+    let mut pressure = vec![Complex64::new(1.0, 0.0); 3];
+    let freqs = [400.0, blend_hz, blend_hz * 2.0];
+    let label = blend_measured_curve(
+        &mut pressure,
+        &freqs,
+        radius,
+        &[(100.0, 80.0), (blend_hz, 80.0), (blend_hz * 2.0, 86.0)],
+    );
+    assert!(label.starts_with("measured"));
+    assert!((pressure[0].norm() - 1.0).abs() < 1e-9);
+    assert!(
+        (pressure[2].norm() - 2.0).abs() < 0.05,
+        "{}",
+        pressure[2].norm()
+    );
+    let mut bare = vec![Complex64::new(1.0, 0.0); 1];
+    let bare_label = blend_measured_curve(&mut bare, &[1000.0], radius, &[]);
+    assert!(bare_label.contains("no measured cone break-up"));
+    assert!((bare[0].norm() - 1.0).abs() < 1e-12);
+}
+
+#[test]
+fn a_sheet_without_vas_uses_the_force_factor_when_it_is_printed() {
+    let record = serde_json::json!({
+        "published": {
+            "fs_hz": 1000.0, "qes": 1.0, "qms": 2.0, "re_ohm": 6.0, "le_h": 0.0001,
+            "sd_m2": 0.001, "pe_w": 10.0, "bl_tm": 3.0
+        }
+    });
+    let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
+    let mech = derive_mechanical(&published);
+    let omega = 2.0 * std::f64::consts::PI * 1000.0;
+    let expected_mms = 9.0 / (omega * 6.0);
+    assert!((mech.mms - expected_mms).abs() / expected_mms < 0.01);
+    assert!(seatlock_acoustics::derivation_note(&record)
+        .unwrap()
+        .contains("force factor"));
+}
+
+#[test]
+fn nd25fa4_cannot_be_built_without_inventing_mass() {
+    let record = seatlock_core::catalog::driver("dayton-nd25fa-4").unwrap();
+    let error = seatlock_acoustics::published_from_catalog(&record).unwrap_err();
+    assert!(error.contains("Vas"));
+}
+
+#[test]
 fn sourced_drivers_match_printed_mechanics_or_would_warn() {
-    for id in ["dayton-tcp115-4", "dayton-ps95-8", "dayton-rs100-8"] {
+    for id in [
+        "dayton-tcp115-4",
+        "dayton-ps95-8",
+        "dayton-rs100-8",
+        "dayton-nd65-4",
+        "dayton-dsa135-8",
+        "dayton-pc105-8",
+        "dayton-rs225-8",
+    ] {
         let record = seatlock_core::catalog::driver(id).expect(id);
         assert_eq!(record["status"], "sourced");
+        assert_eq!(
+            record["tier"],
+            if id.contains("rs225") {
+                "reference"
+            } else {
+                "budget"
+            }
+        );
         assert_eq!(record["source"]["read_on"], "2026-11-10");
         assert_eq!(record["price"]["read_on"], "2026-11-10");
         let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
         let mech = derive_mechanical(&published);
         let printed = &record["published"];
-        close_rel(mech.mms, printed["mms_kg"].as_f64().unwrap(), 0.1);
-        close_rel(mech.cms, printed["cms_m_per_n"].as_f64().unwrap(), 0.1);
-        close_rel(mech.bl, printed["bl_tm"].as_f64().unwrap(), 0.1);
+        match seatlock_acoustics::printed_disagreement(&record) {
+            Some(note) => assert!(note.contains("10 percent"), "{id}: {note}"),
+            None => {
+                close_rel(mech.mms, printed["mms_kg"].as_f64().unwrap(), 0.1);
+                close_rel(mech.cms, printed["cms_m_per_n"].as_f64().unwrap(), 0.1);
+                close_rel(mech.bl, printed["bl_tm"].as_f64().unwrap(), 0.1);
+            }
+        }
+    }
+    for id in ["dayton-tcp115-8", "dayton-rs225-4"] {
+        let record = seatlock_core::catalog::driver(id).expect(id);
+        assert!(record["price"].is_null());
+        let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
+        let mech = derive_mechanical(&published);
+        let printed = &record["published"];
+        match seatlock_acoustics::printed_disagreement(&record) {
+            Some(note) => assert!(note.contains("10 percent"), "{id}: {note}"),
+            None => {
+                close_rel(mech.mms, printed["mms_kg"].as_f64().unwrap(), 0.1);
+                close_rel(mech.cms, printed["cms_m_per_n"].as_f64().unwrap(), 0.1);
+                close_rel(mech.bl, printed["bl_tm"].as_f64().unwrap(), 0.1);
+            }
+        }
+    }
+    for id in ["dayton-nd25fa-4", "dayton-dc28f-8", "dayton-rst28f-4"] {
+        let record = seatlock_core::catalog::driver(id).expect(id);
+        assert!(seatlock_acoustics::published_from_catalog(&record).is_err());
+    }
+    for path in [
+        "catalog/stock/charlotte-pvc-sch40-4in.json",
+        "catalog/stock/sakrete-form-tube-8in.json",
+        "catalog/stock/komatex-foam-board.json",
+        "catalog/stock/ultrastock-mdf-3-4.json",
+        "catalog/stock/sandeply-18mm.json",
+    ] {
+        let text = seatlock_core::catalog::embedded_file(path).expect(path);
+        let record: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert!(record["density_kg_m3"].is_null(), "{path}");
+        assert!(record["price"]["amount"].as_f64().unwrap() > 0.0, "{path}");
     }
 }
 

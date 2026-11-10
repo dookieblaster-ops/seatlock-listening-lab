@@ -1,0 +1,24 @@
+{
+  "id": "dayton-kabd-4100",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "KABD-4100",
+  "kind": "amplifier",
+  "channels": 4,
+  "power_w": 100.0,
+  "rated_load_ohm": 6.0,
+  "dsp_chip": "ADAU1701",
+  "source": {
+    "url": "https://www.parts-express.com/Dayton-Audio-KABD-4100-4-x-100W-Bluetooth-Amp-Board-with-DSP-325-434",
+    "title": "Dayton Audio KABD-4100 product page",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 89.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-KABD-4100-4-x-100W-Bluetooth-Amp-Board-with-DSP-325-434",
+    "read_on": "2026-11-10"
+  }
+}

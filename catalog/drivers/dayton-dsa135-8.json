@@ -1,0 +1,42 @@
+{
+  "id": "dayton-dsa135-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "DSA135-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 51.81,
+    "qes": 0.47,
+    "qms": 2.04,
+    "vas_m3": 0.00793,
+    "re_ohm": 5.9,
+    "le_h": 0.00078,
+    "sd_m2": 0.00754,
+    "xmax_m": 0.0049,
+    "pe_w": 50.0,
+    "mms_kg": 0.0095,
+    "cms_m_per_n": 0.00099,
+    "bl_tm": 6.22
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.111506,
+    "outer_diameter_m": 0.134874,
+    "bolt_circle_m": 0.125984,
+    "bolt_count": 4,
+    "depth_m": 0.06858
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-526--dayton-audio-DSA135-8-specifications.pdf",
+    "title": "Dayton Audio DSA135-8 specification sheet",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 39.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DSA135-8-5-Designer-Series-Aluminum-Cone-Woofer-295-526",
+    "read_on": "2026-11-10"
+  }
+}

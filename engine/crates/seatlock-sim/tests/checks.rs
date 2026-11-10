@@ -580,3 +580,76 @@ fn two_way_example_is_canonical_and_tuned_near_40_hz() {
     assert_eq!(result.radiators.len(), 2);
     assert!(result.radiators[1].spl_db.iter().any(|level| *level > 0.0));
 }
+
+#[test]
+fn baffle_radiation_drops_about_six_decibels_at_low_frequency() {
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let freqs = vec![30.0];
+    let half = simulate(
+        &design,
+        &SimulateRequest {
+            radiation: "point".to_string(),
+            space: "half".to_string(),
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let baffle = simulate(
+        &design,
+        &SimulateRequest {
+            radiation: "baffle".to_string(),
+            space: "half".to_string(),
+            frequencies_hz: Some(freqs),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let drop = half.radiators[0].spl_db[0] - baffle.radiators[0].spl_db[0];
+    assert!((drop - 6.02).abs() < 1.0, "drop {drop}");
+    assert!(baffle
+        .fidelity
+        .ignored
+        .iter()
+        .any(|line| line.contains("no measured cone break-up")));
+}
+
+#[test]
+fn baffle_step_is_a_six_decibel_shelf_and_one_driver_has_no_extra_delay() {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../designs/examples/two-way-vented.seatlock.json"
+    ))
+    .unwrap();
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let plan = seatlock_sim::correction_plan(&design, &builtin());
+    let shelf = &plan["baffle_step"];
+    assert!((shelf["gain_db"].as_f64().unwrap() - 6.0).abs() < 1e-9);
+    let filter = seatlock_correct::CorrectionFilter {
+        filter_type: "lowshelf".to_string(),
+        f_hz: shelf["f_hz"].as_f64().unwrap(),
+        q: 0.707,
+        gain_db: 6.0,
+        from_hz: shelf["f_hz"].as_f64().unwrap(),
+        from_q: 0.707,
+        reason: shelf["reason"].as_str().unwrap().to_string(),
+    };
+    assert!((filter_db(&filter, 20.0, 48_000.0) - 6.0).abs() < 0.2);
+    assert!(filter_db(&filter, 10_000.0, 48_000.0).abs() < 0.5);
+    assert!(seatlock_sim::geometric_delay_s(&design, 0).abs() < 1e-12);
+}
+
+#[test]
+fn a_driver_farther_from_the_listener_is_delayed() {
+    let mut text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../designs/examples/two-way-vented.seatlock.json"
+    ))
+    .unwrap();
+    text = text.replacen("\"surface\": \"front\"", "\"surface\": \"back\"", 1);
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let front = seatlock_sim::geometric_delay_s(&design, 1);
+    let back = seatlock_sim::geometric_delay_s(&design, 0);
+    assert!(back > front);
+    assert!(front.abs() < 1e-12);
+}

@@ -1,0 +1,24 @@
+{
+  "id": "sakrete-form-tube-8in",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "tube",
+  "maker": "SAKRETE",
+  "model": "8 in. x 48 in. concrete form tube",
+  "outside_diameter_m": 0.2032,
+  "length_m": 1.2192,
+  "density_kg_m3": null,
+  "source": {
+    "url": "https://www.homedepot.com/p/SAKRETE-8-in-x-48-in-Concrete-Form-Tube-65470075/100321209",
+    "title": "Home Depot listing for SAKRETE 8 in. x 48 in. concrete form tube",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "amount": 13.28,
+    "currency": "USD",
+    "vendor": "Home Depot",
+    "per": "piece",
+    "url": "https://www.homedepot.com/b/Building-Materials-Concrete-Cement-Masonry/SAKRETE/N-5yc1vZarlkZ1b0",
+    "read_on": "2026-11-10"
+  }
+}

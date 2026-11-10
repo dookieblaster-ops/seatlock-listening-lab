@@ -3,6 +3,7 @@
   "status": "sourced",
   "maker": "Dayton Audio",
   "model": "PS95-8",
+  "tier": "budget",
   "kind": "fullrange",
   "published": {
     "fs_hz": 119.8,
