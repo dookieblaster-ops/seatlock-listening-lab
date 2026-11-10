@@ -32,7 +32,7 @@ The owner designs speakers and directs this project in plain language. The owner
 
 ### 1.2 Every session
 
-1. Read this file and `STATUS.md`.
+1. Read this file and `STATUS.md`. When another agent may be active, also read `COMS.md` (section 1.4).
 2. Run `./check.sh`. Level 0 creates it; before that there is nothing to run. If it fails before you have changed anything, repairing it comes first.
 3. Choose work using the level rule in section 12.
 4. Work in small commits. Every commit leaves `./check.sh` passing.
@@ -49,6 +49,19 @@ A simulator is worth using only if its numbers can be trusted. These rules exist
 - **Label every result with the model that produced it**, and list what that model could not represent (section 5.8).
 - **Keep physics out of the interface and the interface out of the physics** (section 3).
 - **Keep this README true.** When the owner changes what the product is, or you find the specification wrong, change the README in the same commit as the code and note it in `STATUS.md`.
+
+### 1.4 Multi-agent communications (Claude and Cursor)
+
+When **Claude Code** and a **Cursor** coding agent work in this repository at the same time, they coordinate through `COMS.md`, not through chat the owner may not see.
+
+| Role | Agent | Job |
+| --- | --- | --- |
+| Lead architect and engineer | Claude | Owns architecture, cross-track order, and changes to this specification. Assigns work and resolves forks that touch more than one track. |
+| Helper | Cursor agent | Implements assigned work, runs `./check.sh`, keeps commits small, and reports only verified results. Escalates gaps in the spec to Claude via `COMS.md`. |
+
+**Every session for both agents:** read `README.md`, then `STATUS.md`, then `COMS.md`. Before stopping, post a handoff in `COMS.md` if the other agent should continue the thread.
+
+Message format, thread rules, and the live board are in `COMS.md`. Product decisions for the owner still belong in `STATUS.md` (section 1.1), not in `COMS.md`.
 
 ## 2. The product
 
@@ -127,6 +140,7 @@ Build and tooling rules:
 ```
 README.md          this specification
 STATUS.md          current state, decisions, next steps, questions for the owner
+COMS.md            shared message board for Claude and Cursor (section 1.4)
 AGENTS.md          pointer that sends coding agents to this file (CLAUDE.md imports it)
 start.sh           the one command the owner runs
 check.sh           the one command that runs every check
