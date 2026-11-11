@@ -1328,21 +1328,40 @@ fn correction_plan_for(
     let width = outer_field(design, "width_m", 0.2);
     let corner = baffle_step_hz(width, outer_field(design, "height_m", 0.3));
     let shows_step = radiation == "baffle" || (radiation == "point" && space == "step");
+    let f6_max = catalog::target(&design.target)
+        .and_then(|target| target.get("f6_hz_max").and_then(Value::as_f64))
+        .unwrap_or(50.0);
+    let flat_max = catalog::target(&design.target)
+        .and_then(|target| target.get("flatness_db_max").and_then(Value::as_f64))
+        .unwrap_or(1.5);
     let (shelf_gain, shelf_note) = if shows_step {
         result
             .radiators
             .first()
-            .map(|curve| fit_baffle_shelf(curve, &freqs, level, corner, design))
+            .map(|curve| {
+                search_shelf(
+                    curve,
+                    &freqs,
+                    level,
+                    corner,
+                    design,
+                    &fixed_block_shape(design, registry, &freqs, 0),
+                    protected,
+                    alignment,
+                    !ports.is_empty(),
+                    tuning,
+                    f6_max,
+                    flat_max,
+                )
+            })
             .unwrap_or((0.0, String::new()))
     } else {
         (0.0, String::new())
     };
-    let shelf_reason = if shelf_gain > 0.0 {
-        "Raises the bass to make up for sound wrapping around the cabinet edge.".to_string()
-    } else if shelf_note.is_empty() {
+    let shelf_reason = if shelf_note.is_empty() {
         "Raises the bass 6 dB to make up for sound wrapping around the cabinet edge.".to_string()
     } else {
-        shelf_note.clone()
+        shelf_note
     };
     let mut plans = Vec::new();
     for (index, curve) in result.radiators.iter().enumerate() {
@@ -1428,48 +1447,115 @@ fn shelf_db(gain_db: f64, corner_hz: f64, freq_hz: f64, design: &DesignFile) -> 
     )
 }
 
-fn fit_baffle_shelf(
+#[allow(clippy::too_many_arguments)]
+fn search_shelf(
     curve: &RadiatorCurve,
     freqs: &[f64],
     level_db: f64,
     corner_hz: f64,
     design: &DesignFile,
+    fixed: &[f64],
+    protected: [f64; 2],
+    alignment: (f64, f64),
+    vented: bool,
+    tuning_hz: f64,
+    f6_max: f64,
+    flat_max: f64,
 ) -> (f64, String) {
-    let fits = |gain: f64| {
-        freqs.iter().enumerate().all(|(index, freq)| {
-            let boost = shelf_db(gain, corner_hz, *freq, design);
-            let room = curve.max_spl_db[index] - level_db;
-            boost <= room.max(0.0) + 0.05
-        })
-    };
-    if fits(6.0) {
-        return (6.0, String::new());
+    let sample_rate = design.dsp.sample_rate_hz as f64;
+    let mut best_gain = 0.0;
+    let mut best_short = f64::MAX;
+    for step in 0..=12 {
+        let gain = step as f64 * 0.5;
+        let spl: Vec<f64> = curve
+            .spl_db
+            .iter()
+            .zip(freqs)
+            .map(|(level, freq)| *level + shelf_db(gain, corner_hz, *freq, design))
+            .collect();
+        let max_for_eq: Vec<f64> = curve
+            .max_spl_db
+            .iter()
+            .zip(freqs)
+            .map(|(level, freq)| *level - shelf_db(gain, corner_hz, *freq, design))
+            .collect();
+        let outcome = seatlock_correct::correct(
+            freqs,
+            &spl,
+            &max_for_eq,
+            level_db,
+            protected,
+            design.dsp.correction.max_filters as usize,
+            sample_rate,
+            alignment.0,
+            alignment.1,
+            vented,
+            tuning_hz,
+            fixed,
+        );
+        let corrected: Vec<f64> = curve
+            .spl_db
+            .iter()
+            .zip(freqs)
+            .map(|(level, freq)| {
+                let extra: f64 = outcome
+                    .filters
+                    .iter()
+                    .map(|filter| seatlock_correct::filter_db(filter, *freq, sample_rate))
+                    .sum();
+                *level + shelf_db(gain, corner_hz, *freq, design) + extra
+            })
+            .collect();
+        let (f6, flatness, loud) = seatlock_correct::metrics(freqs, &corrected, &curve.max_spl_db);
+        let legal = corrected.iter().enumerate().all(|(index, level)| {
+            if freqs[index] < f6 {
+                return true;
+            }
+            let boost = level - curve.spl_db[index];
+            let room = (curve.max_spl_db[index] - level_db).max(0.0);
+            boost <= room + 0.3
+        });
+        if !legal {
+            continue;
+        }
+        let shortfall = (f6 / f6_max.max(1.0)).log2().max(0.0)
+            + (flatness - flat_max).max(0.0) / 1.5
+            + (level_db - loud).max(0.0) / 6.0;
+        eprintln!("shelf {gain} kept shortfall {shortfall:.3} f6 {f6:.1} flat {flatness:.2} loud {loud:.1}");
+        if shortfall < best_short - 1e-4
+            || (shortfall - best_short).abs() <= 1e-4 && gain >= best_gain
+        {
+            best_short = shortfall;
+            best_gain = gain;
+        }
     }
-    let mut worst_index = 0usize;
-    let mut worst_over = f64::MIN;
+    let (f6, _, _) = seatlock_correct::metrics(freqs, &curve.spl_db, &curve.max_spl_db);
+    let mut tight_index = 0usize;
+    let mut tight_margin = f64::MAX;
     for (index, freq) in freqs.iter().enumerate() {
+        if *freq < f6 {
+            continue;
+        }
+        let boost = shelf_db(best_gain, corner_hz, *freq, design);
         let room = curve.max_spl_db[index] - level_db;
-        let over = shelf_db(6.0, corner_hz, *freq, design) - room.max(0.0);
-        if over > worst_over {
-            worst_over = over;
-            worst_index = index;
+        let margin = room - boost;
+        if margin < tight_margin {
+            tight_margin = margin;
+            tight_index = index;
         }
     }
-    let name = tightest_limit(curve, worst_index, design);
-    let mut gain = 5.5;
-    while gain >= 0.5 {
-        if fits(gain) {
-            return (
-                gain,
-                format!("{name} reduces the baffle-step shelf to {gain:.1} dB."),
-            );
-        }
-        gain -= 0.5;
+    let name = tightest_limit(curve, tight_index, design);
+    if best_gain >= 0.5 {
+        (
+            best_gain,
+            format!("{name} limits the baffle-step shelf to {best_gain:.1} dB."),
+        )
+    } else {
+        (
+            0.0,
+            format!("{name} stops the baffle-step shelf, so it is not applied."),
+        )
     }
-    (
-        0.0,
-        format!("{name} stops the baffle-step shelf, so it is not applied."),
-    )
 }
 
 fn tightest_limit(curve: &RadiatorCurve, index: usize, design: &DesignFile) -> &'static str {

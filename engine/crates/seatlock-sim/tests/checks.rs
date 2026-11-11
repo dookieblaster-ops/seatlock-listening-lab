@@ -632,6 +632,51 @@ fn sealed_baffle_correction_stays_near_half_space_or_names_the_limit() {
 }
 
 #[test]
+fn an_80_db_target_applies_a_baffle_shelf_of_at_least_3_db() {
+    let mut design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    design.target = "test-80".to_string();
+    let bare = simulate(
+        &design,
+        &SimulateRequest {
+            radiation: "baffle".into(),
+            space: "half".into(),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let plan = seatlock_sim::correction_plan_with(&design, &builtin(), "baffle", "half");
+    let shelf = plan["filters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|filter| filter["type"] == "lowshelf")
+        .and_then(|filter| filter["gain_db"].as_f64())
+        .unwrap_or(0.0);
+    assert!(shelf >= 3.0, "shelf {shelf} dB, note {}", plan["message"]);
+    let mut corrected = design.clone();
+    for filter in plan["filters"].as_array().unwrap() {
+        let part =
+            serde_json::from_value::<seatlock_core::design::KindPart>(filter.clone()).unwrap();
+        corrected.dsp.per_radiator[0].blocks.push(part);
+    }
+    let after = simulate(
+        &corrected,
+        &SimulateRequest {
+            radiation: "baffle".into(),
+            space: "half".into(),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert!(
+        after.flatness_db < bare.flatness_db,
+        "evenness {} vs {}",
+        after.flatness_db,
+        bare.flatness_db
+    );
+}
+
+#[test]
 fn baffle_scores_for_the_page() {
     let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
     let plan = seatlock_sim::correction_plan_with(&design, &builtin(), "baffle", "half");
@@ -663,7 +708,7 @@ fn baffle_scores_for_the_page() {
         },
         &builtin(),
     );
-    assert_eq!(format!("{:.0}", result.f6_hz), "125");
+    assert_eq!(format!("{:.0}", result.f6_hz), "113");
     assert_eq!(format!("{:.1}", result.flatness_db), "7.4");
     assert_eq!(format!("{:.0}", result.max_spl_metric_db), "83");
 }

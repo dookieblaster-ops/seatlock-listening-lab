@@ -1,0 +1,6 @@
+{
+  "f6_hz_max": 50,
+  "flatness_db_max": 1.5,
+  "max_spl_db_min": 80,
+  "budget_max": null
+}
