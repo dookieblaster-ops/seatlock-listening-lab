@@ -37,7 +37,7 @@ Goal: a two-way vented speaker simulates, plays, and compares against another de
 
 1. **Outer shapes.** Rounded and chamfered edges, a sloped baffle, `prism`, and `tube` (README section 6.2), each registered as its own member. `tube` takes its diameter and wall from a stock record and gets printed end caps, so a hybrid build exports print files for the caps and a cut length for the pipe. `sheet_box` is a box cut from a sheet stock record, with a cut list and whole sheets in the cost; it prints nothing.
 2. **Inside.** Round and slot ports, several chambers, recesses, and bolt holes from mounting data.
-3. **Print parts.** Split the cabinet into parts that fit the printer's build volume, with alignment features. Export 3MF and report the print time. The printer's build volume and flow rate come from the owner. Until they are in STATUS, use a labeled placeholder of 220 x 220 x 250 mm.
+3. **Print parts.** Split the cabinet into parts that fit the printer's build volume, with alignment features. Export 3MF and report the print time. The build volume and flow come from the owner's printer record, `catalog/printers/bambu-lab-x2d.json` (256 x 256 x 260 mm).
 4. **`fdtd` with openings (README section 5.5).** An exterior air block with absorbing faces, `H_k` from the flow through each opening, and a two-resolution uncertainty. Background jobs with progress and cancel. Checks: CHK-FDTD-3 and CHK-FDTD-4. Check the exterior block size rule of section 5.5 and record the result.
 
 ## M4. Optimizer and the end-to-end check
