@@ -18,7 +18,7 @@ require rustup 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -
 require cargo 'rustup component add cargo'
 require cc 'sudo apt install -y build-essential'
 require node 'curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs'
-require npm 'sudo apt install -y npm'
+require npm 'curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs'
 require xdg-open 'sudo apt install -y xdg-utils'
 
 NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
