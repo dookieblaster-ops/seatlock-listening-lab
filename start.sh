@@ -14,7 +14,7 @@ require() {
   fi
 }
 
-require rustup 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh'
+require rustup 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . "$HOME/.cargo/env"'
 require cargo 'rustup component add cargo'
 require node 'curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs'
 require npm 'sudo apt install -y npm'
@@ -42,7 +42,7 @@ echo "Building WebAssembly modules..."
 mkdir -p web/public/examples
 cp engine/target/wasm32-unknown-unknown/release/seatlock_wasm.wasm web/public/
 cp engine/target/wasm32-unknown-unknown/release/seatlock_rt.wasm web/public/
-cp designs/examples/sealed-test.seatlock.json web/public/examples/
+cp designs/examples/*.seatlock.json web/public/examples/
 
 (
   cd web
