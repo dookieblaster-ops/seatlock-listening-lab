@@ -3,6 +3,9 @@
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
 
+pub mod grid;
+pub use grid::Grid;
+
 /// Rigid rectangular cavity with a resistive source patch on the low-x wall.
 pub struct Cavity {
     pub size_m: [f64; 3],
@@ -234,7 +237,7 @@ pub fn run_grid(
     }
 }
 
-fn clock_start() -> Option<std::time::Instant> {
+pub(crate) fn clock_start() -> Option<std::time::Instant> {
     #[cfg(target_arch = "wasm32")]
     {
         None
@@ -245,7 +248,7 @@ fn clock_start() -> Option<std::time::Instant> {
     }
 }
 
-fn elapsed_ms(started: Option<std::time::Instant>) -> f64 {
+pub(crate) fn elapsed_ms(started: Option<std::time::Instant>) -> f64 {
     started
         .map(|instant| instant.elapsed().as_secs_f64() * 1000.0)
         .unwrap_or(0.0)
@@ -296,7 +299,7 @@ fn num_complex(re: f64, im: f64) -> (f64, f64) {
     (re, im)
 }
 
-fn div(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+pub(crate) fn div(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     let den = b.0 * b.0 + b.1 * b.1;
     ((a.0 * b.0 + a.1 * b.1) / den, (a.1 * b.0 - a.0 * b.1) / den)
 }
@@ -385,9 +388,10 @@ pub struct OpeningCurve {
     pub elapsed_ms: f64,
 }
 
-/// CHK-FDTD-3 cavity: 0.20 m cube, 40 mm neck, 100 mm long, exterior block.
-/// `exterior_widths` is how many opening widths the block extends past the mouth.
-pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
+/// CHK-FDTD-3 cavity: 0.20 m cube, 40 mm neck, 100 mm long, flush with a flat wall that
+/// carries the exterior block. `exterior_widths` is how many opening widths the block extends
+/// past the mouth.
+pub fn helmholtz_neck_grid(exterior_widths: f64) -> Grid {
     let dx = 0.01;
     let opening = 0.04;
     let margin = exterior_widths * opening;
@@ -400,14 +404,21 @@ pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
     let ny = (yz / dx).round() as usize;
     let nz = ny;
     let inset = (ny - 20) / 2;
-    let mut air = vec![false; nx * ny * nz];
-    let mut exterior = vec![false; nx * ny * nz];
-    let mut source = vec![false; nx * ny * nz];
-    let cell = |i: usize, j: usize, k: usize| (i * ny + j) * nz + k;
+    let mut grid = Grid {
+        n: [nx, ny, nz],
+        dx,
+        origin_m: [0.0; 3],
+        air: vec![false; nx * ny * nz],
+        source: Vec::new(),
+        absorbing: Vec::new(),
+        openings: vec![Vec::new()],
+        true_volume_m3: 0.2 * 0.2 * 0.2,
+    };
     for i in 0..nx_cavity {
         for j in inset..inset + 20 {
             for k in inset..inset + 20 {
-                air[cell(i, j, k)] = true;
+                let c = grid.cell(i, j, k);
+                grid.air[c] = true;
             }
         }
     }
@@ -415,238 +426,80 @@ pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
     for i in nx_cavity..nx_cavity + nx_neck {
         for j in neck0..neck0 + 4 {
             for k in neck0..neck0 + 4 {
-                air[cell(i, j, k)] = true;
+                let c = grid.cell(i, j, k);
+                grid.air[c] = true;
             }
         }
     }
-    for i in nx_cavity + nx_neck..nx {
+    let port_i = nx_cavity + nx_neck;
+    let mouth = [
+        port_i as f64 * dx,
+        ny as f64 * dx * 0.5,
+        nz as f64 * dx * 0.5,
+    ];
+    for i in port_i..nx {
         for j in 0..ny {
             for k in 0..nz {
-                let index = cell(i, j, k);
-                air[index] = true;
-                exterior[index] = true;
+                let c = grid.cell(i, j, k);
+                grid.air[c] = true;
+                let count = (i + 1 == nx) as u8
+                    + (j == 0) as u8
+                    + (j + 1 == ny) as u8
+                    + (k == 0) as u8
+                    + (k + 1 == nz) as u8;
+                if count > 0 {
+                    let center = [
+                        (i as f64 + 0.5) * dx,
+                        (j as f64 + 0.5) * dx,
+                        (k as f64 + 0.5) * dx,
+                    ];
+                    let r = ((center[0] - mouth[0]).powi(2)
+                        + (center[1] - mouth[1]).powi(2)
+                        + (center[2] - mouth[2]).powi(2))
+                    .sqrt();
+                    grid.absorbing.push((c, count, r));
+                }
             }
         }
     }
     let source0 = ny / 2 - 3;
     for j in source0..source0 + 6 {
         for k in source0..source0 + 6 {
-            if j < ny && k < nz {
-                source[cell(0, j, k)] = true;
-            }
+            let c = grid.cell(0, j, k);
+            grid.source.push(c);
         }
     }
-    let port_i = nx_cavity + nx_neck;
-    run_masked(nx, ny, nz, dx, &air, &exterior, &source, port_i)
+    for j in neck0..neck0 + 4 {
+        for k in neck0..neck0 + 4 {
+            let slot = grid.face_slot(0, port_i, j, k);
+            grid.openings[0].push((0, slot, 1.0));
+        }
+    }
+    grid
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_masked(
-    nx: usize,
-    ny: usize,
-    nz: usize,
-    dx: f64,
-    air: &[bool],
-    exterior: &[bool],
-    source: &[bool],
-    port_i: usize,
-) -> OpeningCurve {
-    let started = clock_start();
-    let cell = |i: usize, j: usize, k: usize| (i * ny + j) * nz + k;
-    let dt = 0.95 * dx / (C0 * 3.0_f64.sqrt());
-    let kp = RHO0 * C0 * C0 * dt / dx;
-    let y_face = 1.0 / (RHO0 * C0);
-    let rho_c = RHO0 * C0;
-    let mut pressure = vec![0.0_f32; nx * ny * nz];
-    let mut next = vec![0.0_f32; nx * ny * nz];
-    let mut vx = vec![0.0_f32; (nx + 1) * ny * nz];
-    let mut vy = vec![0.0_f32; nx * (ny + 1) * nz];
-    let mut vz = vec![0.0_f32; nx * ny * (nz + 1)];
-    let sigma = 8.0 * dt;
-    let t0 = 4.0 * sigma;
-    let mut samples_p = Vec::new();
-    let mut samples_u = Vec::new();
-    let mut samples_port = Vec::new();
-    let mut peak = 0.0_f64;
-    let mut steps = 0usize;
-    let max_steps = 24_000usize;
-    while steps < max_steps {
-        let time = steps as f64 * dt;
-        let pulse = (-((time - t0) / sigma).powi(2)).exp();
-        for i in 1..nx {
-            for j in 0..ny {
-                for k in 0..nz {
-                    if air[cell(i - 1, j, k)] && air[cell(i, j, k)] {
-                        let ahead = pressure[cell(i, j, k)] as f64;
-                        let behind = pressure[cell(i - 1, j, k)] as f64;
-                        let slot = (i * ny + j) * nz + k;
-                        vx[slot] += (-(dt / (RHO0 * dx)) * (ahead - behind)) as f32;
-                    }
-                }
-            }
-        }
-        for i in 0..nx {
-            for j in 1..ny {
-                for k in 0..nz {
-                    if air[cell(i, j - 1, k)] && air[cell(i, j, k)] {
-                        let ahead = pressure[cell(i, j, k)] as f64;
-                        let behind = pressure[cell(i, j - 1, k)] as f64;
-                        let slot = (i * (ny + 1) + j) * nz + k;
-                        vy[slot] += (-(dt / (RHO0 * dx)) * (ahead - behind)) as f32;
-                    }
-                }
-            }
-        }
-        for i in 0..nx {
-            for j in 0..ny {
-                for k in 1..nz {
-                    if air[cell(i, j, k - 1)] && air[cell(i, j, k)] {
-                        let ahead = pressure[cell(i, j, k)] as f64;
-                        let behind = pressure[cell(i, j, k - 1)] as f64;
-                        let slot = (i * ny + j) * (nz + 1) + k;
-                        vz[slot] += (-(dt / (RHO0 * dx)) * (ahead - behind)) as f32;
-                    }
-                }
-            }
-        }
-        let mut p_sum = 0.0;
-        let mut u_sum = 0.0;
-        let mut faces = 0.0;
-        let mut port = 0.0;
-        for i in 0..nx {
-            for j in 0..ny {
-                for k in 0..nz {
-                    if !air[cell(i, j, k)] {
-                        continue;
-                    }
-                    let mut net = 0.0;
-                    if i + 1 < nx && air[cell(i + 1, j, k)] {
-                        net += vx[((i + 1) * ny + j) * nz + k] as f64;
-                    }
-                    if i > 0 && air[cell(i - 1, j, k)] {
-                        net -= vx[(i * ny + j) * nz + k] as f64;
-                    }
-                    if j + 1 < ny && air[cell(i, j + 1, k)] {
-                        net += vy[(i * (ny + 1) + (j + 1)) * nz + k] as f64;
-                    }
-                    if j > 0 && air[cell(i, j - 1, k)] {
-                        net -= vy[(i * (ny + 1) + j) * nz + k] as f64;
-                    }
-                    if k + 1 < nz && air[cell(i, j, k + 1)] {
-                        net += vz[(i * ny + j) * (nz + 1) + (k + 1)] as f64;
-                    }
-                    if k > 0 && air[cell(i, j, k - 1)] {
-                        net -= vz[(i * ny + j) * (nz + 1) + k] as f64;
-                    }
-                    let on_source = source[cell(i, j, k)];
-                    let mut y_sum = if on_source { y_face } else { 0.0 };
-                    if exterior[cell(i, j, k)] {
-                        if i == 0 || i + 1 == nx {
-                            y_sum += y_face;
-                        }
-                        if j == 0 || j + 1 == ny {
-                            y_sum += y_face;
-                        }
-                        if k == 0 || k + 1 == nz {
-                            y_sum += y_face;
-                        }
-                    }
-                    let v_source = if on_source { pulse } else { 0.0 };
-                    let g = 0.5 * kp * y_sum;
-                    let old = pressure[cell(i, j, k)] as f64;
-                    let updated = (old * (1.0 - g) - kp * net + kp * v_source) / (1.0 + g);
-                    next[cell(i, j, k)] = updated as f32;
-                    if on_source {
-                        let mean = 0.5 * (updated + old);
-                        let v_net = v_source - mean / rho_c;
-                        p_sum += mean;
-                        u_sum += v_net * dx * dx;
-                        faces += 1.0;
-                    }
-                }
-            }
-        }
-        let neck0 = ny / 2 - 2;
-        for j in neck0..neck0 + 4 {
-            for k in neck0..neck0 + 4 {
-                port += vx[(port_i * ny + j) * nz + k] as f64 * dx * dx;
-            }
-        }
-        std::mem::swap(&mut pressure, &mut next);
-        let aperture_p = if faces > 0.0 { p_sum / faces } else { 0.0 };
-        samples_p.push(aperture_p);
-        samples_u.push(u_sum);
-        samples_port.push(port);
-        peak = peak.max(aperture_p.abs());
-        steps += 1;
-        if time > t0 + 40.0 * sigma && peak > 0.0 {
-            let quiet = samples_p
-                .iter()
-                .rev()
-                .take(300)
-                .all(|sample| sample.abs() < 1e-4 * peak);
-            if quiet && steps > 1000 {
-                break;
-            }
-        }
-    }
-    let n = samples_p.len().next_power_of_two().max(65_536);
-    let mut p_re = vec![0.0; n];
-    let mut p_im = vec![0.0; n];
-    let mut u_re = vec![0.0; n];
-    let mut u_im = vec![0.0; n];
-    let mut h_re_t = vec![0.0; n];
-    let mut h_im_t = vec![0.0; n];
-    for (index, ((p, u), port)) in samples_p
-        .iter()
-        .zip(&samples_u)
-        .zip(&samples_port)
-        .enumerate()
-    {
-        p_re[index] = *p;
-        u_re[index] = *u;
-        h_re_t[index] = *port;
-    }
-    fft(&mut p_re, &mut p_im);
-    fft(&mut u_re, &mut u_im);
-    fft(&mut h_re_t, &mut h_im_t);
-    let mut frequencies_hz = Vec::new();
-    let mut z_real = Vec::new();
-    let mut z_imag = Vec::new();
-    let mut h_real = Vec::new();
-    let mut h_imag = Vec::new();
-    for bin in 1..n / 2 {
-        let freq = bin as f64 / (n as f64 * dt);
-        if freq > 400.0 {
-            break;
-        }
-        let p = (p_re[bin], p_im[bin]);
-        let u = (u_re[bin], u_im[bin]);
-        let port = (h_re_t[bin], h_im_t[bin]);
-        let z = if u.0 * u.0 + u.1 * u.1 > 1e-30 {
-            div(p, u)
-        } else {
-            (0.0, 0.0)
-        };
-        let h = if u.0 * u.0 + u.1 * u.1 > 1e-30 {
-            div(port, u)
-        } else {
-            (0.0, 0.0)
-        };
-        frequencies_hz.push(freq);
-        z_real.push(z.0);
-        z_imag.push(z.1);
-        h_real.push(h.0);
-        h_imag.push(h.1);
-    }
+/// How many opening widths the exterior block extends past a mouth in every direction. Three
+/// (README section 5.5's starting point) moved `Z_ab` and `H` by up to 1.4 % at 5.5 % from the
+/// port resonance when doubled; five moves them under 1 % (STATUS, 2026-11-10).
+pub const EXTERIOR_WIDTHS: f64 = 5.0;
+
+/// CHK-FDTD-3 on [`helmholtz_neck_grid`], from 2 Hz to 400 Hz in 0.25 Hz steps.
+pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
+    let grid = helmholtz_neck_grid(exterior_widths);
+    let options = grid::Options {
+        max_steps: 60_000,
+        frequencies_hz: (8..=1600).map(|index| index as f64 * 0.25).collect(),
+        progress_every: 0,
+    };
+    let response = grid::run(&grid, &options, &mut |_, _| true);
     OpeningCurve {
-        frequencies_hz,
-        z_real,
-        z_imag,
-        h_real,
-        h_imag,
-        steps,
-        elapsed_ms: elapsed_ms(started),
+        frequencies_hz: response.frequencies_hz,
+        z_real: response.z_real,
+        z_imag: response.z_imag,
+        h_real: response.h_real[0].clone(),
+        h_imag: response.h_imag[0].clone(),
+        steps: response.steps,
+        elapsed_ms: response.elapsed_ms,
     }
 }
 

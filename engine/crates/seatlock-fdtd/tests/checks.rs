@@ -57,7 +57,7 @@ fn chk_fdtd_2_low_frequency_compliance() {
 
 #[test]
 fn chk_fdtd_3_helmholtz_neck() {
-    let curve = seatlock_fdtd::helmholtz_neck(3.0);
+    let curve = seatlock_fdtd::helmholtz_neck(seatlock_fdtd::EXTERIOR_WIDTHS);
     eprintln!("FDTD3 steps {} ms {}", curve.steps, curve.elapsed_ms);
     let mut best_f = 0.0;
     let mut best = 0.0;
@@ -98,15 +98,16 @@ fn chk_fdtd_3_helmholtz_neck() {
 }
 
 #[test]
-// Known to fail off resonance until the 3D model has losses (README section 5.5, STATUS):
-// both runs stop at the 24000-step cap (0.38 s), long before the lossless port resonance
-// (time constant about 2 s) decays, and the truncated ring leaks into nearby values.
-#[ignore = "release only, about 40 s; fails off resonance until losses arrive (see STATUS)"]
+// README section 5.5's exterior-block rule. It failed with plane-wave absorbing faces, which add
+// a false resistance to the low-frequency radiation load; with spherical-wave faces and a block of
+// EXTERIOR_WIDTHS it passes, and both runs decay fully (STATUS, 2026-11-10).
+#[ignore = "slow, about 75 s; run with --ignored"]
 fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_percent() {
     // README section 5.5: compare the resonance frequency, and Z_ab and H more than 5 % away
     // from it. The lossless peak height is not compared: it is set by the absorbing faces.
-    let small = seatlock_fdtd::helmholtz_neck(3.0);
-    let large = seatlock_fdtd::helmholtz_neck(6.0);
+    let width = seatlock_fdtd::EXTERIOR_WIDTHS;
+    let small = seatlock_fdtd::helmholtz_neck(width);
+    let large = seatlock_fdtd::helmholtz_neck(2.0 * width);
     let peak = |curve: &seatlock_fdtd::OpeningCurve| {
         let mut best_f = 0.0;
         let mut best = 0.0;
@@ -124,6 +125,21 @@ fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_pe
         best_f
     };
     let (f_small, f_large) = (peak(&small), peak(&large));
+    // "Away from any resonance" (README 5.5): a parallel resonance is a maximum of |Z_ab| and a
+    // series resonance a minimum; skip 5 % around each.
+    let mag = |index: usize| small.z_real[index].hypot(small.z_imag[index]);
+    let mut resonances = vec![f_small];
+    let count = small.frequencies_hz.len();
+    for index in 8..count.saturating_sub(8) {
+        let here = mag(index);
+        let window = (index - 8..=index + 8).filter(|other| *other != index);
+        if window.clone().all(|other| mag(other) > here)
+            || window.clone().all(|other| mag(other) < here)
+        {
+            resonances.push(small.frequencies_hz[index]);
+        }
+    }
+    eprintln!("RESONANCES {resonances:?}");
     let freq_change = (f_large - f_small).abs() / f_small;
     let mut worst_z: f64 = 0.0;
     let mut worst_h: f64 = 0.0;
@@ -131,7 +147,9 @@ fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_pe
         let freq = small.frequencies_hz[index];
         assert!((large.frequencies_hz[index] - freq).abs() < 1e-9);
         // Off resonance, below the cavity's first standing wave (858 Hz for 0.2 m).
-        if !(8.0..=400.0).contains(&freq) || (freq - f_small).abs() < 0.05 * f_small {
+        if !(8.0..=400.0).contains(&freq)
+            || resonances.iter().any(|res| (freq - res).abs() < 0.05 * res)
+        {
             continue;
         }
         let z_small = small.z_real[index].hypot(small.z_imag[index]);
@@ -142,7 +160,7 @@ fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_pe
         let dh = (large.h_real[index] - small.h_real[index])
             .hypot(large.h_imag[index] - small.h_imag[index]);
         worst_h = worst_h.max(dh / h_small);
-        if index % 8 == 0 {
+        if index % 8 == 0 || dz / z_small > 0.01 || dh / h_small > 0.01 {
             eprintln!(
                 "ROW {freq:.1} Hz |Z| {z_small:.4e} dZ {:.4} |H| {h_small:.4} dH {:.4} steps {} {}",
                 dz / z_small,
