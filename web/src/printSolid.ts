@@ -22,7 +22,16 @@ async function manifold(): Promise<ManifoldToplevel> {
 /** A constructive solid geometry tree from the engine (GeometryReport.print_tree). */
 export type PrintTree =
   | { op: "box"; min_m: number[]; max_m: number[] }
-  | { op: "cylinder"; base_m: number[]; axis: number[]; length_m: number; radius_m: number; segments?: number }
+  | {
+      op: "cylinder";
+      base_m: number[];
+      axis: number[];
+      length_m: number;
+      radius_m: number;
+      /** The radius at the far end, for a taper. */
+      radius_end_m?: number;
+      segments?: number;
+    }
   | { op: "hull"; points_m: number[][] }
   | {
       op: "prism";
@@ -53,7 +62,13 @@ function build(wasm: Wasm, node: PrintTree): Solid | null {
     return moved;
   }
   if (node.op === "cylinder") {
-    const blank = Manifold.cylinder(node.length_m, node.radius_m, node.radius_m, node.segments ?? 96, false);
+    const blank = Manifold.cylinder(
+      node.length_m,
+      node.radius_m,
+      node.radius_end_m ?? node.radius_m,
+      node.segments ?? 96,
+      false,
+    );
     // The blank runs along +z. Turn it to `axis`: about x by -asin(ay), then about y by atan2(ax, az).
     const [ax, ay, az] = node.axis;
     const rx = (-Math.asin(Math.max(-1, Math.min(1, ay))) * 180) / Math.PI;

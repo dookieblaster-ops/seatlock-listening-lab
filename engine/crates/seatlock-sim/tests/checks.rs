@@ -1311,3 +1311,93 @@ fn a_mounting_size_the_record_does_not_print_refuses_the_export() {
         report.warnings
     );
 }
+
+fn two_way() -> serde_json::Value {
+    serde_json::from_str(
+        &std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../designs/examples/two-way-vented.seatlock.json"
+        ))
+        .unwrap(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_straight_round_port_is_bored_through_the_front_and_printed_as_a_tube() {
+    // two-way-vented: 40 mm port, 87.98 mm from inside the box to the front face, 12 mm wall,
+    // 3 mm tube wall. The tube adds its ring over the 75.98 mm inside; the bore through the
+    // wall takes out a 40 mm disc 12 mm deep.
+    let design: seatlock_core::DesignFile = serde_json::from_value(two_way()).unwrap();
+    let mut sealed = two_way();
+    sealed["speaker"]["enclosure"]["ducts"] = serde_json::json!([]);
+    let sealed: seatlock_core::DesignFile = serde_json::from_value(sealed).unwrap();
+    let with_port = seatlock_sim::geometry_report(&design).unwrap();
+    let without = seatlock_sim::geometry_report(&sealed).unwrap();
+    let pi = std::f64::consts::PI;
+    let (r, t, wall, length) = (0.02_f64, 0.003_f64, 0.012_f64, 0.08798_f64);
+    let inside = length - wall;
+    let added = pi * ((r + t).powi(2) - r * r) * inside - pi * r * r * wall;
+    let got = with_port.solid_volume_m3 - without.solid_volume_m3;
+    assert!((got - added).abs() < 1e-12, "{got} against {added}");
+    assert!(with_port.can_export_print, "{:?}", with_port.warnings);
+
+    // The tube's outside takes air from the box.
+    let request = SimulateRequest::default();
+    let vented = simulate(&design, &request, &builtin());
+    let closed = simulate(&sealed, &request, &builtin());
+    let displaced = pi * (r + t).powi(2) * inside;
+    let lost = closed.interior_volume_m3.unwrap() - vented.interior_volume_m3.unwrap();
+    assert!(
+        (lost - displaced).abs() < 1e-12,
+        "{lost} against {displaced}"
+    );
+}
+
+#[test]
+fn a_port_that_cannot_be_printed_is_simulated_and_refuses_the_export() {
+    let cases = [
+        // Its path stops inside the box, short of the front face.
+        (
+            serde_json::json!([[0.045, 0.2, 0.045], [0.045, 0.11202, 0.045]]),
+            "not on the front",
+        ),
+        // Its opening sits inside the woofer's flange.
+        (
+            serde_json::json!([[0.137, 0.08798, 0.08], [0.137, 0.0, 0.08]]),
+            "woofer",
+        ),
+        // A bend.
+        (
+            serde_json::json!([[0.045, 0.1, 0.1], [0.045, 0.1, 0.045], [0.045, 0.0, 0.045]]),
+            "straight",
+        ),
+    ];
+    for (path, words) in cases {
+        let mut value = two_way();
+        value["speaker"]["enclosure"]["ducts"][0]["path_m"] = path;
+        let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+        let report = seatlock_sim::geometry_report(&design).unwrap();
+        assert!(!report.can_export_print, "{words}");
+        assert!(
+            report.warnings.iter().any(|line| line.contains(words)),
+            "{words}: {:?}",
+            report.warnings
+        );
+        let result = simulate(&design, &SimulateRequest::default(), &builtin());
+        assert!(!result.radiators.is_empty(), "{words}");
+    }
+}
+
+#[test]
+fn a_slot_port_is_printed_with_its_own_size() {
+    let mut value = two_way();
+    value["speaker"]["enclosure"]["ducts"][0]["section"] =
+        serde_json::json!({ "shape": "rect", "start_m": [0.05, 0.02], "end_m": [0.05, 0.02] });
+    value["speaker"]["enclosure"]["ducts"][0]["path_m"] =
+        serde_json::json!([[0.045, 0.08798, 0.045], [0.045, 0.0, 0.045]]);
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(report.can_export_print, "{:?}", report.warnings);
+    assert!(report.print_tree.to_string().contains("\"op\":\"prism\""));
+}

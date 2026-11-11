@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub mod cost;
+pub mod ports;
 pub use cost::{CabinetParts, CostLine, CostReport};
 
 pub fn builtin() -> Registry {
@@ -237,6 +238,13 @@ pub fn simulate(
             let (amount, _, _) = cone_displacement_m3(&radiator.fields);
             displacement += amount;
         }
+    }
+    // A printed port's tube takes air from the chamber (README section 5.3).
+    for port in ports::printed_ports(design, outer.as_ref())
+        .into_iter()
+        .flatten()
+    {
+        displacement += port.displaced_m3;
     }
     let volume = (gross - displacement).max(0.0);
     let baffle = outer.baffle_width_m();
@@ -1197,8 +1205,60 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let mut print_tree = shape
         .print_tree(&holes)
         .map_err(|err| shape_message(kind, &err))?;
-    if !features.is_empty() {
+    let mut solid = solid;
+    let mut shells = Vec::new();
+    let mut bores = Vec::new();
+    for port in ports::printed_ports(design, shape.as_ref()) {
+        let port = match port {
+            Ok(port) => port,
+            Err(problem) => {
+                warnings.push(problem);
+                can_export = false;
+                continue;
+            }
+        };
+        let clash = mounts
+            .iter()
+            .zip(&design.speaker.enclosure.mounts)
+            .find(|(view, mount)| {
+                let d = [
+                    view.position_m[0] - port.opening_m[0],
+                    view.position_m[1] - port.opening_m[1],
+                    view.position_m[2] - port.opening_m[2],
+                ];
+                let flange = mount_driver(design, &mount.id)
+                    .and_then(|driver| {
+                        driver
+                            .pointer("/mounting/outer_diameter_m")
+                            .and_then(Value::as_f64)
+                    })
+                    .unwrap_or(view.cutout_diameter_m);
+                view.surface == port.surface
+                    && (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+                        < flange / 2.0 + port.half_width_m
+            });
+        if let Some((_, mount)) = clash {
+            warnings.push(format!(
+                "Port {}: its opening overlaps the {} mount; the print file is refused.",
+                port.id, mount.id
+            ));
+            can_export = false;
+            continue;
+        }
+        if solid > 0.0 {
+            solid += port.solid_m3;
+        }
+        shells.push(port.shell);
+        bores.push(port.bore);
+    }
+    if !shells.is_empty() {
+        let mut body = vec![print_tree];
+        body.extend(shells);
+        print_tree = seatlock_geom::csg_union(body);
+    }
+    if !features.is_empty() || !bores.is_empty() {
         let mut parts = vec![print_tree];
+        parts.extend(bores);
         parts.extend(features);
         print_tree = seatlock_geom::csg_difference(parts);
     }
