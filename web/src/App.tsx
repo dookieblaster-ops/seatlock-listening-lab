@@ -257,6 +257,7 @@ export default function App() {
           </button>
           <input
             ref={fileInputRef}
+            data-testid="open-design-input"
             type="file"
             accept=".json,.seatlock.json,application/json"
             hidden
@@ -492,6 +493,7 @@ export default function App() {
               ).toExponential(6)}
             </span>{" "}
             m³. 5 mm cells <span data-testid="voxel-air">{geom.voxel_air_volume_m3.toExponential(6)}</span> m³.
+            Printed plastic by formula <span data-testid="formula-solid">{geom.solid_volume_m3.toExponential(6)}</span> m³.
           </p>
           <CostPanel cost={geom.cost} printNote={geom.print_note} />
           <CabinetView
@@ -547,6 +549,12 @@ export default function App() {
             </button>
             <button
               type="button"
+              disabled={design?.speaker.enclosure.outer.kind !== "box"}
+              title={
+                design?.speaker.enclosure.outer.kind === "box"
+                  ? "Solve the air inside the box in 3D."
+                  : "The full 3D air model handles box cabinets only so far."
+              }
               onClick={() => {
                 fdtdWorker.current?.terminate();
                 const worker = new Worker(new URL("./fdtdWorker.ts", import.meta.url), { type: "module" });

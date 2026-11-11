@@ -98,8 +98,13 @@ fn chk_fdtd_3_helmholtz_neck() {
 }
 
 #[test]
-#[ignore = "larger exterior block; run with --release -- --ignored to record the size check"]
-fn exterior_block_doubling_changes_the_peak_by_under_one_percent() {
+// Known to fail off resonance until the 3D model has losses (README section 5.5, STATUS):
+// both runs stop at the 24000-step cap (0.38 s), long before the lossless port resonance
+// (time constant about 2 s) decays, and the truncated ring leaks into nearby values.
+#[ignore = "release only, about 40 s; fails off resonance until losses arrive (see STATUS)"]
+fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_percent() {
+    // README section 5.5: compare the resonance frequency, and Z_ab and H more than 5 % away
+    // from it. The lossless peak height is not compared: it is set by the absorbing faces.
     let small = seatlock_fdtd::helmholtz_neck(3.0);
     let large = seatlock_fdtd::helmholtz_neck(6.0);
     let peak = |curve: &seatlock_fdtd::OpeningCurve| {
@@ -110,22 +115,49 @@ fn exterior_block_doubling_changes_the_peak_by_under_one_percent() {
             if !(40.0..=120.0).contains(&freq) {
                 continue;
             }
-            let mag = (curve.z_real[index].powi(2) + curve.z_imag[index].powi(2)).sqrt();
+            let mag = curve.z_real[index].hypot(curve.z_imag[index]);
             if mag > best {
                 best = mag;
                 best_f = freq;
             }
         }
-        (best_f, best)
+        best_f
     };
-    let (f_small, z_small) = peak(&small);
-    let (f_large, z_large) = peak(&large);
+    let (f_small, f_large) = (peak(&small), peak(&large));
     let freq_change = (f_large - f_small).abs() / f_small;
-    let level_change = (z_large - z_small).abs() / z_small;
+    let mut worst_z: f64 = 0.0;
+    let mut worst_h: f64 = 0.0;
+    for index in 0..small.frequencies_hz.len().min(large.frequencies_hz.len()) {
+        let freq = small.frequencies_hz[index];
+        assert!((large.frequencies_hz[index] - freq).abs() < 1e-9);
+        // Off resonance, below the cavity's first standing wave (858 Hz for 0.2 m).
+        if !(8.0..=400.0).contains(&freq) || (freq - f_small).abs() < 0.05 * f_small {
+            continue;
+        }
+        let z_small = small.z_real[index].hypot(small.z_imag[index]);
+        let dz = (large.z_real[index] - small.z_real[index])
+            .hypot(large.z_imag[index] - small.z_imag[index]);
+        worst_z = worst_z.max(dz / z_small);
+        let h_small = small.h_real[index].hypot(small.h_imag[index]);
+        let dh = (large.h_real[index] - small.h_real[index])
+            .hypot(large.h_imag[index] - small.h_imag[index]);
+        worst_h = worst_h.max(dh / h_small);
+        if index % 8 == 0 {
+            eprintln!(
+                "ROW {freq:.1} Hz |Z| {z_small:.4e} dZ {:.4} |H| {h_small:.4} dH {:.4} steps {} {}",
+                dz / z_small,
+                dh / h_small,
+                small.steps,
+                large.steps
+            );
+        }
+    }
     eprintln!(
-        "BLOCK small {f_small} Hz {z_small}; large {f_large} Hz {z_large}; freq {freq_change} level {level_change}"
+        "BLOCK peak {f_small} Hz and {f_large} Hz; worst off-resonance change Z {worst_z:.4}, H {worst_h:.4}"
     );
-    assert!(freq_change < 0.01, "frequency moved by {freq_change}");
+    assert!(freq_change < 0.01, "resonance moved by {freq_change}");
+    assert!(worst_z < 0.01, "Z_ab off resonance changed by {worst_z}");
+    assert!(worst_h < 0.01, "H off resonance changed by {worst_h}");
 }
 
 #[test]

@@ -19,69 +19,62 @@ async function manifold(): Promise<ManifoldToplevel> {
   return library;
 }
 
-export async function buildCabinetMesh(input: {
-  width_m: number;
-  height_m: number;
-  depth_m: number;
-  wall_m: number;
-  mounts: Array<{ position_m: number[]; cutout_diameter_m: number; outward: number[] }>;
-}): Promise<SolidMesh> {
-  const wasm = await manifold();
+/** A constructive solid geometry tree from the engine (GeometryReport.print_tree). */
+export type PrintTree =
+  | { op: "box"; min_m: number[]; max_m: number[] }
+  | { op: "cylinder"; base_m: number[]; axis: number[]; length_m: number; radius_m: number; segments?: number }
+  | { op: "union" | "difference"; of: PrintTree[] };
+
+type Wasm = ManifoldToplevel;
+type Solid = InstanceType<Wasm["Manifold"]>;
+
+/** Builds one node of the tree. Returns null for an empty union. Every object made is deleted. */
+function build(wasm: Wasm, node: PrintTree): Solid | null {
   const { Manifold } = wasm;
-  const outer = Manifold.cube([input.width_m, input.depth_m, input.height_m], false);
-  const innerSize: [number, number, number] = [
-    input.width_m - 2 * input.wall_m,
-    input.depth_m - 2 * input.wall_m,
-    input.height_m - 2 * input.wall_m,
-  ];
-  const inner = Manifold.cube(innerSize, false).translate([input.wall_m, input.wall_m, input.wall_m]);
-  let solid = outer.subtract(inner);
-  outer.delete();
-  inner.delete();
-
-  for (const mount of input.mounts) {
-    if (mount.cutout_diameter_m <= 0) {
-      continue;
-    }
-    const radius = mount.cutout_diameter_m / 2;
-    const blank = Manifold.cylinder(input.wall_m + 0.0004, radius, radius, 48, false);
-    const [nx, ny, nz] = mount.outward;
-    let cutter = blank;
-    if (ny < -0.5) {
-      const turned = blank.rotate(-90, 0, 0);
-      blank.delete();
-      cutter = turned.translate([mount.position_m[0], -0.0002, mount.position_m[2]]);
-      turned.delete();
-    } else if (ny > 0.5) {
-      const turned = blank.rotate(90, 0, 0);
-      blank.delete();
-      cutter = turned.translate([mount.position_m[0], input.depth_m - input.wall_m - 0.0002, mount.position_m[2]]);
-      turned.delete();
-    } else if (nx < -0.5) {
-      const turned = blank.rotate(0, 90, 0);
-      blank.delete();
-      cutter = turned.translate([-0.0002, mount.position_m[1], mount.position_m[2]]);
-      turned.delete();
-    } else if (nx > 0.5) {
-      const turned = blank.rotate(0, -90, 0);
-      blank.delete();
-      cutter = turned.translate([input.width_m - input.wall_m - 0.0002, mount.position_m[1], mount.position_m[2]]);
-      turned.delete();
-    } else if (nz > 0.5) {
-      cutter = blank.translate([mount.position_m[0], mount.position_m[1], input.height_m - input.wall_m - 0.0002]);
-      blank.delete();
-    } else {
-      const turned = blank.rotate(180, 0, 0);
-      blank.delete();
-      cutter = turned.translate([mount.position_m[0], mount.position_m[1], input.wall_m + 0.0002]);
-      turned.delete();
-    }
-    const next = solid.subtract(cutter);
-    solid.delete();
-    cutter.delete();
-    solid = next;
+  if (node.op === "box") {
+    const size: [number, number, number] = [
+      node.max_m[0] - node.min_m[0],
+      node.max_m[1] - node.min_m[1],
+      node.max_m[2] - node.min_m[2],
+    ];
+    const cube = Manifold.cube(size, false);
+    const moved = cube.translate([node.min_m[0], node.min_m[1], node.min_m[2]]);
+    cube.delete();
+    return moved;
   }
+  if (node.op === "cylinder") {
+    const blank = Manifold.cylinder(node.length_m, node.radius_m, node.radius_m, node.segments ?? 96, false);
+    // The blank runs along +z. Turn it to `axis`: about x by -asin(ay), then about y by atan2(ax, az).
+    const [ax, ay, az] = node.axis;
+    const rx = (-Math.asin(Math.max(-1, Math.min(1, ay))) * 180) / Math.PI;
+    const ry = (Math.atan2(ax, az) * 180) / Math.PI;
+    const turned = blank.rotate([rx, ry, 0]);
+    blank.delete();
+    const moved = turned.translate([node.base_m[0], node.base_m[1], node.base_m[2]]);
+    turned.delete();
+    return moved;
+  }
+  const parts = node.of.map((child) => build(wasm, child)).filter((part): part is Solid => part !== null);
+  if (parts.length === 0) {
+    return null;
+  }
+  let result = parts[0];
+  for (const part of parts.slice(1)) {
+    const next = node.op === "union" ? result.add(part) : result.subtract(part);
+    result.delete();
+    part.delete();
+    result = next;
+  }
+  return result;
+}
 
+/** The printed parts of a cabinet, built from the engine's tree (README section 6.3). */
+export async function buildCabinetMesh(input: { print_tree: PrintTree }): Promise<SolidMesh> {
+  const wasm = await manifold();
+  const solid = build(wasm, input.print_tree);
+  if (!solid) {
+    return { positions: new Float32Array(), indices: new Uint32Array(), solidVolumeM3: 0 };
+  }
   const volume = solid.volume();
   const mesh = solid.getMesh();
   const stride = mesh.numProp;

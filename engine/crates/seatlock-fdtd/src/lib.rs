@@ -212,7 +212,7 @@ pub fn run_grid(
     }
 
     let grid_volume_m3 = nx as f64 * ny as f64 * nz as f64 * dx * dx * dx;
-    let (warning, ignored) = volume_warning(
+    let (warning, mut ignored) = volume_warning(
         &frequencies_hz,
         &real,
         &imag,
@@ -220,6 +220,7 @@ pub fn run_grid(
         true_volume_m3,
         dx * (nx.max(ny).max(nz) as f64),
     );
+    ignored.push(PEAK_HEIGHTS_NOT_MODELED.into());
     ImpedanceCurve {
         frequencies_hz,
         real,
@@ -367,6 +368,11 @@ pub fn aperture_cells(
     }
     cells
 }
+
+/// Through Level 2 the air and walls are lossless, so a resonance is damped only by radiation
+/// and the absorbing faces, and its height is not a property of the cabinet (README 5.5).
+pub const PEAK_HEIGHTS_NOT_MODELED: &str =
+    "resonance peak heights are not modeled: the 3D model has no losses yet";
 
 #[derive(Clone, Debug)]
 pub struct OpeningCurve {

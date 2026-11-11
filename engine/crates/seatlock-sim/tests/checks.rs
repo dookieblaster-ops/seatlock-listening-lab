@@ -1044,3 +1044,61 @@ fn chk_cost_1_sealed_test_dollars_and_print_time() {
         report.print_note
     );
 }
+
+#[test]
+fn a_tube_gets_the_diffraction_of_its_round_end_cap() {
+    // A source at the middle of the 0.1143 m end cap. On axis, `baffle` divided by half space
+    // is the edge-diffraction factor of that circle. Near k*R = pi (about 3 kHz) a centred
+    // source on a round baffle has its strongest peak, which a rectangle does not have.
+    let design = tube_design(0.5, false, "test-woofer-a", "test-amp-a");
+    let freqs = vec![200.0, 1000.0, 3000.0, 5000.0];
+    let request = |radiation: &str| SimulateRequest {
+        radiation: radiation.into(),
+        space: "half".into(),
+        frequencies_hz: Some(freqs.clone()),
+        ..SimulateRequest::default()
+    };
+    let baffle = simulate(&design, &request("baffle"), &builtin());
+    let half = simulate(&design, &request("point"), &builtin());
+    assert!(
+        baffle
+            .issues
+            .iter()
+            .all(|issue| issue.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        baffle.issues
+    );
+    let d = 0.1143;
+    let center = [d / 2.0, 0.0, d / 2.0];
+    let listener = [d / 2.0, -1.0, d / 2.0];
+    for (bin, freq) in freqs.iter().enumerate() {
+        let outline = seatlock_acoustics::circular_outline(center, d / 2.0, [0.0, -1.0, 0.0], 256);
+        let factor = seatlock_acoustics::diffraction_factor(center, listener, &outline, *freq);
+        let expected = 20.0 * factor.norm().log10();
+        let got = baffle.summed_spl_db[bin] - half.summed_spl_db[bin];
+        assert!(
+            (got - expected).abs() < 0.1,
+            "{freq} Hz: got {got:.2} dB, expected {expected:.2} dB"
+        );
+    }
+}
+
+#[test]
+fn an_unfinished_shape_says_so_and_gives_no_curves() {
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    *value.pointer_mut("/speaker/enclosure/outer").unwrap() = serde_json::json!({
+        "kind": "rounded", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18,
+        "wall_m": 0.008, "edge_radius_m": 0.02
+    });
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let result = simulate(&design, &SimulateRequest::default(), &builtin());
+    assert!(result.radiators.is_empty());
+    assert!(
+        result
+            .issues
+            .iter()
+            .any(|issue| issue.message.contains("not finished yet")),
+        "{:?}",
+        result.issues
+    );
+}
