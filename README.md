@@ -619,7 +619,9 @@ Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing ru
 
 Exciters, from Level 3, are records like drivers. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint. Panel materials, also from Level 3, hold `E`, density, Poisson's ratio, and loss factor, each with a source or a note of how it was measured.
 
-`catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram and the printer's build volume and flow rate come from the owner.
+`catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from the owner.
+
+`catalog/printers/` holds the owner's printer, a Bambu Lab X2D: its build volume and maximum flow, copied from the maker's spec sheet. Cabinets are split into parts that fit the main nozzle's build volume. The sheet's flow is a maximum measured on a thin-walled test print, so a print time computed from it is a lower bound, shown as "at least".
 
 `catalog/stock/` holds off-the-shelf building materials, one record each, with the same sourcing rules as drivers: a `tier` (`budget` such as PVC pipe, cardboard concrete-form tube, foam board, coroplast, or plant pots; `reference` such as MDF and cabinet plywood), the published sizes it is sold in, its price per piece, per meter, or per sheet with a `read_on` date, its density, and any published stiffness (`E`) and loss factor. A field the seller or maker does not publish stays empty, and the engine says which results depend on it.
 
@@ -629,7 +631,7 @@ Exciters, from Level 3, are records like drivers. They hold what an exciter's da
 cost of one speaker = drivers and exciters + cabinet + panels + extras
 cabinet             = print_mass_kg * price_per_kg
 print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
-print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600
+print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600   (a lower bound: the flow is the printer's maximum)
 panels              = printed like the cabinet, or bought sheet area * price_per_m2
 stock parts         = whole pieces bought: pipe by the length sold, sheets by the sheet, including offcuts
 cost of the system  = (2 if stereo_pair else 1) * cost of one speaker + electronics

@@ -32,7 +32,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Cursor does Assignment 10 in `COMS.md`: the full outer-shape contract, the baffle-step shelf fix, the exterior block test, tube cost, then the rest of Level 2 M3 (recesses, bolt holes, ports, split print parts, CHK-FDTD-4). Claude reviews it before M4.
+1. Cursor does Assignment 10 in `COMS.md`, with its printer addendum: the full outer-shape contract, the baffle-step shelf fix, the exterior block test, tube cost, then the rest of Level 2 M3 (recesses, bolt holes, ports, split print parts, CHK-FDTD-4). Claude reviews it before M4.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -114,6 +114,7 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: The engine's own default request stays `point` in `half` space. Reason: the numbered checks name that model, and the app sends `baffle` itself.
 - 2026-11-10: An unprinted mounting size is omitted, never stored as 0, and the print export is refused. Reason: README section 9.1. A zero would cut no hole and look like a finished baffle.
 - 2026-11-10: A stock tube with no published wall uses the design's `wall_m` and says so. Reason: the SAKRETE page does not print a wall, and inventing one would be a catalog number.
+- 2026-11-10: Print parts are split to the X2D's main-nozzle build volume, 256 x 256 x 260 mm, and print time is shown as a lower bound from its 40 mm^3/s maximum flow. Reason: the owner named the printer, and the maker's sheet gives the flow only as a maximum on a thin-walled test print.
 
 ## Tool versions
 
@@ -128,7 +129,7 @@ Ask each one when its answer starts to matter. Record the answer here and in the
 
 1. **Quality target.** README section 11.2 uses placeholder numbers: bass limit 50 Hz or lower, evenness 1.5 dB or better, maximum clean level 95 dB at 1 m or higher. Are these right for the owner's listening? Needed before the Level 2 optimizer.
 2. **Playback hardware for real builds.** What will run the crossover and correction and drive the amplifiers: a phone, a laptop, a small computer, a DSP board? This decides the export formats (README section 7) and the electronics catalog. Needed during Level 2.
-3. **Printer.** Build volume, usual material, and filament price per kilogram. Needed for cost at Level 1 and for splitting cabinets into parts at Level 2. Until answered, use clearly labeled placeholder values.
+3. **Printer.** Answered in part on 2026-11-10: the owner has a Bambu Lab X2D. Its record is `catalog/printers/bambu-lab-x2d.json`: main-nozzle build volume 256 x 256 x 260 mm and a maximum hotend flow of 40 mm^3/s, from the maker's spec sheet (a reseller's copy; bambulab.com did not load). Still open: the usual filament and its price per kilogram. Until answered, print cost stays unknown.
 4. **Protected band.** The rule "no EQ boost from 3 kHz to 5 kHz" was carried over from the owner's earlier notes and is on by default. The earlier rule "no boost below 150 Hz" was replaced by the physics limit of README section 8. Confirm both.
 5. **Budget.** Is there a ceiling per pair of speakers? Optional. It becomes `budget_max` in the target.
 6. **Rear-facing DML panels.** What will the panels be made of (printed, or bought sheet such as foam board or plywood)? How far from the wall will the speakers stand? Should in-room results aim for a gently falling response rather than a flat one (the target's tilt)? Needed at Level 3.

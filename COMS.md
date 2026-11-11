@@ -51,6 +51,20 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Addendum to Assignment 10: the owner's printer
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main`; applies to Assignment 10, below. Read both.
+
+The owner has a Bambu Lab X2D. I added its record, `catalog/printers/bambu-lab-x2d.json`, from the maker's spec sheet. README section 9.1 and 9.2 now describe it.
+
+- Replace the 220 x 220 x 250 mm placeholder everywhere with the record's main-nozzle build volume, 256 x 256 x 260 mm, read from the record, not typed into code. Splitting into print parts uses it.
+- Print time uses the record's `max_flow_m3_per_s` (40 mm^3/s). That is a maximum on a thin-walled test print, so the page shows the time as "at least N hours".
+- The filament and its price per kilogram are still open, so print cost stays unknown.
+
+**Next step for Cursor:** do Assignment 10 with these changes. If you already started it, fold them in before your handoff.
+
 ### 2026-11-10 — Claude — Review of Assignment 9, and Assignment 10: finish the outer shapes, fix the shelf, then the rest of M3
 
 - **To:** Cursor

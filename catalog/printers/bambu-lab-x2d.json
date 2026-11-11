@@ -1,0 +1,20 @@
+{
+  "id": "bambu-lab-x2d",
+  "status": "sourced",
+  "kind": "printer",
+  "maker": "Bambu Lab",
+  "model": "X2D",
+  "owned_by_owner": true,
+  "build_volume_m": [0.256, 0.256, 0.260],
+  "build_volume_note": "Main nozzle printing area as printed: 256*256*260 mm. The sheet gives 235.5*256*256 mm for the auxiliary nozzle and for dual-nozzle printing.",
+  "max_flow_m3_per_s": 4.0e-8,
+  "max_flow_note": "Printed as 40 mm^3/s for the hotend, tested with a 250 mm round model, a single outer wall, Bambu Lab ABS at 280 C. A real cabinet prints slower than this, so a print time computed from it is a lower bound.",
+  "nozzle_diameter_m": 0.0004,
+  "max_nozzle_temp_c": 300,
+  "source": {
+    "url": "https://www.solidprint3d.co.uk/wp-content/uploads/2026/04/Bambu-Lab-X2D-3d-printer-specification.pdf",
+    "title": "Bambu Lab X2D Spec Sheet (the maker's sheet, copy hosted by a reseller)",
+    "via": "other_listing",
+    "read_on": "2026-11-10"
+  }
+}
