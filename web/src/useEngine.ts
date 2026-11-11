@@ -215,6 +215,16 @@ export type SimulateResult = {
   flatness_db: number;
   max_spl_metric_db: number;
   fdtd?: FdtdReport | null;
+  /** Sound power level, dB re 1 pW, when a room or the request asked for it. */
+  sound_power_db?: number[] | null;
+  directivity_index_db?: number[] | null;
+  /** The in-room response when the design has a room; the score then comes from it. */
+  in_room?: {
+    spl_db: number[];
+    early_spl_db: number[];
+    reflection_spl_db: number[];
+    diffuse_spl_db: number[];
+  } | null;
   error?: string;
 };
 

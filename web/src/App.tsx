@@ -29,6 +29,7 @@ type Design = {
     };
     radiators: Array<Record<string, unknown>>;
     listening: { distance_m: number };
+    room?: Record<string, unknown>;
   };
   dsp: {
     sample_rate_hz: number;
@@ -314,6 +315,32 @@ export default function App() {
             <NumberField label="Edge radius (mm)" value={mm(Number(outer.edge_radius_m ?? 0))} onChange={(value) => updateNumber("speaker.enclosure.outer.edge_radius_m", value / 1000)} />
             <NumberField label="Listening distance (m)" value={design.speaker.listening.distance_m} onChange={(value) => updateNumber("speaker.listening.distance_m", value)} />
           </div>
+          <h3>Room</h3>
+          <label title="Adds the wall behind the speaker and the room's reverberant sound to the results. It is an estimate for comparing designs, not a room simulation.">
+            <input
+              data-testid="room-toggle"
+              type="checkbox"
+              checked={design.speaker.room?.kind === "simple"}
+              onChange={(event) => {
+                const next = structuredClone(design);
+                if (event.target.checked) {
+                  next.speaker.room = { kind: "simple", wall_behind_m: 0.5, wall_reflection: 0.9, volume_m3: 50, rt60_s: 0.4 };
+                } else {
+                  delete next.speaker.room;
+                }
+                void publish(next, designName);
+              }}
+            />
+            Estimate the sound in a room
+          </label>
+          {design.speaker.room?.kind === "simple" && (
+            <div className="grid">
+              <NumberField label="Wall behind the speaker (m)" testId="room-wall-m" value={Number(design.speaker.room.wall_behind_m)} onChange={(value) => updateNumber("speaker.room.wall_behind_m", value)} />
+              <NumberField label="Wall reflection (0 to 1)" value={Number(design.speaker.room.wall_reflection)} onChange={(value) => updateNumber("speaker.room.wall_reflection", value)} />
+              <NumberField label="Room volume (m^3)" value={Number(design.speaker.room.volume_m3)} onChange={(value) => updateNumber("speaker.room.volume_m3", value)} />
+              <NumberField label="Reverberation time, RT60 (s)" value={Number(design.speaker.room.rt60_s)} onChange={(value) => updateNumber("speaker.room.rt60_s", value)} />
+            </div>
+          )}
           <h3>Driver opening</h3>
           <div className="grid">
             <TextField label="Opening name" value={String(mount.id)} onChange={(value) => {
@@ -832,6 +859,18 @@ export default function App() {
             testId="response-graph"
             fidelity={fidelityText(curve.fidelity)}
           />
+          {sim.in_room && (
+            <Graph
+              title="Loudness in the room"
+              explanation="The sound at the listening position with the wall behind the speaker and the room's reverberant sound added. The direct sound alone is drawn in brown. The score is taken from this curve."
+              freqs={sim.frequencies_hz}
+              values={sim.in_room.spl_db}
+              overlay={sim.summed_spl_db}
+              unit="dB SPL"
+              testId="in-room-graph"
+              fidelity={fidelityText(sim.fidelity)}
+            />
+          )}
           {sim.radiators.map((radiatorCurve, index) => (
             <Graph
               key={`driver-graph-${index}`}

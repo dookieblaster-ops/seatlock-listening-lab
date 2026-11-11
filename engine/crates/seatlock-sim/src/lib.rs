@@ -4,16 +4,17 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
-    baffle_source_pressure, baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3,
-    effective_port_length_m, outline_count_for_perimeter, outline_perimeter_m, polygon_outline,
-    pressure_from_volume_velocity, solve, spl_db, vented_sample, AcousticNode, EdgePoint, PortSpec,
+    baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3,
+    effective_port_length_m, solve, spl_db, vented_sample, AcousticNode, PortSpec,
 };
 use seatlock_core::catalog;
-use seatlock_core::constants::{C0, RHO0};
+use seatlock_core::constants::{C0, P_REF, RHO0};
 use seatlock_core::design::{DesignFile, KindPart};
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
-use seatlock_core::registry::{DspBlock, OuterShape, Registry};
+use seatlock_core::registry::{
+    DspBlock, OuterShape, RadiationScene, RadiatorEval, Registry, RoomSound, SourcePatch,
+};
 use seatlock_correct::metrics;
 use seatlock_dsp::{delay_block, gain_block, polarity_block, prefer_inverted_high, ThiranDelay};
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,9 @@ pub struct SimulateRequest {
     /// Cell size of the full 3D model when `enclosure` is `fdtd`; 10 mm by default.
     #[serde(default)]
     pub fdtd_dx_m: Option<f64>,
+    /// Also return sound power and the directivity index (a room asks for them itself).
+    #[serde(default)]
+    pub sound_power: bool,
 }
 
 fn default_enclosure() -> String {
@@ -78,6 +82,7 @@ impl Default for SimulateRequest {
             frequencies_hz: None,
             revision: 0,
             fdtd_dx_m: None,
+            sound_power: false,
         }
     }
 }
@@ -128,6 +133,24 @@ pub struct SimulateResult {
     pub max_spl_metric_db: f64,
     /// What the full 3D model did, when it ran.
     pub fdtd: Option<FdtdReport>,
+    /// Sound power level, dB re 1 pW, when the room or the request asked for it.
+    pub sound_power_db: Option<Vec<f64>>,
+    /// On-axis level against the mean over all directions, in dB.
+    pub directivity_index_db: Option<Vec<f64>>,
+    /// The in-room response, when the design has a room (README section 5.10). The score
+    /// then comes from it; `summed_spl_db` stays the direct sound.
+    pub in_room: Option<InRoomReport>,
+}
+
+/// The sound at the listening position in a room, in dB SPL at each frequency.
+#[derive(Debug, Clone, Serialize)]
+pub struct InRoomReport {
+    /// Direct sound and reflections added as pressures, diffuse sound added as energy.
+    pub spl_db: Vec<f64>,
+    /// Direct sound plus reflections.
+    pub early_spl_db: Vec<f64>,
+    pub reflection_spl_db: Vec<f64>,
+    pub diffuse_spl_db: Vec<f64>,
 }
 
 /// One run of the full 3D model for a builder cabinet (README section 5.5).
@@ -218,7 +241,7 @@ pub fn simulate_with_progress(
         .mounts
         .iter()
         .all(|mount| mount.surface == "front");
-    if !faces_listener {
+    if !faces_listener && request.radiation == "point" {
         issues.push(Issue::warning(
             "unsupported_kind",
             "A sound source does not face the listener. This quick model treats it as if it did.",
@@ -257,6 +280,9 @@ pub fn simulate_with_progress(
         flatness_db: 0.0,
         max_spl_metric_db: 0.0,
         fdtd: None,
+        sound_power_db: None,
+        directivity_index_db: None,
+        in_room: None,
     };
 
     let outer = match registry.create_outer(
@@ -582,7 +608,12 @@ pub fn simulate_with_progress(
     let room = match registry.create_room(room_kind, &room_fields) {
         Ok(model) => model,
         Err(err) => {
-            issues.push(Issue::warning("unsupported_kind", err, "speaker.room"));
+            issues.push(Issue::warning(
+                "unsupported_kind",
+                format!("{err} The results are for the speaker without a room."),
+                "speaker.room",
+            ));
+            fidelity.room = "free".to_string();
             match registry.create_room("free", &Map::new()) {
                 Ok(model) => model,
                 Err(err) => {
@@ -604,8 +635,33 @@ pub fn simulate_with_progress(
     );
     let amp_limit = amplifier_voltage_limit(design);
 
-    let mut radiators = Vec::new();
-    let mut input_limit = vec![f64::MAX; freqs.len()];
+    // The listener sits straight in front of the middle of the cabinet's front.
+    let size = outer.outer_size_m().unwrap_or([0.0; 3]);
+    let reference = [size[0] / 2.0, 0.0, size[2] / 2.0];
+    let listener = [
+        size[0] / 2.0,
+        -design.speaker.listening.distance_m,
+        size[2] / 2.0,
+    ];
+    let scene = RadiationScene {
+        shape: outer.as_ref(),
+        space: &request.space,
+        baffle_width_m: baffle,
+        reference_m: reference,
+    };
+
+    // Every radiator at 1 V: its DSP chain and its surface sources (README section 5.6).
+    struct Prepared<'a> {
+        index: usize,
+        part: &'a KindPart,
+        eval: RadiatorEval,
+        blocks_h: Vec<Complex64>,
+        /// Volume velocity per volt of each surface source.
+        sources: Vec<Vec<Complex64>>,
+        patches: Vec<SourcePatch>,
+        port_speed_1v: Vec<f64>,
+    }
+    let mut prepared: Vec<Prepared> = Vec::new();
     for (index, part) in design.speaker.radiators.iter().enumerate() {
         let radiator = match registry.create_radiator(&part.kind, &part.fields) {
             Ok(radiator) => radiator,
@@ -619,8 +675,8 @@ pub fn simulate_with_progress(
             }
         };
         let loads_box = driver_loads_box(part);
-        let eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
-        issues.extend(eval.warnings);
+        let mut eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
+        issues.append(&mut eval.warnings);
         let chain = design.dsp.per_radiator.get(index);
         let mut blocks_h = whole.clone();
         if let Some(chain) = chain {
@@ -675,28 +731,82 @@ pub fn simulate_with_progress(
                 }
             }
         }
-        let mut pressure_1v = if request.radiation == "baffle" {
-            baffle_pressure(
-                design,
-                outer.as_ref(),
-                part,
-                &sources,
-                &freqs,
-                design.speaker.listening.distance_m,
-                &request.space,
-                baffle,
-                &mut fidelity,
-            )
-        } else {
-            radiation.pressure(
-                &sources,
-                &freqs,
-                design.speaker.listening.distance_m,
-                &request.space,
-                baffle,
-            )
-        };
+        // A source the shape cannot place has no direction, and every model then treats it
+        // as a simple source at the middle of the front.
+        let placed = placed_sources(design, outer.as_ref(), part, sources.len());
+        let patches = (0..sources.len())
+            .map(|slot| match placed.get(slot) {
+                Some(place) => SourcePatch {
+                    position_m: place.position,
+                    outward: place.outward,
+                    area_m2: std::f64::consts::PI * place.radius_m * place.radius_m,
+                },
+                None => SourcePatch {
+                    position_m: reference,
+                    outward: [0.0; 3],
+                    area_m2: 0.0,
+                },
+            })
+            .collect();
+        prepared.push(Prepared {
+            index,
+            part,
+            eval,
+            blocks_h,
+            sources,
+            patches,
+            port_speed_1v,
+        });
+    }
+
+    // One call for all sources: a 3D radiation model then runs once for the listening position.
+    let all_patches: Vec<SourcePatch> = prepared
+        .iter()
+        .flat_map(|item| item.patches.iter().copied())
+        .collect();
+    let direct = match radiation.transfer(&scene, &all_patches, &freqs, listener, &mut *progress) {
+        Ok(transfer) => transfer,
+        Err(err) => {
+            issues.push(Issue::error(
+                "radiation_failed",
+                format!(
+                    "The {} radiation model could not run: {err}",
+                    request.radiation
+                ),
+                "request.radiation",
+            ));
+            return fail(issues, fidelity);
+        }
+    };
+    let add_notes = |fidelity: &mut Fidelity, notes: &[String]| {
+        for note in notes {
+            if !fidelity.ignored.contains(note) {
+                fidelity.ignored.push(note.clone());
+            }
+        }
+    };
+    add_notes(&mut fidelity, &direct.notes);
+
+    let mut radiators = Vec::new();
+    let mut input_limit = vec![f64::MAX; freqs.len()];
+    let mut any_measured = false;
+    let mut first_source = 0usize;
+    for item in &prepared {
+        let rows = &direct.per_source[first_source..first_source + item.sources.len()];
+        first_source += item.sources.len();
+        let (index, part, eval) = (item.index, item.part, &item.eval);
+        let (blocks_h, port_speed_1v) = (&item.blocks_h, &item.port_speed_1v);
+        let mut pressure_1v: Vec<Complex64> = (0..freqs.len())
+            .map(|bin| {
+                item.sources
+                    .iter()
+                    .zip(rows)
+                    .map(|(velocity, row)| velocity[bin] * row[bin])
+                    .sum()
+            })
+            .collect();
         let measured = measured_curve(part);
+        any_measured |= !measured.is_empty();
         let label =
             blend_measured_curve(&mut pressure_1v, &freqs, piston_radius_m(part), &measured);
         if !fidelity.ignored.iter().any(|line| line == &label) {
@@ -751,6 +861,8 @@ pub fn simulate_with_progress(
         });
     }
 
+    // Which radiator, by its place in `radiators`, the automatic polarity flipped.
+    let mut flipped: Option<usize> = None;
     if let Some((index, crossover_hz)) = highest_crossover(design) {
         if let Some(branch) = radiators.get(index) {
             let mut others = vec![Complex64::new(0.0, 0.0); freqs.len()];
@@ -773,6 +885,7 @@ pub fn simulate_with_progress(
                 .map(|(re, im)| Complex64::new(*re, *im))
                 .collect();
             if prefer_inverted_high(&others, &branch_h, &freqs, crossover_hz) {
+                flipped = Some(index);
                 if let Some(branch) = radiators.get_mut(index) {
                     for value in branch
                         .pressure
@@ -812,12 +925,143 @@ pub fn simulate_with_progress(
         }
     }
     let summed_spl_db: Vec<f64> = summed_pressure.iter().copied().map(spl_db).collect();
+
+    // The room (README section 5.10) and the sound power it rests on (section 5.6), from every
+    // source as it is driven: 1 V response, DSP chain, request voltage, and polarity.
+    let mut in_room: Option<InRoomReport> = None;
+    let mut sound_power_db: Option<Vec<f64>> = None;
+    let mut directivity_index_db: Option<Vec<f64>> = None;
+    let images = room.images(listener, size);
+    let wants_power = room.needs_sound_power() || request.sound_power;
+    if !prepared.is_empty() && (!images.is_empty() || wants_power) {
+        let mut driven: Vec<Vec<Complex64>> = Vec::with_capacity(all_patches.len());
+        for (place, item) in prepared.iter().enumerate() {
+            let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
+            for source in &item.sources {
+                driven.push(
+                    (0..freqs.len())
+                        .map(|bin| source[bin] * item.blocks_h[bin] * (request.voltage_v * sign))
+                        .collect(),
+                );
+            }
+        }
+        let mut failure: Option<String> = None;
+        let mut image_sound: Vec<Vec<Complex64>> = Vec::new();
+        for image in &images {
+            match radiation.transfer(&scene, &all_patches, &freqs, image.point_m, &mut *progress) {
+                Ok(transfer) => {
+                    add_notes(&mut fidelity, &transfer.notes);
+                    image_sound.push(
+                        (0..freqs.len())
+                            .map(|bin| {
+                                driven
+                                    .iter()
+                                    .zip(&transfer.per_source)
+                                    .map(|(velocity, row)| velocity[bin] * row[bin])
+                                    .sum()
+                            })
+                            .collect(),
+                    );
+                }
+                Err(err) => {
+                    failure = Some(err);
+                    break;
+                }
+            }
+        }
+        let mut power_w: Vec<f64> = Vec::new();
+        if failure.is_none() && wants_power {
+            match radiation.sound_power(&scene, &all_patches, &driven, &freqs, &mut *progress) {
+                Ok(power) => {
+                    add_notes(&mut fidelity, &power.notes);
+                    power_w = power.power_w;
+                }
+                Err(err) => failure = Some(err),
+            }
+        }
+        if let Some(err) = failure {
+            issues.push(Issue::warning(
+                "room_failed",
+                format!(
+                    "The sound around the cabinet could not be computed: {err} These results \
+                     are the direct sound only."
+                ),
+                "speaker.room",
+            ));
+            fidelity.room = "free".to_string();
+        } else {
+            if !power_w.is_empty() {
+                let distance = design.speaker.listening.distance_m;
+                sound_power_db = Some(
+                    power_w
+                        .iter()
+                        .map(|watts| 10.0 * (watts.max(1e-30) / 1e-12).log10())
+                        .collect(),
+                );
+                // On-axis intensity against the mean over all directions.
+                directivity_index_db = Some(
+                    power_w
+                        .iter()
+                        .zip(&summed_pressure)
+                        .map(|(watts, pressure)| {
+                            let mean = watts.max(1e-30) * RHO0 * C0
+                                / (4.0 * std::f64::consts::PI * distance * distance);
+                            10.0 * (pressure.norm_sqr().max(1e-30) / mean).log10()
+                        })
+                        .collect(),
+                );
+            }
+            if let Some(found) = room.in_room(&RoomSound {
+                freqs_hz: &freqs,
+                direct: &summed_pressure,
+                images: &image_sound,
+                power_w: &power_w,
+            }) {
+                let level = |pascal_squared: f64| {
+                    10.0 * (pascal_squared.max(1e-30) / (P_REF * P_REF)).log10()
+                };
+                let mut report = InRoomReport {
+                    spl_db: Vec::with_capacity(freqs.len()),
+                    early_spl_db: Vec::with_capacity(freqs.len()),
+                    reflection_spl_db: Vec::with_capacity(freqs.len()),
+                    diffuse_spl_db: Vec::with_capacity(freqs.len()),
+                };
+                for (bin, direct) in summed_pressure.iter().enumerate() {
+                    let early = (*direct + found.reflection[bin]).norm_sqr();
+                    let diffuse = found.diffuse_pa[bin] * found.diffuse_pa[bin];
+                    report.spl_db.push(level(early + diffuse));
+                    report.early_spl_db.push(level(early));
+                    report
+                        .reflection_spl_db
+                        .push(level(found.reflection[bin].norm_sqr()));
+                    report.diffuse_spl_db.push(level(diffuse));
+                }
+                in_room = Some(report);
+                add_notes(&mut fidelity, &room.notes());
+                if any_measured {
+                    add_notes(
+                        &mut fidelity,
+                        &[
+                            "The room's share of the sound uses the piston model, without the \
+                           drivers' published curves."
+                                .to_string(),
+                        ],
+                    );
+                }
+            }
+        }
+    }
+
+    // A design with a room is scored on its in-room response (README section 11.1).
+    let scored_spl_db: &[f64] = in_room
+        .as_ref()
+        .map_or(summed_spl_db.as_slice(), |report| report.spl_db.as_slice());
     // The system plays louder until the first radiator reaches a limit; each radiator gets the
     // input through its own crossover and EQ, so a woofer far above its crossover never limits.
     let max_spl_sum: Vec<f64> = if radiators.is_empty() {
         vec![f64::MAX; freqs.len()]
     } else {
-        summed_spl_db
+        scored_spl_db
             .iter()
             .zip(&input_limit)
             .map(|(level, limit)| {
@@ -826,7 +1070,7 @@ pub fn simulate_with_progress(
             })
             .collect()
     };
-    let (f6_hz, flatness_db, max_spl_metric_db) = metrics(&freqs, &summed_spl_db, &max_spl_sum);
+    let (f6_hz, flatness_db, max_spl_metric_db) = metrics(&freqs, scored_spl_db, &max_spl_sum);
 
     SimulateResult {
         revision: request.revision,
@@ -844,6 +1088,9 @@ pub fn simulate_with_progress(
         flatness_db,
         max_spl_metric_db,
         fdtd: fdtd_report,
+        sound_power_db,
+        directivity_index_db,
+        in_room,
     }
 }
 
@@ -1086,80 +1333,6 @@ struct PlacedSource {
     radius_m: f64,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn baffle_pressure(
-    design: &DesignFile,
-    shape: &dyn OuterShape,
-    part: &KindPart,
-    sources: &[Vec<Complex64>],
-    freqs: &[f64],
-    distance_m: f64,
-    space: &str,
-    baffle_width_m: f64,
-    fidelity: &mut Fidelity,
-) -> Vec<Complex64> {
-    let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
-    let Ok([size_x, _, size_z]) = shape.outer_size_m() else {
-        return total;
-    };
-    let listener = [size_x / 2.0, -distance_m, size_z / 2.0];
-    let highest = freqs.iter().copied().fold(1000.0_f64, f64::max);
-    let placed = placed_sources(design, shape, part, sources.len());
-    let mut outlines: Vec<(String, Vec<EdgePoint>)> = Vec::new();
-    let mut fell_back = false;
-    for (index, velocity) in sources.iter().enumerate() {
-        let place = placed.get(index);
-        let surface = place
-            .filter(|place| faces_listener(place, listener))
-            .and_then(|place| shape.surface_facing(place.outward));
-        let outline = surface.and_then(|surface| {
-            if let Some(found) = outlines.iter().position(|(name, _)| *name == surface) {
-                return Some(found);
-            }
-            let corners = shape.surface_outline(&surface).ok()?;
-            let count = outline_count_for_perimeter(outline_perimeter_m(&corners), highest);
-            outlines.push((surface, polygon_outline(&corners, count)));
-            Some(outlines.len() - 1)
-        });
-        let (Some(place), Some(outline)) = (place, outline) else {
-            fell_back = true;
-            for (bin, freq) in freqs.iter().enumerate() {
-                total[bin] += pressure_from_volume_velocity(
-                    velocity[bin],
-                    *freq,
-                    distance_m,
-                    space,
-                    baffle_width_m,
-                );
-            }
-            continue;
-        };
-        let edge = &outlines[outline].1;
-        for (bin, freq) in freqs.iter().enumerate() {
-            total[bin] += baffle_source_pressure(
-                velocity[bin],
-                *freq,
-                place.position,
-                listener,
-                place.outward,
-                place.radius_m,
-                edge,
-            );
-        }
-    }
-    if fell_back {
-        let note = "A source that does not face the listener is treated as a point source.";
-        if !fidelity.ignored.iter().any(|line| line == note) {
-            fidelity.ignored.push(note.into());
-        }
-    }
-    let note = "Edge diffraction ignores cabinet depth and the shape of the edge.";
-    if !fidelity.ignored.iter().any(|line| line == note) {
-        fidelity.ignored.push(note.into());
-    }
-    total
-}
-
 fn placed_sources(
     design: &DesignFile,
     shape: &dyn OuterShape,
@@ -1184,14 +1357,6 @@ fn placed_sources(
         }
     }
     placed
-}
-
-fn faces_listener(place: &PlacedSource, listener: [f64; 3]) -> bool {
-    let dx = listener[0] - place.position[0];
-    let dy = listener[1] - place.position[1];
-    let dz = listener[2] - place.position[2];
-    let range = (dx * dx + dy * dy + dz * dz).sqrt().max(1e-9);
-    (dx * place.outward[0] + dy * place.outward[1] + dz * place.outward[2]) / range > 0.0
 }
 
 /// The radiator's mount position and direction, from the shape. `None` when the radiator

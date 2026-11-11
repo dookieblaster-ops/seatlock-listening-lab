@@ -245,6 +245,30 @@ pub fn baffle_source_pressure(
     half * directivity * diffraction_factor(source_m, listener_m, outline, freq_hz)
 }
 
+/// One source heard from behind its baffle's plane, in the same simple model: the direct
+/// sound does not get there, and the edge's secondary sources send what the front loses, with
+/// the opposite sign. At low frequency this is the full-space level, as in front; at high
+/// frequency the edge's contributions cancel and the baffle shadows its back.
+pub fn baffle_shadow_pressure(
+    volume_velocity: Complex64,
+    freq_hz: f64,
+    source_m: [f64; 3],
+    listener_m: [f64; 3],
+    outline: &[EdgePoint],
+) -> Complex64 {
+    if outline.is_empty() {
+        return Complex64::new(0.0, 0.0);
+    }
+    let k = 2.0 * PI * freq_hz / C0;
+    let mut sum = Complex64::new(0.0, 0.0);
+    for edge in outline {
+        let d_i = distance(source_m, edge.position_m);
+        let e_i = distance(edge.position_m, listener_m).max(1e-9);
+        sum += Complex64::from_polar(1.0 / e_i, -k * (d_i + e_i));
+    }
+    Complex64::new(0.0, k * C0 * RHO0) * volume_velocity * sum / (4.0 * PI * outline.len() as f64)
+}
+
 fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     let dx = a[0] - b[0];
     let dy = a[1] - b[1];

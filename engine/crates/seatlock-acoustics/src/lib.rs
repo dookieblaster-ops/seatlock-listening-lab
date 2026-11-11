@@ -4,19 +4,23 @@ mod baffle;
 mod cone;
 pub mod network;
 mod point;
+mod radiation;
 mod response;
+mod room;
 mod sealed;
 mod vented;
 mod waveguide;
 
 pub use baffle::{
-    baffle_source_pressure, baffle_step_hz, baffle_step_hz_for_outline, circular_outline,
-    diffraction_factor, outline_count, outline_count_for_perimeter, outline_perimeter_m,
-    piston_directivity, polygon_outline, rectangular_outline, EdgePoint,
+    baffle_shadow_pressure, baffle_source_pressure, baffle_step_hz, baffle_step_hz_for_outline,
+    circular_outline, diffraction_factor, outline_count, outline_count_for_perimeter,
+    outline_perimeter_m, piston_directivity, polygon_outline, rectangular_outline, EdgePoint,
 };
 pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
 pub use point::{baffle_gain, pressure_from_volume_velocity};
+pub use radiation::{BaffleRadiation, PointRadiation, EDGE_NOTE, POINT_FALLBACK_NOTE, SHADOW_NOTE};
 pub use response::blend_measured_curve;
+pub use room::{absorption_area_m2, diffuse_pressure_pa, SimpleRoom};
 pub use sealed::z_ab_sealed;
 pub use vented::{
     effective_port_length_m, end_correction_m, tuning_hz, vented_sample, PortSpec, VentedSample,
@@ -29,9 +33,7 @@ use num_complex::Complex64;
 use seatlock_core::catalog;
 use seatlock_core::constants::{C0, P_REF, RHO0};
 use seatlock_core::issue::Issue;
-use seatlock_core::registry::{
-    EnclosureModel, RadiationModel, Radiator, RadiatorEval, Registry, RoomModel,
-};
+use seatlock_core::registry::{EnclosureModel, Radiator, RadiatorEval, Registry};
 use serde_json::{Map, Value};
 use std::f64::consts::PI;
 
@@ -39,9 +41,10 @@ pub fn register(registry: &mut Registry) {
     registry.register_radiator("cone", parse_cone);
     registry.register_enclosure("lumped", parse_lumped);
     registry.register_enclosure("waveguide", parse_waveguide);
-    registry.register_radiation("point", parse_point);
-    registry.register_radiation("baffle", parse_point);
-    registry.register_room("free", parse_free);
+    registry.register_radiation("point", radiation::parse_point);
+    registry.register_radiation("baffle", radiation::parse_baffle);
+    registry.register_room("free", room::parse_free);
+    registry.register_room("simple", room::parse_simple);
 }
 
 struct ConeRadiator {
@@ -374,44 +377,6 @@ fn parse_lumped(_fields: &Map<String, Value>) -> Result<Box<dyn EnclosureModel>,
 
 fn parse_waveguide(fields: &Map<String, Value>) -> Result<Box<dyn EnclosureModel>, String> {
     parse_lumped(fields)
-}
-
-struct PointRadiation;
-
-impl RadiationModel for PointRadiation {
-    fn pressure(
-        &self,
-        sources: &[Vec<Complex64>],
-        freqs_hz: &[f64],
-        distance_m: f64,
-        space: &str,
-        baffle_width_m: f64,
-    ) -> Vec<Complex64> {
-        freqs_hz
-            .iter()
-            .enumerate()
-            .map(|(index, freq)| {
-                let total: Complex64 = sources.iter().map(|source| source[index]).sum();
-                pressure_from_volume_velocity(total, *freq, distance_m, space, baffle_width_m)
-            })
-            .collect()
-    }
-}
-
-fn parse_point(_fields: &Map<String, Value>) -> Result<Box<dyn RadiationModel>, String> {
-    Ok(Box::new(PointRadiation))
-}
-
-struct FreeRoom;
-
-impl RoomModel for FreeRoom {
-    fn at_listener(&self, direct: &[Complex64]) -> Vec<Complex64> {
-        direct.to_vec()
-    }
-}
-
-fn parse_free(_fields: &Map<String, Value>) -> Result<Box<dyn RoomModel>, String> {
-    Ok(Box::new(FreeRoom))
 }
 
 pub fn spl_db(pressure: Complex64) -> f64 {

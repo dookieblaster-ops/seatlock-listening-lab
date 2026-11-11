@@ -194,8 +194,8 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6); its limits; what it needs from its mount; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
-| Radiation model | Pressure at any point and radiated sound power, from surface sources and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
-| Room model | The path from the speaker's radiation to the listening position (section 5.10). | `free` (1), `simple` (3) |
+| Radiation model | Pressure at any point per unit volume velocity of each surface source, and radiated sound power, from the sources' positions and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
+| Room model | The path from the speaker's radiation to the listening position (section 5.10): the mirror images of the listening position it needs the speaker's sound at, whether it needs the sound power, and what it adds as pressure and as energy. | `free` (1), `simple` (3) |
 | DSP block | Its frequency response, its sample process function, its parameters. | biquad, crossover, delay, gain, limiter (1 to 2), FIR, dynamic bass (3) |
 | Correction feature | Blocks with reasons, from responses, limits, and target, under the keep-only-if-it-helps rule. | C1 to C10 (section 8) |
 | Catalog kind | Record shape, sourcing rule, tier, price. | driver, amplifier, DSP device, print material, stock material (1 to 2), exciter, panel material (3) |
@@ -408,9 +408,9 @@ p_total = sum of p_s over all sources of all radiators, each multiplied by its D
 SPL     = 20*log10(|p_total| / P_REF)
 ```
 
-`B(f)` is the baffle gain, from 1 when sound radiates all around to 2 when it radiates forward only. The request's `space` picks it. `full` is `B = 1`. `half` is `B = 2`, an infinite baffle, and is what the checks use. `step` is a shelf centered on `f3 = 115 / baffle_width_m`: `B = (1 + j*f/(f3/sqrt(2))) / (1 + j*f/(f3*sqrt(2)))`. All sources of one radiator sit at one point, and the direction a source faces is ignored. A design with a source that does not face the listener gets a warning under this model.
+`B(f)` is the baffle gain, from 1 when sound radiates all around to 2 when it radiates forward only. The request's `space` picks it. `full` is `B = 1`. `half` is `B = 2`, an infinite baffle, and is what the checks use. `step` is a shelf centered on `f3 = 115 / baffle_width_m`: `B = (1 + j*f/(f3/sqrt(2))) / (1 + j*f/(f3*sqrt(2)))`. All sources sit at one point, the middle of the cabinet's front, and the direction a source faces is ignored. A design with a source that does not face the listener gets a warning under this model. Behind that point (the side away from the listener) the gain is `2 - B`, so half space sends nothing backward and full space the same both ways; the sound power is then `RHO0*C0*k^2*|U|^2 * (|B|^2 + |2 - B|^2) / (8*pi)`, the simple-source value for `B = 1` and twice that for `B = 2`.
 
-**`baffle`, Level 2.** Each source sits at its real position. A source on a flat surface that faces the listener gets piston directivity, `D = 2*J1(k*a*sin(theta)) / (k*a*sin(theta))` with `theta` measured from its outward direction, and edge diffraction computed from that surface's outline. This model is not valid for a source that faces away from the listener or sits on a curved surface. For those it falls back to `point` and says so in the fidelity label.
+**`baffle`, Level 2.** Each source sits at its real position. A source on a flat surface gets, at any point in front of that surface, piston directivity, `D = 2*J1(k*a*sin(theta)) / (k*a*sin(theta))` with `theta` measured from its outward direction, and edge diffraction computed from that surface's outline. A source on a curved surface, or one the shape cannot place, falls back to `point`, and the fidelity label says so.
 
 Edge diffraction, the simple secondary-source model: divide the outline of the surface the source sits on into `N` equal edge elements, at least 4 per wavelength at the highest frequency and never fewer than 64. Element `i` is at distance `d_i` from the source and `e_i` from the listening point; the source is at distance `r_0` from the listening point. Then
 
@@ -420,9 +420,19 @@ p = p_half_space * ( 1 - (1/(2N)) * sum over i of (r_0 / e_i) * e^(-j*k*(d_i + e
 
 where `p_half_space` is the source's pressure with `B = 2`. At low frequency the sum tends to `-1/2`, so the level falls 6.02 dB to that of full space. At high frequency the terms cancel and the level approaches half space. The model ignores the depth of the cabinet and the edge's shape, which the fidelity label lists.
 
+Behind the source's own surface (a driver on the back heard from the front, or any source heard from the wall behind the cabinet) the direct sound does not arrive, and the same edge elements send what the front loses, with the opposite sign:
+
+```
+p = p_half_space * (1/(2N)) * sum over i of (r_0 / e_i) * e^(-j*k*(d_i + e_i - r_0))
+```
+
+At low frequency that is the full-space level, the same as in front; at high frequency the terms cancel and the surface shadows its back. This is the same simple model, so it still ignores the cabinet's depth, and the fidelity label says so.
+
+Sound power under `baffle` is the far-field integral below, taken over 48 directions spread evenly over the sphere. With up to eight sources the geometry's part (how each pair of sources adds up over all directions) is computed on every sixth frequency and interpolated, then combined with the sources' volume velocities on the full grid.
+
 **`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a point source at the listening position and the pressure recorded all over the cabinet's skin, gives the transfer from every possible surface source to that position at once. Sound power needs such runs for a set of directions around the cabinet. This model is an outline: nothing has validated it yet.
 
-Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field.
+Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field. The results give it as a level in dB re 1 pW, with the directivity index: the on-axis intensity at the listening distance against the mean over all directions, `10*log10(|p_axis|^2 * 4*pi*r^2 / (RHO0*C0*W))`. Both are computed when the design has a room, or when the request sets `sound_power`.
 
 The piston model has no cone break-up. Above roughly `k*a = 1`, a driver's real response comes from its published or measured curve. Level 2 adds a response file per driver, blended in above a chosen frequency. Until a curve is present, label that region accordingly (section 5.8).
 
@@ -497,6 +507,10 @@ diffuse      p_rev^2 = 4 * W * RHO0*C0 / A,   A = 0.161 * volume_m3 / rt60_s,   
 
 in-room response: direct and reflection add as complex pressures; diffuse adds as energy
 ```
+
+The wall is `wall_behind_m` behind the cabinet's back. The cabinet mirrored in that wall is the same as the listening position mirrored in it, heard from the real cabinet, so the reflection is the radiation model's pressure at that mirrored point, which is behind the cabinet, times `wall_reflection`. It ignores the cabinet standing in the reflection's way back. `W` is the sound power of the whole speaker as it is driven, with every radiator's DSP chain and polarity.
+
+The results keep the direct sound as it is (`summed_spl_db`, and the complex pressure listen mode uses) and add `in_room`: the in-room level, the early sound (direct plus reflection), the reflection alone, and the diffuse level. A design with a room is scored on the in-room level. The reflection and the diffuse sound use the piston model, without the drivers' published response curves.
 
 This is an estimate for comparing designs. It is not a room simulation.
 
@@ -864,6 +878,7 @@ Say so in the interface wherever it matters.
 | Exciter | Inertial exciter | The small motor fixed to a panel that makes it vibrate. |
 | Sound power | `W` | All the sound a speaker sends out, in every direction. |
 | In-room response | Section 5.10 | The sound that reaches the listener directly and by way of the room. |
+| Directivity index | `DI` | How much louder the speaker is straight ahead than on average over all directions. |
 | Cone travel | Excursion, `x_peak`, limit `xmax_m` | How far the cone moves from rest. |
 | Port air speed | Port velocity | Peak speed of air in a port. Too fast and the port makes noise. |
 | Bass limit | `f6_hz` | The lowest frequency the speaker reproduces within 6 dB of its normal level. |

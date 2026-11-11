@@ -198,6 +198,7 @@ fn full_3d(request: &str) -> String {
         frequencies_hz: parsed.frequencies_hz,
         revision: parsed.revision,
         fdtd_dx_m: parsed.fdtd_dx_m,
+        sound_power: false,
     };
     let result = simulate_with_progress(&design, &sim_request, &builtin(), &mut report_progress);
     serde_json::to_string(&result).unwrap_or_else(|error| {

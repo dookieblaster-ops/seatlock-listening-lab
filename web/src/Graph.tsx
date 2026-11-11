@@ -61,7 +61,7 @@ export function Graph({ title, explanation, freqs, values, unit, testId, fidelit
           {ymin.toFixed(1)} · 20 Hz to 20 kHz
         </text>
       </svg>
-      <p className="fidelity">{fidelity}</p>
+      <p className="fidelity" data-testid={`${testId}-fidelity`}>{fidelity}</p>
     </figure>
   );
 }
