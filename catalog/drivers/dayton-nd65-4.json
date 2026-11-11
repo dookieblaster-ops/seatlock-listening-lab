@@ -22,9 +22,9 @@
   "mounting": {
     "cutout_diameter_m": 0.05207,
     "outer_diameter_m": 0.064008,
-    "bolt_circle_m": 0.0,
     "bolt_count": 4,
-    "depth_m": 0.048006
+    "depth_m": 0.048006,
+    "via": "search_extract"
   },
   "response_file": null,
   "source": {
@@ -37,6 +37,7 @@
     "currency": "USD",
     "vendor": "Parts Express",
     "url": "https://www.parts-express.com/Dayton-Audio-ND65-4-2-1-2-Aluminum-Cone-Full-Range-Driver-290-204",
-    "read_on": "2026-11-10"
+    "read_on": "2026-11-10",
+    "via": "search_extract"
   }
 }

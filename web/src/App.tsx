@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { CabinetView } from "./CabinetView";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
-import { buildCabinetMesh, meshToStl, type SolidMesh } from "./printSolid";
+import { buildCabinetMesh, meshTo3mf, meshToStl, type SolidMesh } from "./printSolid";
 import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
 import { coefficientMessage, useListen, type ListenSource } from "./useListen";
 import "./App.css";
@@ -214,7 +214,8 @@ export default function App() {
               ? "price unknown"
               : `${record.price?.vendor ?? "vendor"} $${price} as of ${readOn ?? "an unknown date"}`;
           const tier = record.tier ? `${record.tier} ` : "";
-          return `Driver ${index + 1}: ${tier}${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${stale ? ". This price is more than 90 days old." : ""}`;
+          const unconfirmed = record.price?.via || record.mounting?.via ? " unconfirmed" : "";
+          return `Driver ${index + 1}: ${tier}${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${unconfirmed}${stale ? ". This price is more than 90 days old." : ""}`;
         }),
       );
     });
@@ -500,10 +501,17 @@ export default function App() {
             driver={geom.mounts[0]?.position_m ?? null}
           />
           <div className="row">
+            {geom.warnings?.map((line) => (
+              <p key={line} data-testid="mount-warning">{line}</p>
+            ))}
             <button
               type="button"
               data-testid="export-stl"
+              disabled={geom.can_export_print === false}
               onClick={() => {
+                if (geom.can_export_print === false) {
+                  return;
+                }
                 const bytes = meshToStl(solid.positions, solid.indices);
                 const blob = new Blob([bytes], { type: "model/stl" });
                 const url = URL.createObjectURL(blob);
@@ -515,6 +523,28 @@ export default function App() {
               }}
             >
               Export print file
+            </button>
+            <button
+              type="button"
+              data-testid="export-3mf"
+              disabled={geom.can_export_print === false}
+              onClick={() => {
+                if (geom.can_export_print === false) {
+                  return;
+                }
+                const bytes = meshTo3mf(solid.positions, solid.indices);
+                const copy = new ArrayBuffer(bytes.byteLength);
+                new Uint8Array(copy).set(bytes);
+                const blob = new Blob([copy], { type: "model/3mf" });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = "cabinet.3mf";
+                anchor.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Export 3MF
             </button>
             <button
               type="button"

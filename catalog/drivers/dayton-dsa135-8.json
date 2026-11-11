@@ -24,7 +24,8 @@
     "outer_diameter_m": 0.134874,
     "bolt_circle_m": 0.125984,
     "bolt_count": 4,
-    "depth_m": 0.06858
+    "depth_m": 0.06858,
+    "via": "search_extract"
   },
   "response_file": null,
   "source": {
@@ -37,6 +38,7 @@
     "currency": "USD",
     "vendor": "Parts Express",
     "url": "https://www.parts-express.com/Dayton-Audio-DSA135-8-5-Designer-Series-Aluminum-Cone-Woofer-295-526",
-    "read_on": "2026-11-10"
+    "read_on": "2026-11-10",
+    "via": "search_extract"
   }
 }

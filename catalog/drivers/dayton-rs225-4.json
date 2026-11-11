@@ -19,13 +19,6 @@
     "cms_m_per_n": 0.00072,
     "bl_tm": 6.38
   },
-  "mounting": {
-    "cutout_diameter_m": 0.0,
-    "outer_diameter_m": 0.0,
-    "bolt_circle_m": 0.0,
-    "bolt_count": 6,
-    "depth_m": 0.0
-  },
   "response_file": null,
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-376-dayton-audio-rs225-4-spec-sheet-revised.pdf",

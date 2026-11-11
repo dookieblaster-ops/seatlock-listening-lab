@@ -104,6 +104,7 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         text: msg.text,
         revision: msg.revision,
         frequencies_hz: msg.frequencies,
+        radiation: "baffle",
       });
       const json = eng.call("simulate", request);
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);

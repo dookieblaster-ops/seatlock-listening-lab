@@ -321,6 +321,56 @@ fn chk_rad_2_circular_baffle_on_axis() {
 }
 
 #[test]
+fn sensitivity_inverts_chk_drv_2_back_to_vas() {
+    let published = woofer_a();
+    let exact = reference_half_space_spl_db(&published, 2.83, 1.0);
+    let mut record = seatlock_core::catalog::driver("test-woofer-a").unwrap();
+    record["published"]
+        .as_object_mut()
+        .unwrap()
+        .remove("vas_m3");
+    record["published"]["sens_db_2v83"] = serde_json::json!(exact);
+    let built = seatlock_acoustics::published_from_catalog(&record).unwrap();
+    assert!(
+        (built.vas_m3 - 0.01).abs() / 0.01 < 0.0001,
+        "exact {}",
+        built.vas_m3
+    );
+    record["published"]["sens_db_2v83"] = serde_json::json!(87.75);
+    let rounded = seatlock_acoustics::published_from_catalog(&record).unwrap();
+    assert!(
+        (rounded.vas_m3 - 0.01).abs() / 0.01 < 0.001,
+        "rounded {}",
+        rounded.vas_m3
+    );
+    assert!(seatlock_acoustics::derivation_note(&record)
+        .unwrap()
+        .contains("sensitivity"));
+}
+
+#[test]
+fn unprinted_mounting_sizes_are_left_out() {
+    for id in [
+        "dayton-nd25fa-4",
+        "dayton-dc28f-8",
+        "dayton-rst28f-4",
+        "dayton-rs225-4",
+    ] {
+        let record = seatlock_core::catalog::driver(id).expect(id);
+        assert!(
+            record.pointer("/mounting/cutout_diameter_m").is_none(),
+            "{id} stores a cut-out"
+        );
+        assert!(
+            record.pointer("/mounting/bolt_count").is_none(),
+            "{id} stores a bolt count"
+        );
+    }
+    let nd65 = seatlock_core::catalog::driver("dayton-nd65-4").unwrap();
+    assert!(nd65.pointer("/mounting/bolt_circle_m").is_none());
+}
+
+#[test]
 fn a_measured_curve_sets_the_shape_above_ka_equals_one() {
     use num_complex::Complex64;
     use seatlock_acoustics::blend_measured_curve;
@@ -367,10 +417,14 @@ fn a_sheet_without_vas_uses_the_force_factor_when_it_is_printed() {
 }
 
 #[test]
-fn nd25fa4_cannot_be_built_without_inventing_mass() {
+fn nd25fa4_is_derived_from_sensitivity_without_a_travel_limit() {
     let record = seatlock_core::catalog::driver("dayton-nd25fa-4").unwrap();
-    let error = seatlock_acoustics::published_from_catalog(&record).unwrap_err();
-    assert!(error.contains("Vas"));
+    let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
+    assert_eq!(published.xmax_m, 0.0);
+    assert!(record.pointer("/published/xmax_m").is_none());
+    assert!(seatlock_acoustics::derivation_note(&record)
+        .unwrap()
+        .contains("sensitivity"));
 }
 
 #[test]
@@ -382,6 +436,7 @@ fn sourced_drivers_match_printed_mechanics_or_would_warn() {
         "dayton-nd65-4",
         "dayton-dsa135-8",
         "dayton-pc105-8",
+        "dayton-tcp115-8",
         "dayton-rs225-8",
     ] {
         let record = seatlock_core::catalog::driver(id).expect(id);
@@ -408,7 +463,8 @@ fn sourced_drivers_match_printed_mechanics_or_would_warn() {
             }
         }
     }
-    for id in ["dayton-tcp115-8", "dayton-rs225-4"] {
+    {
+        let id = "dayton-rs225-4";
         let record = seatlock_core::catalog::driver(id).expect(id);
         assert!(record["price"].is_null());
         let published = seatlock_acoustics::published_from_catalog(&record).unwrap();
@@ -425,10 +481,17 @@ fn sourced_drivers_match_printed_mechanics_or_would_warn() {
     }
     for id in ["dayton-nd25fa-4", "dayton-dc28f-8", "dayton-rst28f-4"] {
         let record = seatlock_core::catalog::driver(id).expect(id);
-        assert!(seatlock_acoustics::published_from_catalog(&record).is_err());
+        let published = seatlock_acoustics::published_from_catalog(&record).expect(id);
+        assert_eq!(published.xmax_m, 0.0);
+        assert!(seatlock_acoustics::derivation_note(&record)
+            .unwrap()
+            .contains("sensitivity"));
     }
+    let pvc = seatlock_core::catalog::embedded_file("catalog/stock/charlotte-pvc-sch40-4in.json")
+        .unwrap();
+    let pvc: serde_json::Value = serde_json::from_str(pvc).unwrap();
+    assert_eq!(pvc["density_kg_m3"], 1400.0);
     for path in [
-        "catalog/stock/charlotte-pvc-sch40-4in.json",
         "catalog/stock/sakrete-form-tube-8in.json",
         "catalog/stock/komatex-foam-board.json",
         "catalog/stock/ultrastock-mdf-3-4.json",

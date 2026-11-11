@@ -8,7 +8,13 @@
   "outside_diameter_m": 0.1143,
   "inside_diameter_m": 0.1022604,
   "length_m": 3.048,
-  "density_kg_m3": null,
+  "density_kg_m3": 1400.0,
+  "youngs_modulus_pa": 2757902912.0,
+  "material_source": {
+    "url": "https://www.charlottepipe.com/uploads/documents/technical/TM-PL.pdf",
+    "title": "Charlotte Pipe plastics technical manual, PVC specific gravity 1.40 and tensile modulus 400,000 psi minimum at 73 F",
+    "read_on": "2026-11-10"
+  },
   "source": {
     "url": "https://www.homedepot.com/p/Charlotte-Pipe-4-in-x-10-ft-PVC-Schedule-40-DWV-Pipe-PVC074000600/100348477",
     "title": "Home Depot listing for Charlotte Pipe 4 in. x 10 ft. Schedule 40 PVC",

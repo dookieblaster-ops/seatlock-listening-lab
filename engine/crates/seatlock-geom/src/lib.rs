@@ -121,6 +121,88 @@ impl BoxShape {
 
 pub fn register(registry: &mut Registry) {
     registry.register_outer("box", parse_box);
+    registry.register_outer("rounded", parse_rounded);
+    registry.register_outer("chamfered", parse_chamfered);
+    registry.register_outer("sloped", parse_sloped);
+    registry.register_outer("prism", parse_prism);
+    registry.register_outer("tube", parse_tube);
+}
+
+struct RoundedBox {
+    inner: BoxShape,
+    #[allow(dead_code)]
+    radius_m: f64,
+}
+
+impl OuterShape for RoundedBox {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        self.inner.interior_volume_m3()
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.inner.baffle_width_m()
+    }
+}
+
+struct SlopedBox {
+    width_m: f64,
+    height_m: f64,
+    depth_front_m: f64,
+    depth_back_m: f64,
+    wall_m: f64,
+}
+
+impl OuterShape for SlopedBox {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        let width = self.width_m - 2.0 * self.wall_m;
+        let height = self.height_m - 2.0 * self.wall_m;
+        let depth = 0.5 * (self.depth_front_m + self.depth_back_m) - 2.0 * self.wall_m;
+        if width <= 0.0 || height <= 0.0 || depth <= 0.0 {
+            return Err("The walls are thicker than the sloped box.".into());
+        }
+        Ok(width * height * depth)
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.width_m
+    }
+}
+
+struct Prism {
+    length_m: f64,
+    wall_m: f64,
+    area_m2: f64,
+}
+
+impl OuterShape for Prism {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        let length = self.length_m - 2.0 * self.wall_m;
+        if length <= 0.0 || self.area_m2 <= 0.0 {
+            return Err("The prism has no air volume.".into());
+        }
+        Ok(self.area_m2 * length)
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.area_m2.sqrt()
+    }
+}
+
+pub struct TubeShape {
+    pub inside_diameter_m: f64,
+    pub outside_diameter_m: f64,
+    pub length_m: f64,
+    pub wall_from_user: bool,
+}
+
+impl OuterShape for TubeShape {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        let radius = self.inside_diameter_m / 2.0;
+        if radius <= 0.0 || self.length_m <= 0.0 {
+            return Err("The tube needs an inside diameter and a length.".into());
+        }
+        Ok(std::f64::consts::PI * radius * radius * self.length_m)
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.outside_diameter_m
+    }
 }
 
 fn parse_box(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
@@ -130,6 +212,108 @@ fn parse_box(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String>
         depth_m: required_f64(fields, "depth_m")?,
         wall_m: required_f64(fields, "wall_m")?,
     }))
+}
+
+fn parse_rounded(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    Ok(Box::new(RoundedBox {
+        inner: box_from(fields)?,
+        radius_m: required_f64(fields, "edge_radius_m")?,
+    }))
+}
+
+fn parse_chamfered(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    let _chamfer = required_f64(fields, "chamfer_m")?;
+    Ok(Box::new(box_from(fields)?))
+}
+
+fn parse_sloped(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    Ok(Box::new(SlopedBox {
+        width_m: required_f64(fields, "width_m")?,
+        height_m: required_f64(fields, "height_m")?,
+        depth_front_m: required_f64(fields, "depth_front_m")?,
+        depth_back_m: required_f64(fields, "depth_back_m")?,
+        wall_m: required_f64(fields, "wall_m")?,
+    }))
+}
+
+fn parse_prism(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    let outline = fields
+        .get("outline_m")
+        .and_then(Value::as_array)
+        .ok_or("missing outline_m")?;
+    let mut area = 0.0;
+    for index in 0..outline.len() {
+        let next = (index + 1) % outline.len();
+        let (x0, y0) = point2(&outline[index]);
+        let (x1, y1) = point2(&outline[next]);
+        area += x0 * y1 - x1 * y0;
+    }
+    Ok(Box::new(Prism {
+        length_m: required_f64(fields, "length_m")?,
+        wall_m: required_f64(fields, "wall_m")?,
+        area_m2: area.abs() / 2.0,
+    }))
+}
+
+pub fn describe_tube(fields: &Map<String, Value>) -> Result<TubeShape, String> {
+    let length_m = required_f64(fields, "length_m")?;
+    let stock_id = fields.get("stock_id").and_then(Value::as_str).unwrap_or("");
+    let record = seatlock_core::catalog::stock(stock_id);
+    let inside = record
+        .as_ref()
+        .and_then(|item| item.get("inside_diameter_m").and_then(Value::as_f64));
+    let outside = record
+        .as_ref()
+        .and_then(|item| item.get("outside_diameter_m").and_then(Value::as_f64));
+    let (inside_diameter_m, outside_diameter_m, wall_from_user) = if let Some(inside) = inside {
+        let outside = outside.unwrap_or(inside + 2.0 * optional_f64(fields, "wall_m"));
+        (inside, outside, false)
+    } else if let Some(outside) = outside {
+        let wall = optional_f64(fields, "wall_m");
+        if wall <= 0.0 {
+            return Err(
+                "This tube's page does not print a wall, so the design must give wall_m.".into(),
+            );
+        }
+        (outside - 2.0 * wall, outside, true)
+    } else {
+        let diameter = required_f64(fields, "inside_diameter_m")?;
+        (diameter, diameter, false)
+    };
+    Ok(TubeShape {
+        inside_diameter_m,
+        outside_diameter_m,
+        length_m,
+        wall_from_user,
+    })
+}
+
+fn parse_tube(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    Ok(Box::new(describe_tube(fields)?))
+}
+
+fn box_from(fields: &Map<String, Value>) -> Result<BoxShape, String> {
+    Ok(BoxShape {
+        width_m: required_f64(fields, "width_m")?,
+        height_m: required_f64(fields, "height_m")?,
+        depth_m: required_f64(fields, "depth_m")?,
+        wall_m: required_f64(fields, "wall_m")?,
+    })
+}
+
+fn point2(value: &Value) -> (f64, f64) {
+    let coord = |index: usize| {
+        value
+            .as_array()
+            .and_then(|point| point.get(index))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    (coord(0), coord(1))
+}
+
+fn optional_f64(fields: &Map<String, Value>, key: &str) -> f64 {
+    fields.get(key).and_then(Value::as_f64).unwrap_or(0.0)
 }
 
 fn required_f64(fields: &Map<String, Value>, key: &str) -> Result<f64, String> {

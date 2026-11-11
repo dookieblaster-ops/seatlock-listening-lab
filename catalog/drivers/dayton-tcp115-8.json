@@ -17,14 +17,15 @@
     "pe_w": 40.0,
     "mms_kg": 0.01016,
     "cms_m_per_n": 0.00071,
-    "bl_tm": 7.4
+    "bl_tm": 7.4,
+    "sens_db_2v83": 81.9
   },
   "mounting": {
-    "cutout_diameter_m": 0.0,
-    "outer_diameter_m": 0.0,
-    "bolt_circle_m": 0.0,
+    "cutout_diameter_m": 0.095758,
+    "outer_diameter_m": 0.116078,
+    "bolt_circle_m": 0.10795,
     "bolt_count": 4,
-    "depth_m": 0.0
+    "depth_m": 0.058928
   },
   "response_file": null,
   "source": {
@@ -32,5 +33,11 @@
     "title": "Dayton Audio TCP115-8 specification sheet",
     "read_on": "2026-11-10"
   },
-  "price": null
+  "price": {
+    "amount": 15.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-TCP115-8-4-Treated-Paper-Cone-Midbass-Woofer-8-Ohm-295-416",
+    "read_on": "2026-11-10"
+  }
 }
