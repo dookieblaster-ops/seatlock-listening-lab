@@ -11,6 +11,7 @@ import {
   type PrintPart,
   type SolidMesh,
 } from "./printSolid";
+import type { FullMessage } from "./fdtdWorker";
 import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
 import { coefficientMessage, useListen, type ListenSource } from "./useListen";
 import "./App.css";
@@ -88,12 +89,7 @@ export default function App() {
   const [simB, setSimB] = useState<SimulateResult | null>(null);
   const [nameB, setNameB] = useState("");
   const [canonicalB, setCanonicalB] = useState<string | null>(null);
-  const [fdtdCurve, setFdtdCurve] = useState<{
-    freq: number[];
-    mag: number[];
-    lumped: number[];
-    ignored: string[];
-  } | null>(null);
+  const [fdtdRuns, setFdtdRuns] = useState<SimulateResult[]>([]);
   const fdtdWorker = useRef<Worker | null>(null);
 
   async function publish(next: Design, label: string) {
@@ -586,57 +582,55 @@ export default function App() {
             </button>
             <button
               type="button"
-              disabled={design?.speaker.enclosure.outer.kind !== "box"}
-              title={
-                design?.speaker.enclosure.outer.kind === "box"
-                  ? "Solve the air inside the box in 3D."
-                  : "The full 3D air model handles box cabinets only so far."
-              }
+              disabled={!canonical}
+              title="Solve the air inside the cabinet, and around its ports, in 3D: first with 10 mm cells, then 5 mm."
               onClick={() => {
+                if (!canonical) {
+                  return;
+                }
                 fdtdWorker.current?.terminate();
                 const worker = new Worker(new URL("./fdtdWorker.ts", import.meta.url), { type: "module" });
                 fdtdWorker.current = worker;
-                setFdtdCurve(null);
+                setFdtdRuns([]);
                 setFdtdWarning("");
-                setFdtdNote("Solving the air inside the box…");
-                const mount = geom.mounts[0];
-                worker.onmessage = (event) => {
-                  if (event.data.type === "done") {
-                    const curve = JSON.parse(event.data.json) as {
-                      elapsed_ms: number;
-                      error?: string;
-                      warning?: string;
-                      ignored?: string[];
-                      frequencies_hz?: number[];
-                      real?: number[];
-                      imag?: number[];
-                    };
+                setFdtdNote("Solving the air in 3D…");
+                const finished: SimulateResult[] = [];
+                worker.onmessage = (event: MessageEvent<FullMessage>) => {
+                  const message = event.data;
+                  if (message.type === "progress") {
+                    const percent = Math.min(99, Math.round((100 * message.steps) / Math.max(message.maxSteps, 1)));
                     setFdtdNote(
-                      curve.error
-                        ? curve.error
-                        : `Full 3D finished in ${(curve.elapsed_ms / 1000).toFixed(1)} s.`,
+                      `Solving the air in 3D with ${(message.dx * 1000).toFixed(0)} mm cells… ${percent}% of the time limit used so far.`,
                     );
-                    setFdtdWarning(curve.warning ?? "");
-                    if (curve.frequencies_hz && curve.real && curve.imag) {
-                      const compliance = geom.interior_volume_m3 / (1.204 * 343.2 * 343.2);
-                      setFdtdCurve({
-                        freq: curve.frequencies_hz,
-                        mag: curve.real.map((re, index) => Math.hypot(re, curve.imag?.[index] ?? 0)),
-                        lumped: curve.frequencies_hz.map((freq) => 1 / (2 * Math.PI * freq * compliance)),
-                        ignored: curve.ignored ?? [],
-                      });
+                  } else if (message.type === "result") {
+                    const result = JSON.parse(message.json) as SimulateResult;
+                    if (result.error) {
+                      setFdtdNote(`Full 3D failed: ${result.error}`);
+                      return;
                     }
+                    const problems = result.issues.filter((issue) => issue.code.startsWith("fdtd_"));
+                    if (problems.length > 0) {
+                      setFdtdWarning(problems.map((issue) => issue.message).join(" "));
+                    }
+                    if (result.fdtd) {
+                      finished.push(result);
+                      setFdtdRuns([...finished]);
+                    }
+                  } else if (message.type === "done") {
+                    const times = finished
+                      .map(
+                        (run) =>
+                          `${((run.fdtd?.dx_m ?? 0) * 1000).toFixed(0)} mm in ${((run.fdtd?.elapsed_ms ?? 0) / 1000).toFixed(1)} s`,
+                      )
+                      .join(", ");
+                    setFdtdNote(finished.length > 0 ? `Full 3D finished: ${times}.` : "Full 3D failed: it gave no result.");
+                    worker.terminate();
+                    fdtdWorker.current = null;
+                  } else {
+                    setFdtdNote(`Full 3D failed: ${message.message}`);
                   }
                 };
-                worker.postMessage({
-                  depth_m: geom.depth_m - 2 * geom.wall_m,
-                  width_m: geom.width_m - 2 * geom.wall_m,
-                  height_m: geom.height_m - 2 * geom.wall_m,
-                  dx: 0.01,
-                  center_y_m: (mount?.position_m[0] ?? 0) - geom.wall_m,
-                  center_z_m: (mount?.position_m[2] ?? 0) - geom.wall_m,
-                  radius_m: (mount?.cutout_diameter_m ?? 0.04) / 2,
-                });
+                worker.postMessage({ text: canonical, cellSizes: [0.01, 0.005], frequencies: grid });
               }}
             >
               Run full 3D
@@ -657,18 +651,7 @@ export default function App() {
             <p data-testid="fdtd-error">{fdtdNote}</p>
           ) : null}
           {fdtdWarning ? <p data-testid="fdtd-warning">{fdtdWarning}</p> : null}
-          {fdtdCurve && (
-            <Graph
-              title="Air load"
-              explanation="How the air in the box pushes back. Green is the quick model, brown is the full 3D model."
-              freqs={fdtdCurve.freq}
-              values={fdtdCurve.lumped}
-              overlay={fdtdCurve.mag}
-              unit="Pa·s/m³"
-              testId="impedance-3d-graph"
-              fidelity={`Quick sealed box and full 3D, rigid walls. ${fdtdCurve.ignored.join(" ")}`}
-            />
-          )}
+          {fdtdRuns.length > 0 && <FullThreeD runs={fdtdRuns} quick={sim} />}
         </section>
       )}
 
@@ -1086,5 +1069,71 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function FullThreeD({ runs, quick }: { runs: SimulateResult[]; quick: SimulateResult | null }) {
+  const finest = runs.reduce((best, run) => ((run.fdtd?.dx_m ?? 1) < (best.fdtd?.dx_m ?? 1) ? run : best));
+  const report = finest.fdtd;
+  if (!report) {
+    return null;
+  }
+  const coarse = runs.find((run) => run !== finest);
+  // Two cell sizes (README 5.5): the bass difference, and the typical difference up to the
+  // coarse grid's limit. Lossless resonance peaks are left out: their heights are not modeled.
+  let spread: { bass: number; median: number; below: number } | null = null;
+  if (coarse?.fdtd) {
+    const below = Math.min(coarse.fdtd.valid_up_to_hz, report.valid_up_to_hz);
+    let bass = 0;
+    const all: number[] = [];
+    finest.frequencies_hz.forEach((freq, index) => {
+      const diff = Math.abs(finest.summed_spl_db[index] - coarse.summed_spl_db[index]);
+      if (freq <= 300) {
+        bass = Math.max(bass, diff);
+      }
+      if (freq <= below) {
+        all.push(diff);
+      }
+    });
+    all.sort((a, b) => a - b);
+    spread = { bass, median: all.length > 0 ? all[Math.floor(all.length / 2)] : 0, below };
+  }
+  const magnitude = (curve: { re: number[]; im: number[] }) =>
+    curve.re.map((re, index) => Math.hypot(re, curve.im[index] ?? 0));
+  const cell = `${(report.dx_m * 1000).toFixed(0)} mm`;
+  return (
+    <div data-testid="fdtd-results">
+      {spread ? (
+        <p data-testid="fdtd-uncertainty">
+          The 10 mm and 5 mm grids differ by up to {spread.bass.toFixed(2)} dB below 300 Hz, and typically by{" "}
+          {spread.median.toFixed(2)} dB up to {(spread.below / 1000).toFixed(1)} kHz. That is the uncertainty from turning
+          the cabinet into cells. Peaks at the cabinet's own resonances are not modeled yet.
+        </p>
+      ) : null}
+      <p>
+        Grid air {(report.grid_volume_m3 * 1000).toFixed(2)} L against {(report.net_volume_m3 * 1000).toFixed(2)} L in
+        the design; {report.steps} time steps{report.decayed ? "" : ", stopped at the time limit"}.
+      </p>
+      <Graph
+        title="Level with full 3D"
+        explanation={`Green is the full 3D model at ${cell} cells, brown the quick model.`}
+        freqs={finest.frequencies_hz}
+        values={finest.summed_spl_db}
+        overlay={quick?.summed_spl_db}
+        unit="dB SPL"
+        testId="fdtd-spl-graph"
+        fidelity={`Full 3D (${cell}), ${finest.fidelity.radiation} radiation. ${finest.fidelity.ignored.join(" ")}`}
+      />
+      <Graph
+        title="Air load"
+        explanation="How the air in the cabinet pushes back on the cone. Green is the full 3D model, brown the quick model."
+        freqs={report.frequencies_hz}
+        values={magnitude(report.z_ab)}
+        overlay={magnitude(report.z_ab_quick)}
+        unit="Pa·s/m³"
+        testId="impedance-3d-graph"
+        fidelity={`Quick model and full 3D at ${cell} cells, rigid walls, air without losses.`}
+      />
+    </div>
   );
 }

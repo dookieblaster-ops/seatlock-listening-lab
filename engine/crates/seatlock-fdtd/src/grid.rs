@@ -30,14 +30,11 @@ impl Grid {
         (i * self.n[1] + j) * self.n[2] + k
     }
 
-    /// Slot of the face on the low side of cell `(i, j, k)` along `axis`.
-    pub fn face_slot(&self, axis: u8, i: usize, j: usize, k: usize) -> usize {
-        let [_, ny, nz] = self.n;
-        match axis {
-            0 => (i * ny + j) * nz + k,
-            1 => (i * (ny + 1) + j) * nz + k,
-            _ => (i * ny + j) * (nz + 1) + k,
-        }
+    /// Slot of the face on the low side of cell `(i, j, k)` along `axis`. Face arrays use the
+    /// cell's own index: slot `c` along an axis is the face between cell `c` and the cell one
+    /// step lower on that axis.
+    pub fn face_slot(&self, _axis: u8, i: usize, j: usize, k: usize) -> usize {
+        self.cell(i, j, k)
     }
 
     pub fn time_step_s(&self) -> f64 {
@@ -93,9 +90,13 @@ pub fn run(
     let rho_c = RHO0 * C0;
 
     let stride = [ny * nz, nz, 1usize];
-    // Open faces, as (slot, cell ahead); the cell behind is `ahead - stride`.
-    let mut faces: [Vec<(u32, u32)>; 3] = [Vec::new(), Vec::new(), Vec::new()];
-    let mut plain: Vec<(u32, u32, u32)> = Vec::new();
+    let faces_len = cells + ny * nz;
+    // Open faces as a 0/1 mask per axis, so the update runs as plain dense loops.
+    let mut open: [Vec<f32>; 3] = [
+        vec![0.0; faces_len],
+        vec![0.0; faces_len],
+        vec![0.0; faces_len],
+    ];
     let mut special_of = vec![u32::MAX; cells];
     for i in 0..nx {
         for j in 0..ny {
@@ -105,40 +106,44 @@ pub fn run(
                     continue;
                 }
                 let coords = [i, j, k];
-                for axis in 0..3u8 {
-                    if coords[axis as usize] > 0 && grid.air[c - stride[axis as usize]] {
-                        faces[axis as usize].push((grid.face_slot(axis, i, j, k) as u32, c as u32));
+                for axis in 0..3 {
+                    if coords[axis] > 0 && grid.air[c - stride[axis]] {
+                        open[axis][c] = 1.0;
                     }
                 }
-                plain.push((c as u32, i as u32, (i * ny + j) as u32));
             }
         }
     }
+    // The first and last cells along each axis whose low face can be open.
+    let span: [(usize, usize); 3] = std::array::from_fn(|axis| {
+        let first = open[axis].iter().position(|x| *x != 0.0).unwrap_or(cells);
+        let last = open[axis]
+            .iter()
+            .rposition(|x| *x != 0.0)
+            .map_or(first, |x| x + 1);
+        (first, last.max(first))
+    });
 
     // Special cells: source faces and absorbing faces.
     struct Special {
         cell: usize,
-        i: usize,
-        ij: usize,
         y_sum: f64,
         source: bool,
         inductive: f64,
         integral: f64,
+        updated: f64,
     }
     let mut specials: Vec<Special> = Vec::new();
     let mut touch = |cell: usize, specials: &mut Vec<Special>| -> usize {
         if special_of[cell] == u32::MAX {
-            let i = cell / (ny * nz);
-            let j = (cell / nz) % ny;
             special_of[cell] = specials.len() as u32;
             specials.push(Special {
                 cell,
-                i,
-                ij: i * ny + j,
                 y_sum: 0.0,
                 source: false,
                 inductive: 0.0,
                 integral: 0.0,
+                updated: 0.0,
             });
         }
         special_of[cell] as usize
@@ -158,13 +163,16 @@ pub fn run(
             specials[s].inductive += count as f64 / (RHO0 * r.max(2.0 * dx));
         }
     }
-    plain.retain(|(c, _, _)| special_of[*c as usize] == u32::MAX);
+    let air_span = (
+        grid.air.iter().position(|a| *a).unwrap_or(cells),
+        grid.air.iter().rposition(|a| *a).map_or(0, |x| x + 1),
+    );
 
     let mut pressure = vec![0.0_f32; cells];
     let mut v = [
-        vec![0.0_f32; (nx + 1) * ny * nz],
-        vec![0.0_f32; nx * (ny + 1) * nz],
-        vec![0.0_f32; nx * ny * (nz + 1)],
+        vec![0.0_f32; faces_len],
+        vec![0.0_f32; faces_len],
+        vec![0.0_f32; faces_len],
     ];
     let sigma = 8.0 * dt;
     let t0 = 4.0 * sigma;
@@ -177,33 +185,30 @@ pub fn run(
     let mut canceled = false;
     let mut steps = 0usize;
     let quiet_needed = 300usize.max((0.002 / dt) as usize);
+    let (sx, sy) = (stride[0], stride[1]);
 
     while steps < options.max_steps {
         let time = steps as f64 * dt;
         let pulse = (-((time - t0) / sigma).powi(2)).exp();
         for axis in 0..3 {
-            let s = stride[axis] as u32;
+            let s = stride[axis];
+            let (first, last) = span[axis];
+            let mask = &open[axis];
             let vel = &mut v[axis];
-            for &(slot, ahead) in &faces[axis] {
-                let diff = pressure[ahead as usize] - pressure[(ahead - s) as usize];
-                vel[slot as usize] -= kv * diff;
+            for c in first..last {
+                vel[c] -= kv * mask[c] * (pressure[c] - pressure[c - s]);
             }
         }
         let [vx, vy, vz] = &v;
-        let net = |c: usize, i: usize, ij: usize| -> f32 {
-            let sx = c;
-            let sy = c + i * nz;
-            let sz = c + ij;
-            vx[sx + ny * nz] - vx[sx] + vy[sy + nz] - vy[sy] + vz[sz + 1] - vz[sz]
-        };
-        // Plain cells update in place: a cell's new pressure depends only on face velocities.
+        let net = |c: usize| -> f32 { vx[c + sx] - vx[c] + vy[c + sy] - vy[c] + vz[c + 1] - vz[c] };
+        // Special cells first, from the face velocities alone, then the dense update; the
+        // special values then replace what the dense loop wrote.
         let mut p_sum = 0.0;
         let mut u_sum = 0.0;
         let mut source_faces = 0.0;
-        let mut updates: Vec<(usize, f64)> = Vec::with_capacity(specials.len());
         for special in specials.iter_mut() {
             let old = pressure[special.cell] as f64;
-            let outflow = net(special.cell, special.i, special.ij) as f64;
+            let outflow = net(special.cell) as f64;
             let v_source = if special.source { pulse } else { 0.0 };
             let g = 0.5 * kp * special.y_sum;
             let updated =
@@ -211,20 +216,25 @@ pub fn run(
                     + kp * v_source)
                     / (1.0 + g);
             special.integral += 0.5 * dt * (old + updated);
+            special.updated = updated;
             if special.source {
                 let mean = 0.5 * (updated + old);
                 p_sum += mean;
                 u_sum += (v_source - mean / rho_c) * dx * dx;
                 source_faces += 1.0;
             }
-            updates.push((special.cell, updated));
         }
-        for &(c, i, ij) in &plain {
-            let c = c as usize;
-            pressure[c] -= kp32 * net(c, i as usize, ij as usize);
+        // Cells that are not air have only closed faces, so their pressure stays zero.
+        for (c, p) in pressure
+            .iter_mut()
+            .enumerate()
+            .take(air_span.1)
+            .skip(air_span.0)
+        {
+            *p -= kp32 * net(c);
         }
-        for (cell, value) in updates {
-            pressure[cell] = value as f32;
+        for special in &specials {
+            pressure[special.cell] = special.updated as f32;
         }
         for (index, opening) in grid.openings.iter().enumerate() {
             let mut flow = 0.0;

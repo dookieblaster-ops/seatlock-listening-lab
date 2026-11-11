@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 seatlock-core = { path = "../seatlock-core" }
-seatlock-fdtd = { path = "../seatlock-fdtd" }
 seatlock-sim = { path = "../seatlock-sim" }
 serde.workspace = true
 serde_json.workspace = true

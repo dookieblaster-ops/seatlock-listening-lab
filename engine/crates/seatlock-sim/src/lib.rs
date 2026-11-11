@@ -9,7 +9,7 @@ use seatlock_acoustics::{
     pressure_from_volume_velocity, solve, spl_db, vented_sample, AcousticNode, EdgePoint, PortSpec,
 };
 use seatlock_core::catalog;
-use seatlock_core::constants::C0;
+use seatlock_core::constants::{C0, RHO0};
 use seatlock_core::design::{DesignFile, KindPart};
 use seatlock_core::grid::default_grid;
 use seatlock_core::issue::Issue;
@@ -23,6 +23,7 @@ pub mod chambers;
 pub mod cost;
 pub mod ports;
 pub mod split;
+pub mod voxels;
 pub use cost::{CabinetParts, CostLine, CostReport};
 
 pub fn builtin() -> Registry {
@@ -47,6 +48,9 @@ pub struct SimulateRequest {
     pub frequencies_hz: Option<Vec<f64>>,
     #[serde(default)]
     pub revision: u64,
+    /// Cell size of the full 3D model when `enclosure` is `fdtd`; 10 mm by default.
+    #[serde(default)]
+    pub fdtd_dx_m: Option<f64>,
 }
 
 fn default_enclosure() -> String {
@@ -71,6 +75,7 @@ impl Default for SimulateRequest {
             voltage_v: default_voltage(),
             frequencies_hz: None,
             revision: 0,
+            fdtd_dx_m: None,
         }
     }
 }
@@ -119,6 +124,30 @@ pub struct SimulateResult {
     pub f6_hz: f64,
     pub flatness_db: f64,
     pub max_spl_metric_db: f64,
+    /// What the full 3D model did, when it ran.
+    pub fdtd: Option<FdtdReport>,
+}
+
+/// One run of the full 3D model for a builder cabinet (README section 5.5).
+#[derive(Debug, Clone, Serialize)]
+pub struct FdtdReport {
+    pub dx_m: f64,
+    pub cells: usize,
+    pub steps: usize,
+    pub decayed: bool,
+    pub elapsed_ms: f64,
+    /// Above this the grid is too coarse (`C0 / (10 dx)`), and the detailed model is used.
+    pub valid_up_to_hz: f64,
+    /// Inside air on the grid, and the net air volume the quick model uses.
+    pub grid_volume_m3: f64,
+    pub net_volume_m3: f64,
+    /// Largest difference from the quick model's `Z_ab` at low frequency (the self-check).
+    pub self_check_error: Option<f64>,
+    pub frequencies_hz: Vec<f64>,
+    /// `Z_ab` from the 3D model, and from the quick model at the same frequencies.
+    pub z_ab: ComplexCurve,
+    pub z_ab_quick: ComplexCurve,
+    pub port_ids: Vec<String>,
 }
 
 pub fn simulate(
@@ -126,6 +155,24 @@ pub fn simulate(
     request: &SimulateRequest,
     registry: &Registry,
 ) -> SimulateResult {
+    simulate_with_progress(design, request, registry, &mut |_, _| true)
+}
+
+/// [`simulate`], with `progress(steps, max_steps)` called during a full 3D run. Returning false
+/// stops the run, and the result then comes from the detailed model.
+pub fn simulate_with_progress(
+    design: &DesignFile,
+    request: &SimulateRequest,
+    registry: &Registry,
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> SimulateResult {
+    let full_3d = request.enclosure == "fdtd";
+    // The full 3D model refines the detailed model's curves up to its grid's limit.
+    let base = if full_3d {
+        "waveguide"
+    } else {
+        request.enclosure.as_str()
+    };
     let started = simulation_clock();
     let freqs = request.frequencies_hz.clone().unwrap_or_else(default_grid);
     let mut issues = Vec::new();
@@ -207,6 +254,7 @@ pub fn simulate(
         f6_hz: 0.0,
         flatness_db: 0.0,
         max_spl_metric_db: 0.0,
+        fdtd: None,
     };
 
     let outer = match registry.create_outer(
@@ -258,7 +306,7 @@ pub fn simulate(
         }
     }
 
-    let enclosure = match registry.create_enclosure(&request.enclosure, &Map::new()) {
+    let enclosure = match registry.create_enclosure(base, &Map::new()) {
         Ok(model) => model,
         Err(err) => {
             issues.push(Issue::error(
@@ -319,7 +367,7 @@ pub fn simulate(
                  standing waves and pipe resonances are not modeled."
                     .into(),
             );
-            if request.enclosure == "waveguide" {
+            if base == "waveguide" {
                 fidelity.ignored.push(
                     "The detailed model does not solve several chambers yet, so these curves \
                      come from the quick model."
@@ -367,7 +415,7 @@ pub fn simulate(
                 );
                 (impedance, Some(samples))
             };
-            let (z_ab, vented) = if request.enclosure == "waveguide" && !ports.is_empty() {
+            let (z_ab, vented) = if base == "waveguide" && !ports.is_empty() {
                 let mut impedance = Vec::with_capacity(freqs.len());
                 let mut samples = Vec::with_capacity(freqs.len());
                 for freq in &freqs {
@@ -396,6 +444,115 @@ pub fn simulate(
             (volume, ports, z_ab, vented)
         }
     };
+    let (mut z_ab, mut vented) = (z_ab, vented);
+    let mut fdtd_report = None;
+    if full_3d {
+        match full_3d_enclosure(
+            design,
+            outer.as_ref(),
+            &freqs,
+            volume,
+            &ports,
+            request.fdtd_dx_m.unwrap_or(0.01),
+            progress,
+        ) {
+            Ok(run) => {
+                for (bin, z) in run.z.iter().enumerate() {
+                    if let Some(z) = z {
+                        z_ab[bin] = *z;
+                    }
+                }
+                if let Some(samples) = vented.as_mut() {
+                    if run.h.len() == ports.len() {
+                        for (bin, sample) in samples.iter_mut().enumerate() {
+                            if run.z[bin].is_none() {
+                                continue;
+                            }
+                            sample.z_ab = z_ab[bin];
+                            sample.h_sum = Complex64::new(0.0, 0.0);
+                            for (port, h) in run.h.iter().enumerate().take(4) {
+                                sample.h_each[port] = h[bin];
+                                sample.h_sum += h[bin];
+                            }
+                        }
+                    } else {
+                        fidelity.ignored.push(
+                            "The ports' flows come from the detailed model: the 3D grid's \
+                             openings did not match the ports one to one."
+                                .into(),
+                        );
+                    }
+                }
+                if let Some(error) = run.report.self_check_error {
+                    if error > 0.03 {
+                        let ports_note = if ports.is_empty() {
+                            ""
+                        } else {
+                            " With ports, part of the difference is the ports' end corrections, \
+                             which the quick model only estimates."
+                        };
+                        issues.push(Issue::warning(
+                            "fdtd_self_check",
+                            format!(
+                                "At low frequency the full 3D air load differs from the quick \
+                                 model by {:.1}% (it should be under 3%). The 3D grid holds \
+                                 {:.3} L of air and the design {:.3} L.{ports_note}",
+                                error * 100.0,
+                                run.report.grid_volume_m3 * 1000.0,
+                                run.report.net_volume_m3 * 1000.0
+                            ),
+                            "speaker.enclosure",
+                        ));
+                    }
+                }
+                if !run.report.decayed {
+                    issues.push(Issue::warning(
+                        "fdtd_not_decayed",
+                        "The full 3D run reached its time limit before the sound died away, so \
+                         values near sharp resonances are less certain.",
+                        "speaker.enclosure",
+                    ));
+                }
+                // The quick and detailed models' own limits apply only above the grid's limit.
+                fidelity.ignored.retain(|line| {
+                    ![
+                        "sealed-box model",
+                        "left out of the sealed box",
+                        "quick model ignores",
+                        "Bends are treated",
+                        "Several chambers: each is one compliance",
+                        "does not solve several chambers",
+                    ]
+                    .iter()
+                    .any(|phrase| line.contains(phrase))
+                });
+                fidelity.ignored.push(format!(
+                    "Full 3D at {:.0} mm cells up to {:.0} Hz; above that the detailed model.",
+                    run.report.dx_m * 1000.0,
+                    run.report.valid_up_to_hz
+                ));
+                fidelity
+                    .ignored
+                    .push("Full 3D: rigid walls and air without losses.".into());
+                fidelity
+                    .ignored
+                    .push(seatlock_fdtd::PEAK_HEIGHTS_NOT_MODELED.into());
+                fidelity.ignored.extend(run.notes);
+                fdtd_report = Some(run.report);
+            }
+            Err(err) => {
+                fidelity.enclosure = base.to_string();
+                issues.push(Issue::warning(
+                    "fdtd_failed",
+                    format!(
+                        "The full 3D model could not run: {err} These curves come from the \
+                         detailed model."
+                    ),
+                    "speaker.enclosure",
+                ));
+            }
+        }
+    }
     let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
     let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
         Ok(model) => model,
@@ -671,7 +828,150 @@ pub fn simulate(
         f6_hz,
         flatness_db,
         max_spl_metric_db,
+        fdtd: fdtd_report,
     }
+}
+
+struct Full3d {
+    report: FdtdReport,
+    /// `Z_ab` per frequency, where the grid resolves it.
+    z: Vec<Option<Complex64>>,
+    /// `H_k` per port and frequency (zero where the grid does not resolve it).
+    h: Vec<Vec<Complex64>>,
+    notes: Vec<String>,
+}
+
+/// Runs the full 3D model on the cabinet as the builder makes it (README section 5.5).
+fn full_3d_enclosure(
+    design: &DesignFile,
+    outer: &dyn OuterShape,
+    freqs: &[f64],
+    net_volume_m3: f64,
+    ports: &[PortSpec],
+    dx: f64,
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Full3d, String> {
+    if !(0.002..=0.05).contains(&dx) {
+        return Err(format!(
+            "a cell of {:.1} mm is outside the 2 to 50 mm this solver takes.",
+            dx * 1000.0
+        ));
+    }
+    let part = design
+        .speaker
+        .radiators
+        .iter()
+        .find(|part| part.kind == "cone" && driver_loads_box(part))
+        .ok_or("no driver opens into the cabinet's air.")?;
+    let mount_id = part
+        .fields
+        .get("mount")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let mount = design
+        .speaker
+        .enclosure
+        .mounts
+        .iter()
+        .find(|mount| mount.id == mount_id)
+        .ok_or("the driver's mount is missing.")?;
+    let pose = outer.mount_pose(&mount.surface, mount.at_m)?;
+    let wall = outer.panel_thickness_m(&mount.surface)?;
+    let piston = piston_radius_m(part);
+    let body_radius = mount_cutout(design, mount_id)
+        .map(|d| d / 2.0)
+        .unwrap_or(piston);
+    let (displacement, _, _) = cone_displacement_m3(&part.fields);
+    let body_length = if body_radius > 0.0 {
+        displacement / (std::f64::consts::PI * body_radius * body_radius)
+    } else {
+        0.0
+    };
+    let chamber_list = chambers::chambers(design)?;
+    let mut bores = Vec::new();
+    for bore in ports::bores(design) {
+        bores.push(bore?);
+    }
+    let built = voxels::cabinet_grid(
+        outer,
+        &chamber_list,
+        &bores,
+        &voxels::DriverPlacement {
+            pose,
+            wall_m: wall,
+            piston_radius_m: piston,
+            body_radius_m: body_radius,
+            body_length_m: body_length,
+        },
+        dx,
+    )?;
+    let mut grid = built.grid;
+    grid.true_volume_m3 = net_volume_m3;
+    let valid = C0 / (10.0 * dx);
+    let resolved: Vec<f64> = freqs.iter().copied().filter(|f| *f <= valid).collect();
+    let dt = grid.time_step_s();
+    let options = seatlock_fdtd::grid::Options {
+        max_steps: (1.0 / dt).ceil() as usize,
+        frequencies_hz: resolved.clone(),
+        progress_every: 250,
+    };
+    let response = seatlock_fdtd::grid::run(&grid, &options, progress);
+    if response.canceled {
+        return Err("it was canceled.".into());
+    }
+    let mut z = vec![None; freqs.len()];
+    let mut h = vec![vec![Complex64::new(0.0, 0.0); freqs.len()]; grid.openings.len()];
+    let mut z_quick = Vec::new();
+    let mut worst: Option<f64> = None;
+    let check_below = C0 / (50.0 * built.longest_m.max(dx));
+    let compliance = net_volume_m3 / (RHO0 * C0 * C0);
+    let mut cursor = 0usize;
+    for (bin, freq) in freqs.iter().enumerate() {
+        if *freq > valid {
+            continue;
+        }
+        let value = Complex64::new(response.z_real[cursor], response.z_imag[cursor]);
+        z[bin] = Some(value);
+        for (port, values) in h.iter_mut().enumerate() {
+            values[bin] =
+                Complex64::new(response.h_real[port][cursor], response.h_imag[port][cursor]);
+        }
+        cursor += 1;
+        let quick = if ports.is_empty() {
+            Complex64::new(0.0, -1.0 / (2.0 * std::f64::consts::PI * freq * compliance))
+        } else {
+            vented_sample(net_volume_m3, ports, *freq, false).z_ab
+        };
+        z_quick.push(quick);
+        if *freq < check_below {
+            let error = (value - quick).norm() / quick.norm();
+            worst = Some(worst.map_or(error, |w: f64| w.max(error)));
+        }
+    }
+    let report = FdtdReport {
+        dx_m: dx,
+        cells: grid.n[0] * grid.n[1] * grid.n[2],
+        steps: response.steps,
+        decayed: response.decayed,
+        elapsed_ms: response.elapsed_ms,
+        valid_up_to_hz: valid,
+        grid_volume_m3: built.inside_volume_m3,
+        net_volume_m3,
+        self_check_error: worst,
+        frequencies_hz: resolved,
+        z_ab: ComplexCurve {
+            re: response.z_real.clone(),
+            im: response.z_imag.clone(),
+        },
+        z_ab_quick: curve_from(&z_quick),
+        port_ids: built.port_ids,
+    };
+    Ok(Full3d {
+        report,
+        z,
+        h,
+        notes: built.notes,
+    })
 }
 
 fn simulation_clock() -> Option<Instant> {

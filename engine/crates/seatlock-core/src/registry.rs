@@ -113,6 +113,12 @@ pub trait OuterShape: Send + Sync {
         not_finished()
     }
 
+    /// True when the point is inside the cabinet's outer surface: its air, its walls of any
+    /// material, or its printed parts. The 3D solver treats every other point as outside air.
+    fn contains_cabinet(&self, _point_m: [f64; 3]) -> Result<bool, String> {
+        not_finished()
+    }
+
     /// The cabinet's inside air as a CSG tree. Partition walls between chambers are this air
     /// minus the chambers (README section 6.2).
     fn air_tree(&self) -> Result<Value, String> {

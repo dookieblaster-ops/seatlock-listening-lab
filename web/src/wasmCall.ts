@@ -69,12 +69,22 @@ export class WasmEngine {
   }
 }
 
-export async function loadWasmEngine(url: string): Promise<WasmEngine> {
+/** `onProgress(steps, maxSteps)` hears from long engine runs; returning false stops the run. */
+export async function loadWasmEngine(
+  url: string,
+  onProgress?: (steps: number, maxSteps: number) => boolean,
+): Promise<WasmEngine> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to load engine wasm: ${response.status}`);
   }
   const bytes = await response.arrayBuffer();
-  const { instance } = await WebAssembly.instantiate(bytes, {});
+  const imports = {
+    env: {
+      seatlock_progress: (steps: number, maxSteps: number) =>
+        onProgress?.(steps, maxSteps) === false ? 0 : 1,
+    },
+  };
+  const { instance } = await WebAssembly.instantiate(bytes, imports);
   return new WasmEngine(instance.exports);
 }

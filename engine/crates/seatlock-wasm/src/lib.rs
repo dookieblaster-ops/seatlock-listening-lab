@@ -4,8 +4,10 @@
 
 use seatlock_core::catalog;
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
-use seatlock_fdtd::{aperture_cells, run_grid};
-use seatlock_sim::{builtin, correction_plan_with, geometry_report, listen_package, simulate_json};
+use seatlock_sim::{
+    builtin, correction_plan_with, geometry_report, listen_package, simulate_json,
+    simulate_with_progress, SimulateRequest,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -30,6 +32,8 @@ struct CallRequest {
     impulse_len: Option<usize>,
     #[serde(default)]
     sample_rate_hz: Option<f64>,
+    #[serde(default)]
+    fdtd_dx_m: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -101,41 +105,59 @@ fn parse_request(request: &str) -> CallRequest {
         correction: None,
         impulse_len: None,
         sample_rate_hz: None,
+        fdtd_dx_m: None,
     })
 }
 
-fn fdtd_run(request: &str) -> Result<seatlock_fdtd::ImpedanceCurve, String> {
-    let value: serde_json::Value = serde_json::from_str(request).map_err(|err| err.to_string())?;
-    let depth = value
-        .get("depth_m")
-        .and_then(|v| v.as_f64())
-        .ok_or("missing depth_m")?;
-    let width = value
-        .get("width_m")
-        .and_then(|v| v.as_f64())
-        .ok_or("missing width_m")?;
-    let height = value
-        .get("height_m")
-        .and_then(|v| v.as_f64())
-        .ok_or("missing height_m")?;
-    let dx = value.get("dx").and_then(|v| v.as_f64()).unwrap_or(0.01);
-    let center_y = value
-        .get("center_y_m")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(width * 0.5);
-    let center_z = value
-        .get("center_z_m")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(height * 0.5);
-    let radius = value
-        .get("radius_m")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.02);
-    let nx = (depth / dx).round().max(1.0) as usize;
-    let ny = (width / dx).round().max(1.0) as usize;
-    let nz = (height / dx).round().max(1.0) as usize;
-    let source = aperture_cells(ny, nz, dx, [center_y, center_z], radius);
-    Ok(run_grid(nx, ny, nz, dx, &source, depth * width * height))
+#[cfg(target_arch = "wasm32")]
+#[link(wasm_import_module = "env")]
+extern "C" {
+    /// The page's progress hook: returns 0 to stop the run.
+    fn seatlock_progress(steps: u32, max_steps: u32) -> u32;
+}
+
+fn report_progress(steps: usize, max_steps: usize) -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        unsafe { seatlock_progress(steps as u32, max_steps as u32) != 0 }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (steps, max_steps);
+        true
+    }
+}
+
+/// The full 3D model for the design as the builder makes it (README section 5.5).
+fn full_3d(request: &str) -> String {
+    let parsed = parse_request(request);
+    let text = parsed.text.clone().unwrap_or_default();
+    let design: seatlock_core::DesignFile = match serde_json::from_str(&text) {
+        Ok(design) => design,
+        Err(error) => {
+            return serde_json::to_string(&ErrorReply {
+                error: error.to_string(),
+            })
+            .unwrap()
+        }
+    };
+    let defaults = SimulateRequest::default();
+    let sim_request = SimulateRequest {
+        enclosure: "fdtd".to_string(),
+        radiation: parsed.radiation.unwrap_or(defaults.radiation),
+        space: parsed.space.unwrap_or(defaults.space),
+        voltage_v: parsed.voltage_v.unwrap_or(defaults.voltage_v),
+        frequencies_hz: parsed.frequencies_hz,
+        revision: parsed.revision,
+        fdtd_dx_m: parsed.fdtd_dx_m,
+    };
+    let result = simulate_with_progress(&design, &sim_request, &builtin(), &mut report_progress);
+    serde_json::to_string(&result).unwrap_or_else(|error| {
+        serde_json::to_string(&ErrorReply {
+            error: error.to_string(),
+        })
+        .unwrap()
+    })
 }
 
 fn dispatch(method: &str, request: &str) -> String {
@@ -235,21 +257,7 @@ fn dispatch(method: &str, request: &str) -> String {
                 .unwrap(),
             }
         }
-        "fdtd.run" => match fdtd_run(request) {
-            Ok(curve) => serde_json::json!({
-                "frequencies_hz": curve.frequencies_hz,
-                "real": curve.real,
-                "imag": curve.imag,
-                "steps": curve.steps,
-                "elapsed_ms": curve.elapsed_ms,
-                "grid_volume_m3": curve.grid_volume_m3,
-                "true_volume_m3": curve.true_volume_m3,
-                "warning": curve.warning,
-                "ignored": curve.ignored,
-            })
-            .to_string(),
-            Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
-        },
+        "simulate.full3d" => full_3d(request),
         other => serde_json::to_string(&ErrorReply {
             error: format!("Unknown method: {other}"),
         })

@@ -101,6 +101,15 @@ impl OuterShape for BoxShape {
         Ok(outside && !BoxShape::contains_air(self, p))
     }
 
+    fn contains_cabinet(&self, p: [f64; 3]) -> Result<bool, String> {
+        Ok(p[0] > 0.0
+            && p[0] < self.width_m
+            && p[1] > 0.0
+            && p[1] < self.depth_m
+            && p[2] > 0.0
+            && p[2] < self.height_m)
+    }
+
     fn air_tree(&self) -> Result<Value, String> {
         let w = self.wall_m;
         Ok(csg_box(
@@ -343,6 +352,9 @@ impl OuterShape for SheetBox {
     fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
         Ok(self.shape.contains_air(point_m))
     }
+    fn contains_cabinet(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        OuterShape::contains_cabinet(&self.shape, point_m)
+    }
     fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
         Ok(self.shape.wall_m)
     }
@@ -576,6 +588,12 @@ impl OuterShape for TubeShape {
         let t = self.cap_thickness_m;
         let end = self.overall_length_m();
         Ok(radial < r && ((p[1] > 0.0 && p[1] < t) || (p[1] > end - t && p[1] < end)))
+    }
+
+    fn contains_cabinet(&self, p: [f64; 3]) -> Result<bool, String> {
+        let r = self.outside_diameter_m / 2.0;
+        let radial = ((p[0] - r).powi(2) + (p[2] - r).powi(2)).sqrt();
+        Ok(radial < r && p[1] > 0.0 && p[1] < self.overall_length_m())
     }
 
     fn air_tree(&self) -> Result<Value, String> {

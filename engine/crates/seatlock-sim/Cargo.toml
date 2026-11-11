@@ -11,6 +11,7 @@ seatlock-acoustics = { path = "../seatlock-acoustics" }
 seatlock-correct = { path = "../seatlock-correct" }
 seatlock-core = { path = "../seatlock-core" }
 seatlock-dsp = { path = "../seatlock-dsp" }
+seatlock-fdtd = { path = "../seatlock-fdtd" }
 seatlock-geom = { path = "../seatlock-geom" }
 serde.workspace = true
 serde_json.workspace = true

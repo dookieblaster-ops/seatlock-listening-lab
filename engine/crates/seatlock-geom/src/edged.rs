@@ -281,6 +281,10 @@ impl OuterShape for EdgedBox {
         ))
     }
 
+    fn contains_cabinet(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        Ok(inside(point_m, [0.0; 3], self.outer_size(), self.edge))
+    }
+
     fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
         Ok(self.outer.wall_m)
     }

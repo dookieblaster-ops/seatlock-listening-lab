@@ -1,0 +1,4 @@
+# WebAssembly SIMD (supported by every current Chrome and Firefox) lets the 3D solver's dense
+# loops run four cells at a time. README section 3's build command stays the same.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]

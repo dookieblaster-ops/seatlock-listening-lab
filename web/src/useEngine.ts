@@ -214,5 +214,22 @@ export type SimulateResult = {
   f6_hz: number;
   flatness_db: number;
   max_spl_metric_db: number;
+  fdtd?: FdtdReport | null;
   error?: string;
+};
+
+export type FdtdReport = {
+  dx_m: number;
+  cells: number;
+  steps: number;
+  decayed: boolean;
+  elapsed_ms: number;
+  valid_up_to_hz: number;
+  grid_volume_m3: number;
+  net_volume_m3: number;
+  self_check_error: number | null;
+  frequencies_hz: number[];
+  z_ab: { re: number[]; im: number[] };
+  z_ab_quick: { re: number[]; im: number[] };
+  port_ids: string[];
 };

@@ -296,3 +296,93 @@ fn inner_duct(
         to_outside: false,
     })
 }
+
+/// A straight duct's bore for the 3D solver's grid: the air inside it, and its printed tube.
+#[derive(Clone, Debug)]
+pub struct Bore {
+    pub id: String,
+    /// Inside end, and the unit direction toward the other end (outward for a port).
+    pub inner: [f64; 3],
+    pub dir: [f64; 3],
+    pub length: f64,
+    pub round: bool,
+    /// Section sizes at the inside end and the other end: `[diameter]` or `[width, height]`.
+    pub start: Vec<f64>,
+    pub end: Vec<f64>,
+    pub tube_m: f64,
+    pub to_outside: bool,
+}
+
+impl Bore {
+    /// Section size at distance `t` from the inside end, grown by `grow` on every side.
+    pub fn size_at(&self, t: f64, grow: f64) -> Vec<f64> {
+        let s = (t / self.length).clamp(0.0, 1.0);
+        self.start
+            .iter()
+            .zip(&self.end)
+            .map(|(a, b)| a + (b - a) * s + 2.0 * grow)
+            .collect()
+    }
+
+    /// Bore area at distance `t` from the inside end.
+    pub fn area_at(&self, t: f64) -> f64 {
+        let d = self.size_at(t, 0.0);
+        if self.round {
+            std::f64::consts::PI * d[0] * d[0] / 4.0
+        } else {
+            d[0] * d[1]
+        }
+    }
+
+    /// `(t, normalized distance from the axis)`: 1 at the section's edge, grown by `grow`.
+    pub fn locate(&self, p: [f64; 3], grow: f64) -> (f64, f64) {
+        let rel = sub(p, self.inner);
+        let t = dot(rel, self.dir);
+        let across = add_scaled(rel, self.dir, -t);
+        let size = self.size_at(t, grow);
+        if self.round {
+            (t, dot(across, across).sqrt() / (size[0] / 2.0))
+        } else {
+            let (right, up) = seatlock_geom::prism::face_axes(self.dir);
+            let u = dot(across, right).abs() / (size[0] / 2.0);
+            let v = dot(across, up).abs() / (size[1] / 2.0);
+            (t, u.max(v))
+        }
+    }
+
+    /// The largest size across the opening, for the exterior block.
+    pub fn width_m(&self) -> f64 {
+        self.start
+            .iter()
+            .chain(&self.end)
+            .fold(0.0_f64, |a, b| a.max(*b))
+    }
+
+    pub fn mouth_m(&self) -> [f64; 3] {
+        add_scaled(self.inner, self.dir, self.length)
+    }
+}
+
+/// Every duct as a straight bore, in design order. A duct the builder cannot print (a bend)
+/// is an error here too: the 3D solver needs its exact shape.
+pub fn bores(design: &DesignFile) -> Vec<Result<Bore, String>> {
+    let mut out = Vec::new();
+    for duct in &design.speaker.enclosure.ducts {
+        let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
+        let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
+        let to_outside = from == "outside" || to == "outside";
+        let built = straight(duct, from == "outside").map(|d| Bore {
+            id: d.id,
+            inner: d.inner,
+            dir: d.dir,
+            length: d.length,
+            round: d.section.round,
+            start: d.section.start,
+            end: d.section.end,
+            tube_m: d.section.tube_m,
+            to_outside,
+        });
+        out.push(built);
+    }
+    out
+}

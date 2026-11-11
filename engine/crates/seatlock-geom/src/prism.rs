@@ -380,6 +380,15 @@ impl OuterShape for Prism {
             && point_in_polygon(&self.inside, [a, b]))
     }
 
+    fn contains_cabinet(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        let [x, y, z] = point_m;
+        let (a, b, t) = match self.axis {
+            Axis::Y => (x, z, y),
+            Axis::X => (y, z, x),
+        };
+        Ok(t > 0.0 && t < self.length_m && point_in_polygon(&self.outline, [a, b]))
+    }
+
     fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
         Ok(self.wall_m)
     }
