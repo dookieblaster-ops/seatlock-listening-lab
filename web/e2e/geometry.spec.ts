@@ -80,3 +80,15 @@ test("a PVC tube prints two end caps and lists its pipe cut", async ({ page }) =
   await expect(page.getByTestId("cost-note")).toContainText("for a stereo pair");
   await checkExportedStl(page);
 });
+
+test("an MDF box prints nothing, lists its panels, and buys a whole sheet", async ({ page }) => {
+  await page.goto("/");
+  const example = path.resolve(import.meta.dirname, "../../designs/examples/mdf-box.seatlock.json");
+  await page.getByTestId("open-design-input").setInputFiles(example);
+  await expect(page.getByTestId("cost-note")).toContainText("for a stereo pair", { timeout: 20_000 });
+  await expect(page.getByTestId("cost-note")).toContainText("unconfirmed");
+  await expect(page.getByTestId("cut-list")).toContainText("sheet 1");
+  await expect(page.getByTestId("cut-list")).toContainText("front 1 250 x 160 mm");
+  await expect(page.getByRole("button", { name: "Export print file" })).toBeDisabled();
+  await expect(page.getByTestId("scores")).toBeVisible();
+});

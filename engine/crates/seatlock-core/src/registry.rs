@@ -84,6 +84,11 @@ pub trait OuterShape: Send + Sync {
         Vec::new()
     }
 
+    /// Flat panels cut from sheet stock for one cabinet: `(stock id, name, [a, b] in m)`.
+    fn stock_panels(&self) -> Vec<(String, String, [f64; 2])> {
+        Vec::new()
+    }
+
     /// Sizes `[x, y, z]` in m of the separately printed parts, for fitting them to the printer.
     fn printed_part_sizes_m(&self) -> Vec<[f64; 3]> {
         self.outer_size_m()

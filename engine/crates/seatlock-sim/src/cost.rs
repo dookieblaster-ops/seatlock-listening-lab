@@ -48,6 +48,8 @@ pub struct CabinetParts {
     pub print_solid_m3: Option<f64>,
     /// Stock cuts for one speaker: (stock id, cut length in m).
     pub stock_cuts: Vec<(String, f64)>,
+    /// Flat panels for one speaker: (stock id, name, [a, b] in m).
+    pub stock_panels: Vec<(String, String, [f64; 2])>,
     pub problems: Vec<String>,
 }
 
@@ -118,6 +120,68 @@ fn amp_channels(id: &str, problems: &mut Vec<String>) -> Option<u32> {
             None
         }
     }
+}
+
+/// Lays panels `(label, long, short)` onto sheets `long_m` x `short_m` in rows across the long
+/// side, tallest first, rotating a panel when that is the only way it fits. Saw kerf is ignored.
+#[allow(clippy::type_complexity)]
+fn pack_panels(
+    panels: &[(String, f64, f64)],
+    long_m: f64,
+    short_m: f64,
+) -> Result<Vec<Vec<(String, f64, f64)>>, String> {
+    // Each sheet: rows of (height, used length), and the panels placed.
+    struct Sheet {
+        rows: Vec<(f64, f64)>,
+        used_height: f64,
+        placed: Vec<(String, f64, f64)>,
+    }
+    let mut order: Vec<&(String, f64, f64)> = panels.iter().collect();
+    order.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    let mut sheets: Vec<Sheet> = Vec::new();
+    for panel in order {
+        let (label, a, b) = panel;
+        // Lay the panel with its long side along the sheet's long side if it fits; otherwise turned.
+        let (along, across) = if *a <= long_m + 1e-9 && *b <= short_m + 1e-9 {
+            (*a, *b)
+        } else if *b <= long_m + 1e-9 && *a <= short_m + 1e-9 {
+            (*b, *a)
+        } else {
+            return Err(format!(
+                "A {:.0} x {:.0} mm panel is larger than the sheet sold",
+                a * 1000.0,
+                b * 1000.0
+            ));
+        };
+        let mut done = false;
+        for sheet in sheets.iter_mut() {
+            if let Some(row) = sheet
+                .rows
+                .iter_mut()
+                .find(|(height, used)| across <= *height + 1e-9 && used + along <= long_m + 1e-9)
+            {
+                row.1 += along;
+                sheet.placed.push((label.clone(), *a, *b));
+                done = true;
+                break;
+            }
+            if sheet.used_height + across <= short_m + 1e-9 {
+                sheet.rows.push((across, along));
+                sheet.used_height += across;
+                sheet.placed.push((label.clone(), *a, *b));
+                done = true;
+                break;
+            }
+        }
+        if !done {
+            sheets.push(Sheet {
+                rows: vec![(across, along)],
+                used_height: across,
+                placed: vec![(label.clone(), *a, *b)],
+            });
+        }
+    }
+    Ok(sheets.into_iter().map(|sheet| sheet.placed).collect())
 }
 
 pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
@@ -252,6 +316,69 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
             read_on,
             via,
         ));
+    }
+
+    // Sheet stock: panels laid onto whole sheets in rows, largest first.
+    let mut sheet_ids: Vec<String> = Vec::new();
+    for (id, _, _) in &parts.stock_panels {
+        if !sheet_ids.contains(id) {
+            sheet_ids.push(id.clone());
+        }
+    }
+    for id in &sheet_ids {
+        let Some(record) = catalog::stock(id) else {
+            problems.push(format!("Stock part {id} is not in the catalog."));
+            continue;
+        };
+        let name = name_of(&record, id);
+        let sheet = (
+            record.get("width_m").and_then(Value::as_f64),
+            record.get("length_m").and_then(Value::as_f64),
+        );
+        let (Some(sheet_w), Some(sheet_l)) = sheet else {
+            problems.push(format!("{name} has no sheet size in the catalog."));
+            continue;
+        };
+        let mut panels: Vec<(String, f64, f64)> = Vec::new();
+        for speaker in 0..speakers {
+            for (other, panel, [a, b]) in &parts.stock_panels {
+                if other == id {
+                    let label = if speakers > 1 {
+                        format!("{panel} {}", speaker + 1)
+                    } else {
+                        panel.clone()
+                    };
+                    panels.push((label, a.max(*b), a.min(*b)));
+                }
+            }
+        }
+        match pack_panels(&panels, sheet_w.max(sheet_l), sheet_w.min(sheet_l)) {
+            Ok(sheets) => {
+                for (index, sheet) in sheets.iter().enumerate() {
+                    let listed: Vec<String> = sheet
+                        .iter()
+                        .map(|(label, a, b)| {
+                            format!("{label} {:.0} x {:.0} mm", a * 1000.0, b * 1000.0)
+                        })
+                        .collect();
+                    cut_list.push(format!(
+                        "{name}, sheet {}: {}",
+                        index + 1,
+                        listed.join("; ")
+                    ));
+                }
+                let (amount, read_on, via) = price_of(&record);
+                lines.push(line(
+                    name,
+                    sheets.len() as f64,
+                    "sheet",
+                    amount,
+                    read_on,
+                    via,
+                ));
+            }
+            Err(err) => problems.push(format!("{err} ({name})")),
+        }
     }
 
     // Extras, per speaker.

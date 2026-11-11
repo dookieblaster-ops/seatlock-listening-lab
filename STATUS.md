@@ -31,7 +31,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. The rest of Level 2 M3: `sheet_box`, the other four shapes, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Then M4.
+1. The rest of Level 2 M3: the other four shapes, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Then M4.
 2. The owner runs `./start.sh` once on the laptop. This closes the last Level 0 item. On 2026-11-10 the owner started: the repository is cloned, Rust and Node.js 22 are installed, and the first build had not yet finished.
 3. Owner request, 2026-11-10, approved and added to README Level 3 track D: show the 3D pressure field inside the cabinet (a pulse in slow motion and standing-wave patterns at a chosen frequency), and a bass-only 3D wave model of the room (below about 200 to 300 Hz). Both are Level 3; the first comes with the internal-geometry editor, the second beside the `simple` room estimate.
 
@@ -45,6 +45,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-10, Claude, Assignment 10 items 3 and 4. Fail-first: a tube under `baffle` gave -3.58 dB at 200 Hz against -5.62 dB expected for its 0.1143 m round end cap, because the simulator used an invented 0.2 x 0.3 m rectangle; a `rounded` box was simulated as a plain box. Both pass now. The simulator, the geometry report, the voxel volume, and the print solid all go through the shape contract, and the box's left and top mounts are placed the same way in the simulator as in the print file (they differed before). CHK-EXT-1's test shape implements the whole contract and still changes no file outside its crate. `tools/cloud-check.sh` passed: 68 engine tests and 8 browser tests, including the `pvc-tube` print file (CHK-GEO-1 and CHK-GEO-2). CHK-E2E-1's stored scores did not move.
 - 2026-11-10, exterior block size (README section 5.5), release run: doubling the block from 3 to 6 opening widths leaves the resonance at 65.88 Hz, and `H` within 0.5 % at 9 Hz and 1.1 % at 20 Hz, but `Z_ab` 5 % away from the resonance changes by up to 34 %, and by 23 % at 9 Hz. Cause: both runs stop at the 24000-step cap (0.38 s), while the lossless port resonance rings with a time constant of about 2 s, so the cut-off ring leaks into nearby values. The test keeps its strict assertions and is marked as a known failure until the 3D model has losses (Level 3) or a decay window is validated. CHK-FDTD-3 itself still passes.
 - 2026-11-10: the 3D solver crate is optimized in test builds; CHK-FDTD-3 now takes 10.7 s instead of about 92 s.
+- 2026-11-10, Claude: `sheet_box` (README section 6.2). A box cut from sheet stock, butt-jointed: front and back full size, sides between them, top and bottom between the sides; the wall is the sheet's thickness; nothing is printed and print export is off. Panels are laid onto whole sheets in rows, tallest first (saw kerf ignored). Fail-first: the new CHK-COST-1 sheet-box test failed because the kind did not exist. A stereo pair of sealed-test-sized boxes in 3/4 in. MDF needs one $49.98 sheet (unconfirmed price). New example `mdf-box`: TCP115-4 in that MDF box, to compare with `pvc-tube`. `tools/cloud-check.sh` passed: 69 engine tests and 9 browser tests.
 - Never yet run on the owner's laptop: `./start.sh` and `./check.sh`.
 
 ## Decisions log

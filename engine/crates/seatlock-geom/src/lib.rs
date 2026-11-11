@@ -276,6 +276,105 @@ pub fn register(registry: &mut Registry) {
     registry.register_outer("sloped", parse_sloped);
     registry.register_outer("prism", parse_prism);
     registry.register_outer("tube", parse_tube);
+    registry.register_outer("sheet_box", parse_sheet_box);
+}
+
+/// A box cut from sheet stock (README section 6.2): butt-jointed panels, nothing printed.
+/// The front and back are full size; the sides fit between them; the top and bottom fit
+/// between the sides. The wall is the sheet's thickness.
+pub struct SheetBox {
+    pub shape: BoxShape,
+    pub stock_id: String,
+    pub stock_name: String,
+}
+
+impl OuterShape for SheetBox {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        self.shape.interior_volume_m3()
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.shape.width_m
+    }
+    fn outer_size_m(&self) -> Result<[f64; 3], String> {
+        OuterShape::outer_size_m(&self.shape)
+    }
+    fn surfaces(&self) -> Vec<String> {
+        OuterShape::surfaces(&self.shape)
+    }
+    fn mount_pose(&self, surface: &str, at_m: [f64; 2]) -> Result<MountPose, String> {
+        self.shape.mount_pose(surface, at_m)
+    }
+    fn surface_facing(&self, outward: [f64; 3]) -> Option<String> {
+        Some(box_face_facing(outward).to_string())
+    }
+    fn surface_outline(&self, surface: &str) -> Result<Vec<[f64; 3]>, String> {
+        OuterShape::surface_outline(&self.shape, surface)
+    }
+    fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        Ok(self.shape.contains_air(point_m))
+    }
+    fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
+        Ok(self.shape.wall_m)
+    }
+    fn print_solid_m3(&self, _cutouts: &[(String, f64)]) -> Result<f64, String> {
+        Ok(0.0)
+    }
+    fn printed_part_sizes_m(&self) -> Vec<[f64; 3]> {
+        Vec::new()
+    }
+    fn stock_panels(&self) -> Vec<(String, String, [f64; 2])> {
+        let BoxShape {
+            width_m: w,
+            height_m: h,
+            depth_m: d,
+            wall_m: t,
+        } = self.shape;
+        let id = &self.stock_id;
+        [
+            ("front", [w, h]),
+            ("back", [w, h]),
+            ("left side", [d - 2.0 * t, h]),
+            ("right side", [d - 2.0 * t, h]),
+            ("top", [w - 2.0 * t, d - 2.0 * t]),
+            ("bottom", [w - 2.0 * t, d - 2.0 * t]),
+        ]
+        .into_iter()
+        .map(|(name, size)| (id.clone(), name.to_string(), size))
+        .collect()
+    }
+    fn notes(&self) -> Vec<String> {
+        vec![format!(
+            "Cut from {}: nothing is printed. Driver holes are cut with a hole saw or jigsaw.",
+            self.stock_name
+        )]
+    }
+    fn print_tree(&self, _cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
+        Ok(csg_union(Vec::new()))
+    }
+}
+
+fn parse_sheet_box(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
+    let stock_id = fields.get("stock_id").and_then(Value::as_str).unwrap_or("");
+    let record = seatlock_core::catalog::stock(stock_id)
+        .ok_or_else(|| format!("Sheet stock {stock_id} is not in the catalog."))?;
+    let wall_m = record
+        .get("thickness_m")
+        .and_then(Value::as_f64)
+        .ok_or("The sheet's record has no thickness.")?;
+    let name = record
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or(stock_id);
+    Ok(Box::new(SheetBox {
+        shape: BoxShape {
+            width_m: required_f64(fields, "width_m")?,
+            height_m: required_f64(fields, "height_m")?,
+            depth_m: required_f64(fields, "depth_m")?,
+            wall_m,
+        },
+        stock_id: stock_id.to_string(),
+        stock_name: name.to_string(),
+    }))
 }
 
 struct RoundedBox {

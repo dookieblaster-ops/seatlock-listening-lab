@@ -1102,3 +1102,44 @@ fn an_unfinished_shape_says_so_and_gives_no_curves() {
         result.issues
     );
 }
+
+#[test]
+fn chk_cost_1_sheet_box_hand_calculation() {
+    // sealed-test's outside size cut from 3/4 in. MDF: nothing printed, a cut list, whole sheets.
+    // Per speaker: front and back 0.16 x 0.25; left and right (0.18 - 2t) x 0.25;
+    // top and bottom (0.16 - 2t) x (0.18 - 2t), with t = 0.01905 m.
+    // A stereo pair's twelve panels fit one 1.2192 x 2.4384 m sheet: 1 x $49.98.
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    *value.pointer_mut("/speaker/enclosure/outer").unwrap() = serde_json::json!({
+        "kind": "sheet_box", "stock_id": "ultrastock-mdf-3-4",
+        "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18
+    });
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let result = simulate(&design, &SimulateRequest::default(), &builtin());
+    assert!(!result.radiators.is_empty(), "{:?}", result.issues);
+    let t = 0.01905;
+    let air = (0.16 - 2.0 * t) * (0.25 - 2.0 * t) * (0.18 - 2.0 * t);
+    assert!((result.interior_volume_m3.unwrap() - air).abs() < 1e-9);
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert_eq!(report.solid_volume_m3, 0.0);
+    assert_eq!(report.cost.print_mass_kg, 0.0);
+    let sheet = report
+        .cost
+        .lines
+        .iter()
+        .find(|line| line.item.contains("MDF"))
+        .unwrap();
+    assert_eq!(sheet.quantity, 1.0);
+    assert_eq!(sheet.total_usd, Some(49.98));
+    assert!(
+        sheet.unconfirmed,
+        "the MDF price came from a category listing"
+    );
+    let panels: usize = report
+        .cost
+        .cut_list
+        .iter()
+        .map(|line| line.matches(" mm").count())
+        .sum();
+    assert_eq!(panels, 12, "{:?}", report.cost.cut_list);
+}

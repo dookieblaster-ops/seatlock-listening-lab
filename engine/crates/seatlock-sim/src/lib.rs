@@ -1187,14 +1187,15 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         &CabinetParts {
             print_solid_m3: Some(solid),
             stock_cuts: shape.stock_cuts(),
+            stock_panels: shape.stock_panels(),
             problems: Vec::new(),
         },
     );
-    if !cost.problems.is_empty() {
+    if !cost.problems.is_empty() || solid <= 0.0 {
         can_export = false;
     }
     let mut print_note = print_split_note(&shape.printed_part_sizes_m());
-    if !shape.stock_cuts().is_empty() {
+    if !shape.stock_cuts().is_empty() || !shape.stock_panels().is_empty() {
         print_note.push_str(" Stock parts are cut, not printed; see the cut list.");
     }
     Ok(GeometryReport {
@@ -1228,6 +1229,7 @@ pub fn design_cost(design: &DesignFile) -> CostReport {
             &CabinetParts {
                 print_solid_m3: None,
                 stock_cuts: Vec::new(),
+                stock_panels: Vec::new(),
                 problems: vec![err],
             },
         ),
@@ -1261,6 +1263,9 @@ fn printer_volume() -> (String, [f64; 3]) {
 }
 
 fn print_split_note(parts: &[[f64; 3]]) -> String {
+    if parts.is_empty() {
+        return "Nothing is printed.".to_string();
+    }
     let (name, [bx, by, bz]) = printer_volume();
     if bx <= 0.0 || by <= 0.0 || bz <= 0.0 {
         return "No printer is in the catalog, so the print is not split.".to_string();
