@@ -1094,7 +1094,10 @@ fn an_unfinished_shape_says_so_and_gives_no_curves() {
     let result = simulate(&design, &SimulateRequest::default(), &builtin());
     assert!(result.radiators.is_empty());
     assert!(
-        result.issues.iter().any(|issue| issue.message.contains("not finished yet")),
+        result
+            .issues
+            .iter()
+            .any(|issue| issue.message.contains("not finished yet")),
         "{:?}",
         result.issues
     );

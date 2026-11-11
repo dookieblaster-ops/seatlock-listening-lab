@@ -85,6 +85,85 @@ pub fn rectangular_outline(width_m: f64, height_m: f64, y_m: f64, count: usize) 
         .collect()
 }
 
+/// Length of a closed outline through `corners`.
+pub fn outline_perimeter_m(corners: &[[f64; 3]]) -> f64 {
+    (0..corners.len())
+        .map(|i| distance(corners[i], corners[(i + 1) % corners.len()]))
+        .sum()
+}
+
+/// Any closed outline, given by its corners in order, spaced evenly into `count` edge elements
+/// (at least 64). A curve is passed as many short straight edges.
+pub fn polygon_outline(corners: &[[f64; 3]], count: usize) -> Vec<EdgePoint> {
+    let count = count.max(64);
+    if corners.len() < 2 {
+        return Vec::new();
+    }
+    let perimeter = outline_perimeter_m(corners);
+    let mut points = Vec::with_capacity(count);
+    let mut edge = 0;
+    let mut start_of_edge = 0.0;
+    for index in 0..count {
+        let along = perimeter * index as f64 / count as f64;
+        loop {
+            let a = corners[edge];
+            let b = corners[(edge + 1) % corners.len()];
+            let length = distance(a, b);
+            if along <= start_of_edge + length || edge + 1 == corners.len() {
+                let t = if length > 0.0 {
+                    ((along - start_of_edge) / length).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                points.push(EdgePoint {
+                    position_m: [
+                        a[0] + (b[0] - a[0]) * t,
+                        a[1] + (b[1] - a[1]) * t,
+                        a[2] + (b[2] - a[2]) * t,
+                    ],
+                });
+                break;
+            }
+            start_of_edge += length;
+            edge += 1;
+        }
+    }
+    points
+}
+
+/// Edge elements for an outline of this perimeter at `freq_hz`: at least 64, and at least 4 per
+/// wavelength.
+pub fn outline_count_for_perimeter(perimeter_m: f64, freq_hz: f64) -> usize {
+    let wavelength = C0 / freq_hz.max(1.0);
+    ((4.0 * perimeter_m.max(0.0) / wavelength).ceil() as usize).max(64)
+}
+
+/// Where on-axis edge diffraction is 3 dB below half space, for a source at `source_m` on the
+/// surface with these corners, heard straight out along `outward`.
+pub fn baffle_step_hz_for_outline(
+    corners: &[[f64; 3]],
+    source_m: [f64; 3],
+    outward: [f64; 3],
+) -> f64 {
+    let outline = polygon_outline(corners, 128);
+    let listener = [
+        source_m[0] + outward[0],
+        source_m[1] + outward[1],
+        source_m[2] + outward[2],
+    ];
+    let target = 10_f64.powf(-3.0 / 20.0);
+    let mut previous = 30.0;
+    for step in 0..60 {
+        let freq = 30.0 * 1.1_f64.powi(step);
+        let level = diffraction_factor(source_m, listener, &outline, freq).norm();
+        if level >= target {
+            return previous;
+        }
+        previous = freq;
+    }
+    previous
+}
+
 /// How many edge elements a baffle needs at `freq_hz`: at least 64, and at least 4 per wavelength.
 pub fn outline_count(width_m: f64, height_m: f64, freq_hz: f64) -> usize {
     let perimeter = 2.0 * (width_m.max(0.0) + height_m.max(0.0));

@@ -84,6 +84,18 @@ pub trait OuterShape: Send + Sync {
         Vec::new()
     }
 
+    /// Sizes `[x, y, z]` in m of the separately printed parts, for fitting them to the printer.
+    fn printed_part_sizes_m(&self) -> Vec<[f64; 3]> {
+        self.outer_size_m()
+            .map(|size| vec![size])
+            .unwrap_or_default()
+    }
+
+    /// Plain-language notes about numbers the shape had to take from the user, and similar.
+    fn notes(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// The printed parts as a constructive solid geometry tree in JSON, with each cut-out
     /// given as `(pose, diameter in m)`. The page builds it with manifold-3d (README 6.3).
     fn print_tree(&self, _cutouts: &[(MountPose, f64)]) -> Result<Value, String> {

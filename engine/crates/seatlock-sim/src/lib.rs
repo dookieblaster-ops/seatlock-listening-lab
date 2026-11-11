@@ -4,9 +4,9 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
-    baffle_source_pressure, baffle_step_hz, blend_measured_curve, cone_displacement_m3,
-    effective_port_length_m, outline_count, pressure_from_volume_velocity, rectangular_outline,
-    solve, spl_db, vented_sample, AcousticNode, EdgePoint, PortSpec,
+    baffle_source_pressure, baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3,
+    effective_port_length_m, outline_count_for_perimeter, outline_perimeter_m, polygon_outline,
+    pressure_from_volume_velocity, solve, spl_db, vented_sample, AcousticNode, EdgePoint, PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::C0;
@@ -240,6 +240,28 @@ pub fn simulate(
     }
     let volume = (gross - displacement).max(0.0);
     let baffle = outer.baffle_width_m();
+    if let Err(err) = outer.outer_size_m() {
+        issues.push(Issue::error(
+            "unsupported_kind",
+            shape_message(&design.speaker.enclosure.outer.kind, &err),
+            "speaker.enclosure.outer",
+        ));
+        return fail(issues, fidelity);
+    }
+    for mount in &design.speaker.enclosure.mounts {
+        if let Err(err) = outer.mount_pose(&mount.surface, mount.at_m) {
+            issues.push(Issue::error(
+                "bad_mount",
+                format!(
+                    "Mount {}: {}",
+                    mount.id,
+                    shape_message(&design.speaker.enclosure.outer.kind, &err)
+                ),
+                "speaker.enclosure.mounts",
+            ));
+            return fail(issues, fidelity);
+        }
+    }
 
     let enclosure = match registry.create_enclosure(&request.enclosure, &Map::new()) {
         Ok(model) => model,
@@ -416,6 +438,7 @@ pub fn simulate(
         let mut pressure_1v = if request.radiation == "baffle" {
             baffle_pressure(
                 design,
+                outer.as_ref(),
                 part,
                 &sources,
                 &freqs,
@@ -653,15 +676,13 @@ fn highest_crossover(design: &DesignFile) -> Option<(usize, f64)> {
     best
 }
 
-fn outer_field(design: &DesignFile, key: &str, fallback: f64) -> f64 {
-    design
-        .speaker
-        .enclosure
-        .outer
-        .fields
-        .get(key)
-        .and_then(Value::as_f64)
-        .unwrap_or(fallback)
+/// The plain-language message for a shape that cannot answer part of its contract.
+fn shape_message(kind: &str, err: &str) -> String {
+    if err == seatlock_core::registry::SHAPE_NOT_FINISHED {
+        format!("The {kind} cabinet shape is not finished yet, so this design is left out of the results.")
+    } else {
+        err.to_string()
+    }
 }
 
 struct PlacedSource {
@@ -673,6 +694,7 @@ struct PlacedSource {
 #[allow(clippy::too_many_arguments)]
 fn baffle_pressure(
     design: &DesignFile,
+    shape: &dyn OuterShape,
     part: &KindPart,
     sources: &[Vec<Complex64>],
     freqs: &[f64],
@@ -681,21 +703,30 @@ fn baffle_pressure(
     baffle_width_m: f64,
     fidelity: &mut Fidelity,
 ) -> Vec<Complex64> {
-    let width = outer_field(design, "width_m", 0.2);
-    let height = outer_field(design, "height_m", 0.3);
-    let depth = outer_field(design, "depth_m", 0.2);
-    let listener = [width / 2.0, -distance_m, height / 2.0];
-    let highest = freqs.iter().copied().fold(1000.0_f64, f64::max);
-    let count = outline_count(width, height, highest);
-    let front = rectangular_outline(width, height, 0.0, count);
-    let back = rectangular_outline(width, height, depth, count);
-    let placed = placed_sources(design, part, sources.len());
     let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
+    let Ok([size_x, _, size_z]) = shape.outer_size_m() else {
+        return total;
+    };
+    let listener = [size_x / 2.0, -distance_m, size_z / 2.0];
+    let highest = freqs.iter().copied().fold(1000.0_f64, f64::max);
+    let placed = placed_sources(design, shape, part, sources.len());
+    let mut outlines: Vec<(String, Vec<EdgePoint>)> = Vec::new();
     let mut fell_back = false;
     for (index, velocity) in sources.iter().enumerate() {
         let place = placed.get(index);
-        let faces = place.is_some_and(|place| faces_listener(place, listener));
-        if !faces {
+        let surface = place
+            .filter(|place| faces_listener(place, listener))
+            .and_then(|place| shape.surface_facing(place.outward));
+        let outline = surface.and_then(|surface| {
+            if let Some(found) = outlines.iter().position(|(name, _)| *name == surface) {
+                return Some(found);
+            }
+            let corners = shape.surface_outline(&surface).ok()?;
+            let count = outline_count_for_perimeter(outline_perimeter_m(&corners), highest);
+            outlines.push((surface, polygon_outline(&corners, count)));
+            Some(outlines.len() - 1)
+        });
+        let (Some(place), Some(outline)) = (place, outline) else {
             fell_back = true;
             for (bin, freq) in freqs.iter().enumerate() {
                 total[bin] += pressure_from_volume_velocity(
@@ -707,13 +738,8 @@ fn baffle_pressure(
                 );
             }
             continue;
-        }
-        let place = &placed[index];
-        let outline: &[EdgePoint] = if place.outward[1] > 0.5 {
-            &back
-        } else {
-            &front
         };
+        let edge = &outlines[outline].1;
         for (bin, freq) in freqs.iter().enumerate() {
             total[bin] += baffle_source_pressure(
                 velocity[bin],
@@ -722,7 +748,7 @@ fn baffle_pressure(
                 listener,
                 place.outward,
                 place.radius_m,
-                outline,
+                edge,
             );
         }
     }
@@ -739,16 +765,23 @@ fn baffle_pressure(
     total
 }
 
-fn placed_sources(design: &DesignFile, part: &KindPart, count: usize) -> Vec<PlacedSource> {
+fn placed_sources(
+    design: &DesignFile,
+    shape: &dyn OuterShape,
+    part: &KindPart,
+    count: usize,
+) -> Vec<PlacedSource> {
     let mut placed = Vec::new();
-    let (position, outward) = mount_pose(design, part);
+    let Some(pose) = mount_pose(design, shape, part) else {
+        return placed;
+    };
     placed.push(PlacedSource {
-        position,
-        outward,
+        position: pose.position_m,
+        outward: pose.outward,
         radius_m: piston_radius_m(part),
     });
     if count > 1 {
-        for port in port_poses(design) {
+        for port in port_poses(design, shape) {
             placed.push(port);
             if placed.len() == count {
                 break;
@@ -766,36 +799,25 @@ fn faces_listener(place: &PlacedSource, listener: [f64; 3]) -> bool {
     (dx * place.outward[0] + dy * place.outward[1] + dz * place.outward[2]) / range > 0.0
 }
 
-fn mount_pose(design: &DesignFile, part: &KindPart) -> ([f64; 3], [f64; 3]) {
-    let width = outer_field(design, "width_m", 0.2);
-    let height = outer_field(design, "height_m", 0.3);
-    let depth = outer_field(design, "depth_m", 0.2);
-    let mount_id = part
-        .fields
-        .get("mount")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+/// The radiator's mount position and direction, from the shape. `None` when the radiator
+/// names no mount, or the shape cannot place it.
+fn mount_pose(
+    design: &DesignFile,
+    shape: &dyn OuterShape,
+    part: &KindPart,
+) -> Option<seatlock_core::registry::MountPose> {
+    let mount_id = part.fields.get("mount").and_then(Value::as_str)?;
     let mount = design
         .speaker
         .enclosure
         .mounts
         .iter()
-        .find(|mount| mount.id == mount_id);
-    let (u, v, surface) = mount
-        .map(|mount| (mount.at_m[0], mount.at_m[1], mount.surface.as_str()))
-        .unwrap_or((width / 2.0, height / 2.0, "front"));
-    match surface {
-        "back" => ([u, depth, v], [0.0, 1.0, 0.0]),
-        "left" => ([0.0, u, v], [-1.0, 0.0, 0.0]),
-        "right" => ([width, u, v], [1.0, 0.0, 0.0]),
-        "top" => ([u, v, height], [0.0, 0.0, 1.0]),
-        "bottom" => ([u, v, 0.0], [0.0, 0.0, -1.0]),
-        _ => ([u, 0.0, v], [0.0, -1.0, 0.0]),
-    }
+        .find(|mount| mount.id == mount_id)?;
+    shape.mount_pose(&mount.surface, mount.at_m).ok()
 }
 
-fn port_poses(design: &DesignFile) -> Vec<PlacedSource> {
-    let depth = outer_field(design, "depth_m", 0.2);
+fn port_poses(design: &DesignFile, shape: &dyn OuterShape) -> Vec<PlacedSource> {
+    let depth = shape.outer_size_m().map(|size| size[1]).unwrap_or(0.0);
     let mut poses = Vec::new();
     for duct in &design.speaker.enclosure.ducts {
         let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
@@ -1102,60 +1124,30 @@ pub struct GeometryReport {
     pub cut_list: Vec<String>,
     pub print_note: String,
     pub user_wall: bool,
+    /// The printed parts as a CSG tree for manifold-3d on the page (README section 6.3).
+    pub print_tree: Value,
     pub cost: CostReport,
 }
 
 pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let outer = &design.speaker.enclosure.outer;
-    if outer.kind == "tube" {
-        return tube_report(design);
-    }
-    if outer.kind != "box" {
-        return Err(format!("geometry report needs a box, found {}", outer.kind));
-    }
-    let shape = seatlock_geom::BoxShape {
-        width_m: outer
-            .fields
-            .get("width_m")
-            .and_then(|v| v.as_f64())
-            .ok_or("missing width_m")?,
-        height_m: outer
-            .fields
-            .get("height_m")
-            .and_then(|v| v.as_f64())
-            .ok_or("missing height_m")?,
-        depth_m: outer
-            .fields
-            .get("depth_m")
-            .and_then(|v| v.as_f64())
-            .ok_or("missing depth_m")?,
-        wall_m: outer
-            .fields
-            .get("wall_m")
-            .and_then(|v| v.as_f64())
-            .ok_or("missing wall_m")?,
-    };
-    let mut cutout_area = 0.0;
+    let registry = builtin();
+    let shape = registry.create_outer(&outer.kind, &outer.fields)?;
+    let kind = outer.kind.as_str();
+    let [width_m, depth_m, height_m] = shape
+        .outer_size_m()
+        .map_err(|err| shape_message(kind, &err))?;
+    let mut warnings = shape.notes();
+    let user_wall = warnings.iter().any(|line| line.contains("user's own"));
     let mut mounts = Vec::new();
-    let mut warnings = Vec::new();
+    let mut cut_areas = Vec::new();
+    let mut holes = Vec::new();
     let mut can_export = true;
     for mount in &design.speaker.enclosure.mounts {
-        let pose = shape.mount_pose(&mount.surface, mount.at_m)?;
-        let cutout = design
-            .speaker
-            .radiators
-            .iter()
-            .find(|radiator| {
-                radiator.fields.get("mount").and_then(|v| v.as_str()) == Some(mount.id.as_str())
-            })
-            .and_then(|radiator| radiator.fields.get("driver_id").and_then(|v| v.as_str()))
-            .and_then(catalog::driver)
-            .and_then(|driver| {
-                driver
-                    .pointer("/mounting/cutout_diameter_m")
-                    .and_then(|v| v.as_f64())
-            });
-        let cutout = match cutout {
+        let pose = shape
+            .mount_pose(&mount.surface, mount.at_m)
+            .map_err(|err| format!("Mount {}: {}", mount.id, shape_message(kind, &err)))?;
+        let cutout = match mount_cutout(design, &mount.id) {
             Some(value) if value > 0.0 => value,
             _ => {
                 warnings.push(
@@ -1166,7 +1158,13 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
                 0.0
             }
         };
-        cutout_area += std::f64::consts::PI * (cutout * 0.5).powi(2);
+        if cutout > 0.0 {
+            cut_areas.push((
+                mount.surface.clone(),
+                std::f64::consts::PI * (cutout * 0.5).powi(2),
+            ));
+            holes.push((pose, cutout));
+        }
         mounts.push(MountView {
             surface: mount.surface.clone(),
             at_m: mount.at_m,
@@ -1175,35 +1173,47 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
             cutout_diameter_m: cutout,
         });
     }
-    let solid = shape.solid_volume_m3(cutout_area)?;
+    let solid = shape
+        .print_solid_m3(&cut_areas)
+        .map_err(|err| shape_message(kind, &err))?;
+    let print_tree = shape
+        .print_tree(&holes)
+        .map_err(|err| shape_message(kind, &err))?;
     let density = catalog::material(&design.build.material)
-        .and_then(|record| record.get("density_kg_m3").and_then(|v| v.as_f64()))
+        .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64))
         .unwrap_or(0.0);
-    let print_mass_kg = solid * density * design.build.infill_fraction;
     let cost = cost::report(
         design,
         &CabinetParts {
             print_solid_m3: Some(solid),
-            stock_cuts: Vec::new(),
+            stock_cuts: shape.stock_cuts(),
             problems: Vec::new(),
         },
     );
+    if !cost.problems.is_empty() {
+        can_export = false;
+    }
+    let mut print_note = print_split_note(&shape.printed_part_sizes_m());
+    if !shape.stock_cuts().is_empty() {
+        print_note.push_str(" Stock parts are cut, not printed; see the cut list.");
+    }
     Ok(GeometryReport {
-        width_m: shape.width_m,
-        height_m: shape.height_m,
-        depth_m: shape.depth_m,
-        wall_m: shape.wall_m,
+        width_m,
+        height_m,
+        depth_m,
+        wall_m: shape.panel_thickness_m("front").unwrap_or(0.0),
         interior_volume_m3: shape.interior_volume_m3()?,
         solid_volume_m3: solid,
-        voxel_air_volume_m3: shape.voxel_air_volume_m3(0.005)?,
-        print_mass_kg,
+        voxel_air_volume_m3: seatlock_geom::voxel_air_volume_m3(shape.as_ref(), 0.005)?,
+        print_mass_kg: solid * density * design.build.infill_fraction,
         cost_note: catalog::cost_note(design),
         mounts,
         warnings,
         can_export_print: can_export,
-        cut_list: Vec::new(),
-        print_note: print_split_note(shape.width_m, shape.depth_m, shape.height_m),
-        user_wall: false,
+        cut_list: cost.cut_list.clone(),
+        print_note,
+        user_wall,
+        print_tree,
         cost,
     })
 }
@@ -1250,7 +1260,7 @@ fn printer_volume() -> (String, [f64; 3]) {
     (name, volume)
 }
 
-fn print_split_note(width_m: f64, depth_m: f64, height_m: f64) -> String {
+fn print_split_note(parts: &[[f64; 3]]) -> String {
     let (name, [bx, by, bz]) = printer_volume();
     if bx <= 0.0 || by <= 0.0 || bz <= 0.0 {
         return "No printer is in the catalog, so the print is not split.".to_string();
@@ -1262,95 +1272,15 @@ fn print_split_note(width_m: f64, depth_m: f64, height_m: f64) -> String {
         bz * 1000.0
     );
     let pieces = |size: f64, limit: f64| (size / limit).ceil().max(1.0) as i32;
-    let count = pieces(width_m, bx) * pieces(depth_m, by) * pieces(height_m, bz);
-    if count <= 1 {
-        format!("Fits the {name} ({size}) in one piece.")
+    let count: i32 = parts
+        .iter()
+        .map(|[x, y, z]| pieces(*x, bx) * pieces(*y, by) * pieces(*z, bz))
+        .sum();
+    if count as usize <= parts.len() {
+        format!("Every printed part fits the {name} ({size}).")
     } else {
         format!("About {count} printed pieces for the {name} ({size}).")
     }
-}
-
-fn tube_report(design: &DesignFile) -> Result<GeometryReport, String> {
-    let fields = &design.speaker.enclosure.outer.fields;
-    let tube = seatlock_geom::describe_tube(fields)?;
-    let stock_id = fields
-        .get("stock_id")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let mut warnings = Vec::new();
-    if tube.wall_from_user {
-        warnings.push(
-            "The seller does not print a wall thickness, so this wall is the user's own number."
-                .into(),
-        );
-    }
-    // Drivers mount on the printed end caps.
-    let mut mounts = Vec::new();
-    let mut cutout_area = 0.0;
-    let mut can_export = true;
-    for mount in &design.speaker.enclosure.mounts {
-        let pose = tube.mount_pose(&mount.surface, mount.at_m)?;
-        let cutout = mount_cutout(design, &mount.id);
-        let cutout = match cutout {
-            Some(value) if value > 0.0 => value,
-            _ => {
-                warnings.push(
-                    "mounting size not published, so this mount is not cut into the print file."
-                        .into(),
-                );
-                can_export = false;
-                0.0
-            }
-        };
-        cutout_area += std::f64::consts::PI * (cutout * 0.5).powi(2);
-        mounts.push(MountView {
-            surface: mount.surface.clone(),
-            at_m: mount.at_m,
-            position_m: pose.position_m,
-            outward: pose.outward,
-            cutout_diameter_m: cutout,
-        });
-    }
-    let caps_m3 = tube.cap_volume_m3() - cutout_area * tube.cap_thickness_m;
-    let density = catalog::material(&design.build.material)
-        .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64))
-        .unwrap_or(0.0);
-    let cost = cost::report(
-        design,
-        &CabinetParts {
-            print_solid_m3: Some(caps_m3),
-            stock_cuts: vec![(stock_id, tube.length_m)],
-            problems: Vec::new(),
-        },
-    );
-    if !cost.problems.is_empty() {
-        can_export = false;
-    }
-    let interior = tube.interior_volume_m3()?;
-    let d = tube.outside_diameter_m;
-    Ok(GeometryReport {
-        width_m: d,
-        height_m: d,
-        depth_m: tube.overall_length_m(),
-        wall_m: (d - tube.inside_diameter_m) / 2.0,
-        interior_volume_m3: interior,
-        solid_volume_m3: caps_m3,
-        voxel_air_volume_m3: interior,
-        print_mass_kg: caps_m3 * density * design.build.infill_fraction,
-        cost_note: catalog::cost_note(design),
-        mounts,
-        warnings,
-        can_export_print: can_export,
-        cut_list: cost.cut_list.clone(),
-        print_note: format!(
-            "Two printed end caps, {:.1} mm thick. The pipe is a stock cut, not a print. {}",
-            tube.cap_thickness_m * 1000.0,
-            print_split_note(d, tube.cap_thickness_m, d)
-        ),
-        user_wall: tube.wall_from_user,
-        cost,
-    })
 }
 
 /// The cut-out diameter of the driver on a mount, from its catalog record.
@@ -1411,6 +1341,27 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
     correction_plan_for(design, registry, "point", "half")
 }
 
+/// Where the first radiator's own baffle edge puts the baffle step: on-axis diffraction 3 dB
+/// below half space, from the outline of the surface it is mounted on. Without an outline,
+/// the step formula of README section 5.6, `115 / baffle width`.
+fn baffle_corner_hz(design: &DesignFile, registry: &Registry) -> f64 {
+    let outer = &design.speaker.enclosure.outer;
+    let Ok(shape) = registry.create_outer(&outer.kind, &outer.fields) else {
+        return 0.0;
+    };
+    let from_outline = design.speaker.radiators.first().and_then(|part| {
+        let pose = mount_pose(design, shape.as_ref(), part)?;
+        let surface = shape.surface_facing(pose.outward)?;
+        let corners = shape.surface_outline(&surface).ok()?;
+        Some(baffle_step_hz_for_outline(
+            &corners,
+            pose.position_m,
+            pose.outward,
+        ))
+    });
+    from_outline.unwrap_or_else(|| 115.0 / shape.baffle_width_m().max(0.05))
+}
+
 fn correction_plan_for(
     design: &DesignFile,
     registry: &Registry,
@@ -1446,8 +1397,7 @@ fn correction_plan_for(
         seatlock_acoustics::tuning_hz(result.interior_volume_m3.unwrap_or(0.01), &ports)
     };
     let protected = design.dsp.correction.protected_band_hz;
-    let width = outer_field(design, "width_m", 0.2);
-    let corner = baffle_step_hz(width, outer_field(design, "height_m", 0.3));
+    let corner = baffle_corner_hz(design, registry);
     let shows_step = radiation == "baffle" || (radiation == "point" && space == "step");
     let f6_max = catalog::target(&design.target)
         .and_then(|target| target.get("f6_hz_max").and_then(Value::as_f64))

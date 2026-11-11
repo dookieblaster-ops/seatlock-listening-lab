@@ -1,8 +1,8 @@
 //! Test-only outer shape, radiator, and DSP block for CHK-EXT-1.
 
 use num_complex::Complex64;
-use seatlock_core::registry::{DspBlock, OuterShape, Radiator, RadiatorEval, Registry};
-use serde_json::{Map, Value};
+use seatlock_core::registry::{DspBlock, MountPose, OuterShape, Radiator, RadiatorEval, Registry};
+use serde_json::{json, Map, Value};
 use std::f64::consts::PI;
 
 pub fn register(registry: &mut Registry) {
@@ -23,6 +23,70 @@ impl OuterShape for Cylinder {
 
     fn baffle_width_m(&self) -> f64 {
         self.radius_m * 2.0
+    }
+
+    // An upright cylinder of air with no wall: the whole outer-shape contract, for CHK-EXT-1.
+
+    fn outer_size_m(&self) -> Result<[f64; 3], String> {
+        let d = 2.0 * self.radius_m;
+        Ok([d, d, self.height_m])
+    }
+
+    fn surfaces(&self) -> Vec<String> {
+        vec!["bottom".into(), "top".into()]
+    }
+
+    fn mount_pose(&self, surface: &str, at_m: [f64; 2]) -> Result<MountPose, String> {
+        match surface {
+            "top" => Ok(MountPose {
+                position_m: [at_m[0], at_m[1], self.height_m],
+                outward: [0.0, 0.0, 1.0],
+            }),
+            "bottom" => Ok(MountPose {
+                position_m: [at_m[0], at_m[1], 0.0],
+                outward: [0.0, 0.0, -1.0],
+            }),
+            other => Err(format!("no {other} surface")),
+        }
+    }
+
+    fn surface_facing(&self, outward: [f64; 3]) -> Option<String> {
+        if outward[2] > 0.5 {
+            Some("top".into())
+        } else if outward[2] < -0.5 {
+            Some("bottom".into())
+        } else {
+            None
+        }
+    }
+
+    fn surface_outline(&self, surface: &str) -> Result<Vec<[f64; 3]>, String> {
+        let z = if surface == "top" { self.height_m } else { 0.0 };
+        let r = self.radius_m;
+        Ok((0..64)
+            .map(|i| {
+                let a = 2.0 * PI * i as f64 / 64.0;
+                [r + r * a.cos(), r + r * a.sin(), z]
+            })
+            .collect())
+    }
+
+    fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        let r = self.radius_m;
+        let radial = ((point_m[0] - r).powi(2) + (point_m[1] - r).powi(2)).sqrt();
+        Ok(radial < r && point_m[2] > 0.0 && point_m[2] < self.height_m)
+    }
+
+    fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
+        Ok(0.0)
+    }
+
+    fn print_solid_m3(&self, _cutouts: &[(String, f64)]) -> Result<f64, String> {
+        Ok(0.0)
+    }
+
+    fn print_tree(&self, _cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
+        Ok(json!({ "op": "union", "of": [] }))
     }
 }
 

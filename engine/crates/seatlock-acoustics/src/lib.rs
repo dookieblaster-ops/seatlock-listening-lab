@@ -9,8 +9,9 @@ mod vented;
 mod waveguide;
 
 pub use baffle::{
-    baffle_source_pressure, baffle_step_hz, circular_outline, diffraction_factor, outline_count,
-    piston_directivity, rectangular_outline, EdgePoint,
+    baffle_source_pressure, baffle_step_hz, baffle_step_hz_for_outline, circular_outline,
+    diffraction_factor, outline_count, outline_count_for_perimeter, outline_perimeter_m,
+    piston_directivity, polygon_outline, rectangular_outline, EdgePoint,
 };
 pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
 pub use point::{baffle_gain, pressure_from_volume_velocity};

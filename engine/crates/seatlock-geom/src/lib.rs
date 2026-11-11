@@ -1,7 +1,8 @@
 //! Cabinet geometry: air network, solid primitives, voxel grid, and volumes.
 
+pub use seatlock_core::registry::MountPose;
 use seatlock_core::registry::{OuterShape, Registry};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 pub struct BoxShape {
     pub width_m: f64,
@@ -24,12 +25,161 @@ impl OuterShape for BoxShape {
     fn baffle_width_m(&self) -> f64 {
         self.width_m
     }
+
+    fn outer_size_m(&self) -> Result<[f64; 3], String> {
+        Ok([self.width_m, self.depth_m, self.height_m])
+    }
+
+    fn surfaces(&self) -> Vec<String> {
+        ["front", "back", "left", "right", "bottom", "top"]
+            .iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    fn mount_pose(&self, surface: &str, at_m: [f64; 2]) -> Result<MountPose, String> {
+        BoxShape::mount_pose(self, surface, at_m)
+    }
+
+    fn surface_facing(&self, outward: [f64; 3]) -> Option<String> {
+        Some(box_face_facing(outward).to_string())
+    }
+
+    fn surface_outline(&self, surface: &str) -> Result<Vec<[f64; 3]>, String> {
+        let (w, d, h) = (self.width_m, self.depth_m, self.height_m);
+        Ok(match surface {
+            "front" => vec![[0.0, 0.0, 0.0], [w, 0.0, 0.0], [w, 0.0, h], [0.0, 0.0, h]],
+            "back" => vec![[w, d, 0.0], [0.0, d, 0.0], [0.0, d, h], [w, d, h]],
+            "left" => vec![[0.0, d, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, h], [0.0, d, h]],
+            "right" => vec![[w, 0.0, 0.0], [w, d, 0.0], [w, d, h], [w, 0.0, h]],
+            "bottom" => vec![[0.0, d, 0.0], [w, d, 0.0], [w, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            "top" => vec![[0.0, 0.0, h], [w, 0.0, h], [w, d, h], [0.0, d, h]],
+            other => return Err(format!("unknown face {other}")),
+        })
+    }
+
+    fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        Ok(BoxShape::contains_air(self, point_m))
+    }
+
+    fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
+        Ok(self.wall_m)
+    }
+
+    fn print_solid_m3(&self, cutouts: &[(String, f64)]) -> Result<f64, String> {
+        let area: f64 = cutouts.iter().map(|(_, area)| area).sum();
+        self.solid_volume_m3(area)
+    }
+
+    fn print_tree(&self, cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
+        let w = self.wall_m;
+        let mut parts = vec![
+            csg_box([0.0, 0.0, 0.0], [self.width_m, self.depth_m, self.height_m]),
+            csg_box(
+                [w, w, w],
+                [self.width_m - w, self.depth_m - w, self.height_m - w],
+            ),
+        ];
+        parts.extend(
+            cutouts
+                .iter()
+                .map(|(pose, diameter)| csg_hole(pose, *diameter, w)),
+        );
+        Ok(csg_difference(parts))
+    }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct MountPose {
-    pub position_m: [f64; 3],
-    pub outward: [f64; 3],
+/// The box face whose outward direction is closest to `outward`.
+pub fn box_face_facing(outward: [f64; 3]) -> &'static str {
+    let [x, y, z] = outward;
+    if y.abs() >= x.abs() && y.abs() >= z.abs() {
+        if y < 0.0 {
+            "front"
+        } else {
+            "back"
+        }
+    } else if x.abs() >= z.abs() {
+        if x < 0.0 {
+            "left"
+        } else {
+            "right"
+        }
+    } else if z < 0.0 {
+        "bottom"
+    } else {
+        "top"
+    }
+}
+
+/// A box from `min` to `max` in m.
+pub fn csg_box(min: [f64; 3], max: [f64; 3]) -> Value {
+    json!({ "op": "box", "min_m": min, "max_m": max })
+}
+
+/// A cylinder whose base circle is centred on `base`, extending `length_m` along `axis`.
+pub fn csg_cylinder(base: [f64; 3], axis: [f64; 3], length_m: f64, radius_m: f64) -> Value {
+    json!({ "op": "cylinder", "base_m": base, "axis": axis, "length_m": length_m,
+            "radius_m": radius_m, "segments": 96 })
+}
+
+/// The first part minus all the others.
+pub fn csg_difference(parts: Vec<Value>) -> Value {
+    json!({ "op": "difference", "of": parts })
+}
+
+pub fn csg_union(parts: Vec<Value>) -> Value {
+    json!({ "op": "union", "of": parts })
+}
+
+/// A cut-out through a panel of `thickness_m` at a mount, a little longer on both sides.
+pub fn csg_hole(pose: &MountPose, diameter_m: f64, thickness_m: f64) -> Value {
+    let extra = 0.0005;
+    let o = pose.outward;
+    let base = [
+        pose.position_m[0] + o[0] * extra,
+        pose.position_m[1] + o[1] * extra,
+        pose.position_m[2] + o[2] * extra,
+    ];
+    csg_cylinder(
+        base,
+        [-o[0], -o[1], -o[2]],
+        thickness_m + 2.0 * extra,
+        diameter_m / 2.0,
+    )
+}
+
+/// Air volume as the voxel grid sees it: each `dx` cube counts the fraction of its
+/// 4 x 4 x 4 sample points that are in the air (README section 6.3, CHK-GEO-1).
+pub fn voxel_air_volume_m3(shape: &dyn OuterShape, dx: f64) -> Result<f64, String> {
+    let [sx, sy, sz] = shape.outer_size_m()?;
+    let cells = |size: f64| (size / dx).ceil().max(1.0) as usize;
+    let (nx, ny, nz) = (cells(sx), cells(sy), cells(sz));
+    let n = 4;
+    let step = dx / n as f64;
+    let mut volume = 0.0;
+    for i in 0..nx {
+        for j in 0..ny {
+            for k in 0..nz {
+                let mut inside = 0;
+                for a in 0..n {
+                    for b in 0..n {
+                        for c in 0..n {
+                            let point = [
+                                i as f64 * dx + (a as f64 + 0.5) * step,
+                                j as f64 * dx + (b as f64 + 0.5) * step,
+                                k as f64 * dx + (c as f64 + 0.5) * step,
+                            ];
+                            if shape.contains_air(point)? {
+                                inside += 1;
+                            }
+                        }
+                    }
+                }
+                volume += dx * dx * dx * inside as f64 / (n * n * n) as f64;
+            }
+        }
+    }
+    Ok(volume)
 }
 
 impl BoxShape {
@@ -193,6 +343,8 @@ pub struct TubeShape {
     pub wall_from_user: bool,
     /// Thickness of each printed end cap: a flat disc of the tube's outside diameter.
     pub cap_thickness_m: f64,
+    /// The stock record the tube is cut from.
+    pub stock_id: String,
 }
 
 /// End caps are 8 mm thick unless the design says otherwise.
@@ -247,6 +399,103 @@ impl OuterShape for TubeShape {
     }
     fn baffle_width_m(&self) -> f64 {
         self.outside_diameter_m
+    }
+
+    fn outer_size_m(&self) -> Result<[f64; 3], String> {
+        let d = self.outside_diameter_m;
+        Ok([d, self.overall_length_m(), d])
+    }
+
+    fn surfaces(&self) -> Vec<String> {
+        vec!["front".into(), "back".into()]
+    }
+
+    fn mount_pose(&self, surface: &str, at_m: [f64; 2]) -> Result<MountPose, String> {
+        TubeShape::mount_pose(self, surface, at_m)
+    }
+
+    fn surface_facing(&self, outward: [f64; 3]) -> Option<String> {
+        if outward[1] < -0.5 {
+            Some("front".into())
+        } else if outward[1] > 0.5 {
+            Some("back".into())
+        } else {
+            None
+        }
+    }
+
+    fn surface_outline(&self, surface: &str) -> Result<Vec<[f64; 3]>, String> {
+        let y = match surface {
+            "front" => 0.0,
+            "back" => self.overall_length_m(),
+            other => return Err(format!("A tube has no {other} surface.")),
+        };
+        let r = self.outside_diameter_m / 2.0;
+        let count = 256;
+        Ok((0..count)
+            .map(|i| {
+                let angle = 2.0 * std::f64::consts::PI * i as f64 / count as f64;
+                [r + r * angle.cos(), y, r + r * angle.sin()]
+            })
+            .collect())
+    }
+
+    fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        let r = self.outside_diameter_m / 2.0;
+        let inner = self.inside_diameter_m / 2.0;
+        let radial = ((point_m[0] - r).powi(2) + (point_m[2] - r).powi(2)).sqrt();
+        let y = point_m[1];
+        Ok(radial < inner && y > self.cap_thickness_m && y < self.cap_thickness_m + self.length_m)
+    }
+
+    fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
+        Ok(self.cap_thickness_m)
+    }
+
+    fn print_solid_m3(&self, cutouts: &[(String, f64)]) -> Result<f64, String> {
+        let area: f64 = cutouts.iter().map(|(_, area)| area).sum();
+        Ok((self.cap_volume_m3() - area * self.cap_thickness_m).max(0.0))
+    }
+
+    fn stock_cuts(&self) -> Vec<(String, f64)> {
+        vec![(self.stock_id.clone(), self.length_m)]
+    }
+
+    fn printed_part_sizes_m(&self) -> Vec<[f64; 3]> {
+        let d = self.outside_diameter_m;
+        vec![[d, self.cap_thickness_m, d]; 2]
+    }
+
+    fn notes(&self) -> Vec<String> {
+        let mut notes = Vec::new();
+        if self.wall_from_user {
+            notes.push(
+                "The seller does not print a wall thickness, so this wall is the user's own number."
+                    .into(),
+            );
+        }
+        notes.push(format!(
+            "Two printed end caps, {:.1} mm thick. The pipe is a stock cut, not a print.",
+            self.cap_thickness_m * 1000.0
+        ));
+        notes
+    }
+
+    fn print_tree(&self, cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
+        let r = self.outside_diameter_m / 2.0;
+        let t = self.cap_thickness_m;
+        let axis = [0.0, 1.0, 0.0];
+        let caps = csg_union(vec![
+            csg_cylinder([r, 0.0, r], axis, t, r),
+            csg_cylinder([r, t + self.length_m, r], axis, t, r),
+        ]);
+        let mut parts = vec![caps];
+        parts.extend(
+            cutouts
+                .iter()
+                .map(|(pose, diameter)| csg_hole(pose, *diameter, t)),
+        );
+        Ok(csg_difference(parts))
     }
 }
 
@@ -335,6 +584,7 @@ pub fn describe_tube(fields: &Map<String, Value>) -> Result<TubeShape, String> {
         length_m,
         wall_from_user,
         cap_thickness_m,
+        stock_id: stock_id.to_string(),
     })
 }
 

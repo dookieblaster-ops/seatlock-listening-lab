@@ -157,6 +157,7 @@ export type GeometryReport = {
   print_mass_kg: number;
   cost_note: string;
   cost: CostReport;
+  print_tree: import("./printSolid").PrintTree;
   print_note?: string;
   cut_list?: string[];
   warnings?: string[];
