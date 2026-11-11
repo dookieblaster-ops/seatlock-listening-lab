@@ -402,6 +402,10 @@ impl OuterShape for Prism {
         );
         Ok(csg_difference(parts))
     }
+
+    fn air_tree(&self) -> Result<Value, String> {
+        Ok(self.csg(&self.inside, self.wall_m, self.length_m - self.wall_m))
+    }
 }
 
 /// A box whose front leans back: deeper at the bottom than at the top, with the back

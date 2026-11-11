@@ -1,7 +1,8 @@
-//! Ports in the builder (README sections 6.2 and 6.4): a duct to `outside` is bored through
-//! the wall it leaves by and printed as a tube or a slot reaching back into the chamber.
+//! Ports and ducts in the builder (README sections 6.2 and 6.4). A duct to `outside` is
+//! bored through the wall it leaves by and printed as a tube or a slot reaching back into
+//! its chamber; a duct between two chambers is printed as a tube through the partition.
 //!
-//! What is printed today: a straight duct whose outside end lies on one of the shape's
+//! What is printed today: straight ducts. A port's outside end lies on one of the shape's
 //! faces and leaves it square. A round section may taper; a slot keeps one size. Anything
 //! else is still simulated, but the print file is refused with a reason.
 
@@ -9,26 +10,30 @@ use seatlock_core::registry::OuterShape;
 use seatlock_core::DesignFile;
 use serde_json::{json, Value};
 
+use crate::chambers::{air_intervals, Chamber, Section};
+
 /// Wall of a printed port tube unless the duct gives `wall_m`. A lab default, not a catalog
 /// number (STATUS decisions).
 pub const DEFAULT_PORT_WALL_M: f64 = 0.003;
 
-/// What one printed port adds to the cabinet.
+/// What one printed duct adds to the cabinet.
 pub struct PrintedPort {
     pub id: String,
     /// Added to the cabinet before anything is cut.
     pub shell: Value,
     /// Cut after the shells are added.
     pub bore: Value,
-    /// Plastic the port adds, after its bore through the wall is taken out.
+    /// Plastic the duct adds: its tube where it runs through air, less its bore where it
+    /// runs through a wall or partition.
     pub solid_m3: f64,
-    /// Air the tube's outside takes from the chamber.
+    /// Air the tube's outside takes from the chambers.
     pub displaced_m3: f64,
-    /// Where it opens on the outside, its outward direction, and its largest half-width.
+    /// For a port: where it opens outside, its direction, half-width, and face.
     pub opening_m: [f64; 3],
     pub outward: [f64; 3],
     pub half_width_m: f64,
     pub surface: String,
+    pub to_outside: bool,
 }
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -62,34 +67,42 @@ fn face_normal(corners: &[[f64; 3]]) -> [f64; 3] {
     [n[0] / length, n[1] / length, n[2] / length]
 }
 
-fn frustum_m3(length: f64, r0: f64, r1: f64) -> f64 {
-    std::f64::consts::PI * length / 3.0 * (r0 * r0 + r0 * r1 + r1 * r1)
-}
-
-/// The ducts that leave the cabinet, in the order the design lists them, each as a printed
-/// port or the reason it cannot be printed.
+/// Every duct in the design, in design order, as a printed duct or the reason it cannot be
+/// printed. `chambers` is empty when the whole inside is one chamber.
 pub fn printed_ports(
     design: &DesignFile,
     shape: &dyn OuterShape,
+    chambers: &[Chamber],
 ) -> Vec<Result<PrintedPort, String>> {
     let mut out = Vec::new();
     for duct in &design.speaker.enclosure.ducts {
         let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
         let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
-        if from != "outside" && to != "outside" {
-            continue;
-        }
         let id = duct
             .get("id")
             .and_then(Value::as_str)
             .unwrap_or("port")
             .to_string();
-        out.push(one_port(duct, from == "outside", shape).map_err(|e| format!("Port {id}: {e}")));
+        let built = if from == "outside" || to == "outside" {
+            one_port(duct, from == "outside", shape, chambers)
+        } else {
+            inner_duct(duct, from, to, chambers)
+        };
+        out.push(built.map_err(|e| format!("Port {id}: {e}")));
     }
     out
 }
 
-fn one_port(duct: &Value, reversed: bool, shape: &dyn OuterShape) -> Result<PrintedPort, String> {
+struct Straight {
+    id: String,
+    inner: [f64; 3],
+    outer: [f64; 3],
+    dir: [f64; 3],
+    length: f64,
+    section: Section,
+}
+
+fn straight(duct: &Value, reversed: bool) -> Result<Straight, String> {
     let id = duct
         .get("id")
         .and_then(Value::as_str)
@@ -100,25 +113,14 @@ fn one_port(duct: &Value, reversed: bool, shape: &dyn OuterShape) -> Result<Prin
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(point).collect())
         .unwrap_or_default();
-    let section = duct.get("section").cloned().unwrap_or(Value::Null);
-    let size = |key: &str| -> Vec<f64> {
-        section
-            .get(key)
-            .and_then(Value::as_array)
-            .map(|items| items.iter().filter_map(Value::as_f64).collect())
-            .unwrap_or_default()
-    };
-    let (mut start_size, mut end_size) = (size("start_m"), size("end_m"));
-    if end_size.is_empty() {
-        end_size = start_size.clone();
-    }
+    let mut section = Section::of(duct)?;
     if reversed {
         path.reverse();
-        std::mem::swap(&mut start_size, &mut end_size);
+        std::mem::swap(&mut section.start, &mut section.end);
     }
     if path.len() != 2 {
         return Err(
-            "only a straight port is printed so far; this one is simulated, and the print file \
+            "only a straight duct is printed so far; this one is simulated, and the print file \
              is refused."
                 .into(),
         );
@@ -129,132 +131,168 @@ fn one_port(duct: &Value, reversed: bool, shape: &dyn OuterShape) -> Result<Prin
     if length <= 0.0 {
         return Err("its path has no length.".into());
     }
-    let dir = [along[0] / length, along[1] / length, along[2] / length];
+    if !section.round && section.start != section.end {
+        return Err("a tapered slot is not printed yet; the print file is refused.".into());
+    }
+    Ok(Straight {
+        id,
+        inner,
+        outer,
+        dir: [along[0] / length, along[1] / length, along[2] / length],
+        length,
+        section,
+    })
+}
+
+/// Plastic and displaced air of a straight duct. Along its first `run` meters it is a tube
+/// where it passes through chamber air; everywhere else (partitions, and the outer wall
+/// after `run`) its bore takes plastic out.
+fn volumes(d: &Straight, run: f64, chambers: &[Chamber]) -> (f64, f64) {
+    let s = &d.section;
+    let end = add_scaled(d.inner, d.dir, run);
+    let (mut solid, mut displaced, mut covered) = (0.0, 0.0, 0.0);
+    for (t0, t1) in air_intervals(d.inner, end, chambers) {
+        let (s0, s1) = (t0 / d.length, t1 / d.length);
+        let outside = s.volume(d.length, s0, s1, s.tube_m);
+        let bore = s.volume(d.length, s0, s1, 0.0);
+        solid += outside - bore;
+        displaced += outside;
+        covered += bore;
+    }
+    solid -= s.volume(d.length, 0.0, 1.0, 0.0) - covered;
+    (solid, displaced)
+}
+
+fn csg(d: &Straight, grow: f64, extra: f64) -> Value {
+    let s = &d.section;
+    let base = add_scaled(d.inner, d.dir, -extra);
+    let length = d.length + 2.0 * extra;
+    if s.round {
+        let slope = (s.end[0] - s.start[0]) / 2.0 / d.length;
+        json!({ "op": "cylinder", "base_m": base, "axis": d.dir, "length_m": length,
+                "radius_m": s.start[0] / 2.0 + grow - slope * extra,
+                "radius_end_m": s.end[0] / 2.0 + grow + slope * extra, "segments": 96 })
+    } else {
+        // The slot's width runs across the face and its height up it.
+        let (right, up) = seatlock_geom::prism::face_axes(d.dir);
+        let (hw, hh) = (s.start[0] / 2.0 + grow, s.start[1] / 2.0 + grow);
+        json!({ "op": "prism", "outline_m": [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]],
+                "origin_m": base, "u": right, "v": up, "w": d.dir, "length_m": length })
+    }
+}
+
+fn half_width(d: &Straight) -> f64 {
+    let s = &d.section;
+    let t = s.tube_m;
+    if s.round {
+        s.start[0].max(s.end[0]) / 2.0 + t
+    } else {
+        0.5 * ((s.start[0] + 2.0 * t).powi(2) + (s.start[1] + 2.0 * t).powi(2)).sqrt()
+    }
+}
+
+type InAir<'a> = &'a dyn Fn([f64; 3]) -> Result<bool, String>;
+
+/// True when the tube's outside fits in the air at `at`: four far points across it.
+fn fits(d: &Straight, at: [f64; 3], in_air: InAir) -> Result<bool, String> {
+    let (right, up) = seatlock_geom::prism::face_axes(d.dir);
+    let reach = half_width(d) * 0.999;
+    for (a, b) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+        if !in_air(add_scaled(add_scaled(at, right, a * reach), up, b * reach))? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn one_port(
+    duct: &Value,
+    reversed: bool,
+    shape: &dyn OuterShape,
+    chambers: &[Chamber],
+) -> Result<PrintedPort, String> {
+    let d = straight(duct, reversed)?;
     let surface = shape
-        .surface_facing(dir)
+        .surface_facing(d.dir)
         .ok_or("its outside end does not leave through a face of the cabinet.")?;
     let corners = shape.surface_outline(&surface)?;
     let mut normal = face_normal(&corners);
-    if dot(normal, dir) < 0.0 {
+    if dot(normal, d.dir) < 0.0 {
         normal = [-normal[0], -normal[1], -normal[2]];
     }
-    if dot(normal, dir) < 0.9998 {
+    if dot(normal, d.dir) < 0.9998 {
         return Err(format!(
             "it leaves the {surface} face at a slant; only a port square to its face is printed."
         ));
     }
-    if dot(sub(outer, corners[0]), normal).abs() > 1e-6 {
+    if dot(sub(d.outer, corners[0]), normal).abs() > 1e-6 {
         return Err(format!(
             "its outside end is not on the {surface} face. A port's path runs from inside the \
              chamber to the outside surface."
         ));
     }
     let wall = shape.panel_thickness_m(&surface)?;
-    let inside = length - wall;
+    let inside = d.length - wall;
     if inside <= 0.0 {
         return Err("it is no longer than the wall it goes through.".into());
     }
-    if !shape.contains_air(inner)? {
-        return Err("its inside end is not in the chamber's air.".into());
-    }
-    let tube = duct
-        .get("wall_m")
-        .and_then(Value::as_f64)
-        .unwrap_or(DEFAULT_PORT_WALL_M);
-    let kind = section
-        .get("shape")
-        .and_then(Value::as_str)
-        .unwrap_or("round");
-    let extra = 0.0005;
-    let bore_from = add_scaled(inner, dir, -extra);
-    let (shell, bore, solid, displaced, half_width) = match kind {
-        "round" => {
-            let (r0, r1) = match (start_size.first(), end_size.first()) {
-                (Some(a), Some(b)) if *a > 0.0 && *b > 0.0 => (a / 2.0, b / 2.0),
-                _ => return Err("its round section has no diameter.".into()),
-            };
-            let at_wall = r0 + (r1 - r0) * inside / length;
-            let shell = cylinder(inner, dir, length, r0 + tube, r1 + tube);
-            let slope = (r1 - r0) / length;
-            let bore = cylinder(
-                bore_from,
-                dir,
-                length + 2.0 * extra,
-                r0 - slope * extra,
-                r1 + slope * extra,
-            );
-            let outside = frustum_m3(inside, r0 + tube, at_wall + tube);
-            let solid = outside - frustum_m3(inside, r0, at_wall) - frustum_m3(wall, at_wall, r1);
-            (shell, bore, solid, outside, r0.max(r1) + tube)
-        }
-        "rect" | "slot" => {
-            let (w, h) = match (start_size.as_slice(), end_size.as_slice()) {
-                ([w0, h0], [w1, h1]) if w0 == w1 && h0 == h1 && *w0 > 0.0 && *h0 > 0.0 => {
-                    (*w0, *h0)
-                }
-                ([_, _], [_, _]) => {
-                    return Err(
-                        "a tapered slot is not printed yet; the print file is refused.".into(),
-                    )
-                }
-                _ => return Err("its slot section needs a width and a height.".into()),
-            };
-            // The slot's width runs across the face and its height up it.
-            let (right, up) = seatlock_geom::prism::face_axes(dir);
-            let shell = slot(
-                inner,
-                right,
-                up,
-                dir,
-                length,
-                w + 2.0 * tube,
-                h + 2.0 * tube,
-            );
-            let bore = slot(bore_from, right, up, dir, length + 2.0 * extra, w, h);
-            let outside = (w + 2.0 * tube) * (h + 2.0 * tube) * inside;
-            let solid = outside - w * h * inside - w * h * wall;
-            let half = 0.5 * ((w + 2.0 * tube).powi(2) + (h + 2.0 * tube).powi(2)).sqrt();
-            (shell, bore, solid, outside, half)
-        }
-        other => return Err(format!("a {other} section is not printed.")),
+    let in_air = |p: [f64; 3]| -> Result<bool, String> {
+        Ok(shape.contains_air(p)?
+            && (chambers.is_empty() || chambers.iter().any(|chamber| chamber.contains(p))))
     };
-    // The tube's outside must stay in the chamber: check its far corners at the inside end.
-    let (right, up) = seatlock_geom::prism::face_axes(dir);
-    let reach = half_width * 0.999;
-    for (a, b) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
-        let probe = add_scaled(add_scaled(inner, right, a * reach), up, b * reach);
-        if !shape.contains_air(probe)? {
-            return Err("its tube does not fit inside the chamber.".into());
-        }
+    if !in_air(d.inner)? {
+        return Err("its inside end is not in a chamber's air.".into());
     }
+    if !fits(&d, d.inner, &in_air)? {
+        return Err("its tube does not fit inside the chamber.".into());
+    }
+    let (solid, displaced) = volumes(&d, inside, chambers);
     Ok(PrintedPort {
-        id,
-        shell,
-        bore,
+        id: d.id.clone(),
+        shell: csg(&d, d.section.tube_m, 0.0),
+        bore: csg(&d, 0.0, 0.0005),
         solid_m3: solid,
         displaced_m3: displaced,
-        opening_m: outer,
-        outward: dir,
-        half_width_m: half_width,
+        opening_m: d.outer,
+        outward: d.dir,
+        half_width_m: half_width(&d),
         surface,
+        to_outside: true,
     })
 }
 
-fn cylinder(base: [f64; 3], axis: [f64; 3], length: f64, r0: f64, r1: f64) -> Value {
-    json!({ "op": "cylinder", "base_m": base, "axis": axis, "length_m": length,
-            "radius_m": r0, "radius_end_m": r1, "segments": 96 })
-}
-
-fn slot(
-    base: [f64; 3],
-    right: [f64; 3],
-    up: [f64; 3],
-    axis: [f64; 3],
-    length: f64,
-    width: f64,
-    height: f64,
-) -> Value {
-    let (hw, hh) = (width / 2.0, height / 2.0);
-    json!({ "op": "prism", "outline_m": [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]],
-            "origin_m": base, "u": right, "v": up, "w": axis, "length_m": length })
+fn inner_duct(
+    duct: &Value,
+    from: &str,
+    to: &str,
+    chambers: &[Chamber],
+) -> Result<PrintedPort, String> {
+    let d = straight(duct, false)?;
+    let find = |id: &str| chambers.iter().find(|chamber| chamber.id == id);
+    let (Some(a), Some(b)) = (find(from), find(to)) else {
+        return Err(format!(
+            "it joins {from} and {to}, which are not both chambers."
+        ));
+    };
+    if !a.contains(d.inner) || !b.contains(d.outer) {
+        return Err(format!("its ends are not inside chambers {from} and {to}."));
+    }
+    let in_a = |p: [f64; 3]| Ok(a.contains(p));
+    let in_b = |p: [f64; 3]| Ok(b.contains(p));
+    if !fits(&d, d.inner, &in_a)? || !fits(&d, d.outer, &in_b)? {
+        return Err("its tube does not fit inside the chambers at its ends.".into());
+    }
+    let (solid, displaced) = volumes(&d, d.length, chambers);
+    Ok(PrintedPort {
+        id: d.id.clone(),
+        shell: csg(&d, d.section.tube_m, 0.0),
+        bore: csg(&d, 0.0, 0.0005),
+        solid_m3: solid,
+        displaced_m3: displaced,
+        opening_m: d.outer,
+        outward: d.dir,
+        half_width_m: half_width(&d),
+        surface: String::new(),
+        to_outside: false,
+    })
 }

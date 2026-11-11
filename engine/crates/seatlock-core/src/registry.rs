@@ -106,6 +106,12 @@ pub trait OuterShape: Send + Sync {
     fn print_tree(&self, _cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
         not_finished()
     }
+
+    /// The cabinet's inside air as a CSG tree. Partition walls between chambers are this air
+    /// minus the chambers (README section 6.2).
+    fn air_tree(&self) -> Result<Value, String> {
+        not_finished()
+    }
 }
 
 /// A radiator evaluated at 1 V RMS, before the DSP chain.

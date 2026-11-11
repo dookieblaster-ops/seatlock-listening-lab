@@ -1401,3 +1401,131 @@ fn a_slot_port_is_printed_with_its_own_size() {
     assert!(report.can_export_print, "{:?}", report.warnings);
     assert!(report.print_tree.to_string().contains("\"op\":\"prism\""));
 }
+
+fn example(name: &str) -> serde_json::Value {
+    let path = format!(
+        "{}/../../../designs/examples/{name}.seatlock.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[test]
+fn one_chamber_that_fills_the_inside_changes_nothing() {
+    // sealed-test with its whole inside named as one chamber: no partition, same air, same
+    // sound.
+    let plain: seatlock_core::DesignFile = serde_json::from_str(&read_example()).unwrap();
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    value["speaker"]["enclosure"]["chambers"] = serde_json::json!([
+        { "id": "main", "min_m": [0.008, 0.008, 0.008], "max_m": [0.152, 0.172, 0.242] }
+    ]);
+    let named: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let request = SimulateRequest::default();
+    let a = simulate(&plain, &request, &builtin());
+    let b = simulate(&named, &request, &builtin());
+    assert!(!b.radiators.is_empty(), "{:?}", b.issues);
+    for (x, y) in a.summed_spl_db.iter().zip(&b.summed_spl_db) {
+        assert!((x - y).abs() < 1e-9, "{x} {y}");
+    }
+    let ra = seatlock_sim::geometry_report(&plain).unwrap();
+    let rb = seatlock_sim::geometry_report(&named).unwrap();
+    assert!((ra.solid_volume_m3 - rb.solid_volume_m3).abs() < 1e-12);
+    assert!(rb.can_export_print, "{:?}", rb.warnings);
+}
+
+#[test]
+fn two_chambers_print_a_partition_and_vent_everything_at_low_frequency() {
+    // two-chamber: front 0.25 x 0.138 x 0.416 m and rear 0.25 x 0.126 x 0.416 m inside a box
+    // whose inside is 0.25 x 0.276 x 0.416 m, so the partition is 0.25 x 0.012 x 0.416 m.
+    let design: seatlock_core::DesignFile = serde_json::from_value(example("two-chamber")).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(report.can_export_print, "{:?}", report.warnings);
+    let front = 0.25 * 0.138 * 0.416;
+    let rear = 0.25 * 0.126 * 0.416;
+    assert!((report.interior_volume_m3 - (front + rear)).abs() < 1e-12);
+    let mut open = example("two-chamber");
+    open["speaker"]["enclosure"]["chambers"] = serde_json::json!([]);
+    open["speaker"]["enclosure"]["ducts"] = serde_json::json!([]);
+    for mount in open["speaker"]["enclosure"]["mounts"]
+        .as_array_mut()
+        .unwrap()
+    {
+        mount["rear_into"] = serde_json::json!("main");
+    }
+    let open: seatlock_core::DesignFile = serde_json::from_value(open).unwrap();
+    let plain = seatlock_sim::geometry_report(&open).unwrap();
+    // The coupler: a 40 mm tube, 3 mm wall, 50 mm long; 12 mm of it is in the partition.
+    // The port: 80 mm long, 12 mm through the back wall, the rest in the rear chamber.
+    let pi = std::f64::consts::PI;
+    let ring = pi * (0.023_f64.powi(2) - 0.02_f64.powi(2));
+    let disc = pi * 0.02_f64.powi(2);
+    let coupler = ring * 0.038 - disc * 0.012;
+    let port = ring * 0.068 - disc * 0.012;
+    let partition = 0.25 * 0.012 * 0.416;
+    let added = report.solid_volume_m3 - plain.solid_volume_m3;
+    let expected = partition + coupler + port;
+    assert!(
+        (added - expected).abs() < 1e-12,
+        "{added} against {expected}"
+    );
+
+    let result = simulate(&design, &SimulateRequest::default(), &builtin());
+    assert!(!result.radiators.is_empty(), "{:?}", result.issues);
+    assert!(result
+        .fidelity
+        .ignored
+        .iter()
+        .any(|line| line.contains("Several chambers")));
+    // Net air: each chamber less its tube lengths and, at the front, the woofer behind it.
+    let tubes = pi * 0.023_f64.powi(2) * (0.038 + 0.068);
+    let net = result.interior_volume_m3.unwrap();
+    assert!(
+        net < front + rear - tubes && net > front + rear - tubes - 0.002,
+        "{net}"
+    );
+}
+
+#[test]
+fn chambers_that_do_not_fit_are_refused_with_the_reason() {
+    type Edit<'a> = &'a dyn Fn(&mut serde_json::Value);
+    let cases: [(Edit, &str); 3] = [
+        (
+            &|v| v["speaker"]["enclosure"]["chambers"][1]["min_m"][1] = serde_json::json!(0.14),
+            "overlap",
+        ),
+        (
+            &|v| v["speaker"]["enclosure"]["chambers"][1]["max_m"][1] = serde_json::json!(0.295),
+            "outside the cabinet",
+        ),
+        (
+            &|v| v["speaker"]["enclosure"]["mounts"][0]["rear_into"] = serde_json::json!("attic"),
+            "not one of the chambers",
+        ),
+    ];
+    for (edit, words) in cases {
+        let mut value = example("two-chamber");
+        edit(&mut value);
+        let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+        let result = simulate(&design, &SimulateRequest::default(), &builtin());
+        assert!(result.radiators.is_empty(), "{words}");
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|issue| issue.message.contains(words)),
+            "{words}: {:?}",
+            result.issues
+        );
+    }
+    // A driver whose hole lands on the partition cannot be printed.
+    let mut value = example("two-chamber");
+    value["speaker"]["enclosure"]["mounts"][0]["surface"] = serde_json::json!("left");
+    value["speaker"]["enclosure"]["mounts"][0]["at_m"] = serde_json::json!([0.144, 0.25]);
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(!report.can_export_print);
+    assert!(report
+        .warnings
+        .iter()
+        .any(|line| line.contains("does not open into chamber front")));
+}

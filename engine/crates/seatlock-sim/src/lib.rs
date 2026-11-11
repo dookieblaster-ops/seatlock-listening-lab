@@ -19,6 +19,7 @@ use seatlock_dsp::{delay_block, gain_block, polarity_block, prefer_inverted_high
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+pub mod chambers;
 pub mod cost;
 pub mod ports;
 pub use cost::{CabinetParts, CostLine, CostReport};
@@ -232,21 +233,6 @@ pub fn simulate(
             return fail(issues, fidelity);
         }
     };
-    let mut displacement = 0.0;
-    for radiator in &design.speaker.radiators {
-        if radiator.kind == "cone" {
-            let (amount, _, _) = cone_displacement_m3(&radiator.fields);
-            displacement += amount;
-        }
-    }
-    // A printed port's tube takes air from the chamber (README section 5.3).
-    for port in ports::printed_ports(design, outer.as_ref())
-        .into_iter()
-        .flatten()
-    {
-        displacement += port.displaced_m3;
-    }
-    let volume = (gross - displacement).max(0.0);
     let baffle = outer.baffle_width_m();
     if let Err(err) = outer.outer_size_m() {
         issues.push(Issue::error(
@@ -282,47 +268,132 @@ pub fn simulate(
             return fail(issues, fidelity);
         }
     };
-    let ports = design_ports(design);
-    let (z_ab, vented) = if ports.is_empty() {
-        (enclosure.z_ab(volume, &freqs), None)
-    } else {
-        let mut impedance = Vec::with_capacity(freqs.len());
-        let mut samples = Vec::with_capacity(freqs.len());
-        for freq in &freqs {
-            let sample = vented_sample(volume, &ports, *freq, false);
-            impedance.push(sample.z_ab);
-            samples.push(sample);
-        }
-        fidelity.ignored.push(
-            "The quick model ignores resonances inside the port, and treats a bend as a straight tube."
-                .into(),
-        );
-        (impedance, Some(samples))
-    };
-    let (z_ab, vented) = if request.enclosure == "waveguide" && !ports.is_empty() {
-        let mut impedance = Vec::with_capacity(freqs.len());
-        let mut samples = Vec::with_capacity(freqs.len());
-        for freq in &freqs {
-            let wave = waveguide_box(volume, &ports, *freq);
-            let mut sample = seatlock_acoustics::VentedSample {
-                z_ab: wave.z_in,
-                h_sum: Complex64::new(0.0, 0.0),
-                h_each: [Complex64::new(0.0, 0.0); 4],
-                port_count: wave.openings.len().min(4),
-            };
-            for (index, opening) in wave.openings.iter().take(4).enumerate() {
-                sample.h_each[index] = *opening;
-                sample.h_sum += *opening;
+    let network = chambers::air_network(
+        design,
+        outer.as_ref(),
+        |part| {
+            if part.kind == "cone" {
+                cone_displacement_m3(&part.fields).0
+            } else {
+                0.0
             }
-            impedance.push(sample.z_ab);
-            samples.push(sample);
+        },
+        driver_loads_box,
+    );
+    let (volume, ports, z_ab, vented) = match network {
+        Some(Err(err)) => {
+            issues.push(Issue::error(
+                "bad_chamber",
+                err,
+                "speaker.enclosure.chambers",
+            ));
+            return fail(issues, fidelity);
         }
-        fidelity.ignored.push(
-            "Bends are treated as straight tubes, and the chamber is a single compliance.".into(),
-        );
-        (impedance, Some(samples))
-    } else {
-        (z_ab, vented)
+        Some(Ok(net)) => {
+            let mut impedance = Vec::with_capacity(freqs.len());
+            let mut samples = Vec::with_capacity(freqs.len());
+            for freq in &freqs {
+                let solved = seatlock_acoustics::network::lumped_network(
+                    &net.volumes_m3,
+                    &net.ducts,
+                    net.driver,
+                    *freq,
+                );
+                let mut sample = seatlock_acoustics::VentedSample {
+                    z_ab: solved.z_ab,
+                    h_sum: Complex64::new(0.0, 0.0),
+                    h_each: [Complex64::new(0.0, 0.0); 4],
+                    port_count: solved.h_out.len().min(4),
+                };
+                for (index, h) in solved.h_out.iter().take(4).enumerate() {
+                    sample.h_each[index] = *h;
+                    sample.h_sum += *h;
+                }
+                impedance.push(sample.z_ab);
+                samples.push(sample);
+            }
+            fidelity.ignored.extend(net.notes.iter().cloned());
+            fidelity.ignored.push(
+                "Several chambers: each is one compliance and each duct one air mass, so \
+                 standing waves and pipe resonances are not modeled."
+                    .into(),
+            );
+            if request.enclosure == "waveguide" {
+                fidelity.ignored.push(
+                    "The detailed model does not solve several chambers yet, so these curves \
+                     come from the quick model."
+                        .into(),
+                );
+            }
+            let total = net.volumes_m3.iter().sum::<f64>();
+            let vented = if net.ports.is_empty() {
+                None
+            } else {
+                Some(samples)
+            };
+            (total, net.ports, impedance, vented)
+        }
+        None => {
+            let mut displacement = 0.0;
+            for radiator in &design.speaker.radiators {
+                if radiator.kind == "cone" {
+                    let (amount, _, _) = cone_displacement_m3(&radiator.fields);
+                    displacement += amount;
+                }
+            }
+            // A printed port's tube takes air from the chamber (README section 5.3).
+            for port in ports::printed_ports(design, outer.as_ref(), &[])
+                .into_iter()
+                .flatten()
+            {
+                displacement += port.displaced_m3;
+            }
+            let volume = (gross - displacement).max(0.0);
+            let ports = design_ports(design);
+            let (z_ab, vented) = if ports.is_empty() {
+                (enclosure.z_ab(volume, &freqs), None)
+            } else {
+                let mut impedance = Vec::with_capacity(freqs.len());
+                let mut samples = Vec::with_capacity(freqs.len());
+                for freq in &freqs {
+                    let sample = vented_sample(volume, &ports, *freq, false);
+                    impedance.push(sample.z_ab);
+                    samples.push(sample);
+                }
+                fidelity.ignored.push(
+                    "The quick model ignores resonances inside the port, and treats a bend as a straight tube."
+                        .into(),
+                );
+                (impedance, Some(samples))
+            };
+            let (z_ab, vented) = if request.enclosure == "waveguide" && !ports.is_empty() {
+                let mut impedance = Vec::with_capacity(freqs.len());
+                let mut samples = Vec::with_capacity(freqs.len());
+                for freq in &freqs {
+                    let wave = waveguide_box(volume, &ports, *freq);
+                    let mut sample = seatlock_acoustics::VentedSample {
+                        z_ab: wave.z_in,
+                        h_sum: Complex64::new(0.0, 0.0),
+                        h_each: [Complex64::new(0.0, 0.0); 4],
+                        port_count: wave.openings.len().min(4),
+                    };
+                    for (index, opening) in wave.openings.iter().take(4).enumerate() {
+                        sample.h_each[index] = *opening;
+                        sample.h_sum += *opening;
+                    }
+                    impedance.push(sample.z_ab);
+                    samples.push(sample);
+                }
+                fidelity.ignored.push(
+                    "Bends are treated as straight tubes, and the chamber is a single compliance."
+                        .into(),
+                );
+                (impedance, Some(samples))
+            } else {
+                (z_ab, vented)
+            };
+            (volume, ports, z_ab, vented)
+        }
     };
     let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
     let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
@@ -830,7 +901,7 @@ fn port_poses(design: &DesignFile, shape: &dyn OuterShape) -> Vec<PlacedSource> 
     for duct in &design.speaker.enclosure.ducts {
         let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
         let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
-        let leaves = (from == "main" && to == "outside") || (from == "outside" && to == "main");
+        let leaves = (from == "outside") != (to == "outside");
         if !leaves {
             continue;
         }
@@ -1208,7 +1279,95 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let mut solid = solid;
     let mut shells = Vec::new();
     let mut bores = Vec::new();
-    for port in ports::printed_ports(design, shape.as_ref()) {
+    let chamber_list = match chambers::chambers(design) {
+        Ok(list) => list,
+        Err(problem) => {
+            warnings.push(problem);
+            can_export = false;
+            Vec::new()
+        }
+    };
+    if !chamber_list.is_empty() {
+        // Partition walls: the inside air that no chamber claims is printed solid.
+        let air = shape.air_tree();
+        let bad = chamber_list.iter().find(|chamber| {
+            (0..8).any(|corner| {
+                let inset = 1e-6;
+                let p = [
+                    if corner & 1 == 0 {
+                        chamber.min_m[0] + inset
+                    } else {
+                        chamber.max_m[0] - inset
+                    },
+                    if corner & 2 == 0 {
+                        chamber.min_m[1] + inset
+                    } else {
+                        chamber.max_m[1] - inset
+                    },
+                    if corner & 4 == 0 {
+                        chamber.min_m[2] + inset
+                    } else {
+                        chamber.max_m[2] - inset
+                    },
+                ];
+                !shape.contains_air(p).unwrap_or(false)
+            })
+        });
+        match (air, bad) {
+            (_, Some(chamber)) => {
+                warnings.push(format!(
+                    "Chamber {} reaches outside the cabinet's inside air; the print file is refused.",
+                    chamber.id
+                ));
+                can_export = false;
+            }
+            (Err(_), None) => {
+                warnings.push(
+                    "Partitions between chambers are not made for this kind of cabinet yet; the \
+                     print file is refused."
+                        .into(),
+                );
+                can_export = false;
+            }
+            (Ok(air), None) => {
+                let mut parts = vec![air];
+                parts.extend(
+                    chamber_list
+                        .iter()
+                        .map(|chamber| seatlock_geom::csg_box(chamber.min_m, chamber.max_m)),
+                );
+                let claimed: f64 = chamber_list.iter().map(chambers::Chamber::volume_m3).sum();
+                if solid > 0.0 {
+                    solid += shape.interior_volume_m3()? - claimed;
+                }
+                print_tree = seatlock_geom::csg_union(vec![
+                    print_tree,
+                    seatlock_geom::csg_difference(parts),
+                ]);
+            }
+        }
+        // Each driver must open into the chamber it names, not into a partition.
+        for (view, mount) in mounts.iter().zip(&design.speaker.enclosure.mounts) {
+            let thickness = shape.panel_thickness_m(&mount.surface).unwrap_or(0.0) + 0.002;
+            let behind = [
+                view.position_m[0] - view.outward[0] * thickness,
+                view.position_m[1] - view.outward[1] * thickness,
+                view.position_m[2] - view.outward[2] * thickness,
+            ];
+            let opens = chamber_list
+                .iter()
+                .find(|chamber| chamber.id == mount.rear_into)
+                .is_some_and(|chamber| chamber.contains(behind));
+            if !opens {
+                warnings.push(format!(
+                    "Mount {} does not open into chamber {}; the print file is refused.",
+                    mount.id, mount.rear_into
+                ));
+                can_export = false;
+            }
+        }
+    }
+    for port in ports::printed_ports(design, shape.as_ref(), &chamber_list) {
         let port = match port {
             Ok(port) => port,
             Err(problem) => {
@@ -1286,9 +1445,15 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         height_m,
         depth_m,
         wall_m: shape.panel_thickness_m("front").unwrap_or(0.0),
-        interior_volume_m3: shape.interior_volume_m3()?,
+        interior_volume_m3: if chamber_list.is_empty() {
+            shape.interior_volume_m3()?
+        } else {
+            chamber_list.iter().map(chambers::Chamber::volume_m3).sum()
+        },
         solid_volume_m3: solid,
-        voxel_air_volume_m3: seatlock_geom::voxel_air_volume_m3(shape.as_ref(), 0.005)?,
+        voxel_air_volume_m3: seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
+            chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p))
+        })?,
         print_mass_kg: solid * density * design.build.infill_fraction,
         cost_note: catalog::cost_note(design),
         mounts,

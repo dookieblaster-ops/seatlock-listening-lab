@@ -314,4 +314,13 @@ impl OuterShape for EdgedBox {
         );
         Ok(csg_difference(parts))
     }
+
+    fn air_tree(&self) -> Result<Value, String> {
+        let (min, max) = self.inner_bounds();
+        Ok(csg_hull(hull_points(
+            min,
+            max,
+            self.edge.inside(self.outer.wall_m),
+        )))
+    }
 }

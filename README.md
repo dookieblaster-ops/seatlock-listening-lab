@@ -538,6 +538,8 @@ Printing is optional. A cabinet can be all stock, all printed, or a mix, and the
 
 The air region is chambers plus ducts minus solids. Chambers are the nodes and ducts are the edges of the air network that `lumped` and `waveguide` solve. From Level 3 a driver may mount directly on a duct, as in a transmission line.
 
+A chamber is a box of air inside the cabinet's inside air; chambers may not overlap. When chambers are listed, the inside air no chamber claims is printed solid: the gaps between chambers are the partition walls. Each mount's `rear_into` and each duct's `from` and `to` name a chamber (or `outside`), and a driver's hole must open into the chamber it names. A printed duct is straight: a port leaves its face square and is bored through it, a duct between chambers is bored through the partition, and both are printed as a tube (or a slot) with a 3 mm wall unless the duct gives `wall_m`. The tube's outside takes air from the chamber. Through Level 2 several chambers are solved by `lumped` only, each chamber one compliance and each duct one air mass; `waveguide` falls back to it and says so.
+
 ### 6.3 Three views of one solid
 
 From the same parameters derive:

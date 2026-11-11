@@ -90,6 +90,14 @@ impl OuterShape for BoxShape {
         );
         Ok(csg_difference(parts))
     }
+
+    fn air_tree(&self) -> Result<Value, String> {
+        let w = self.wall_m;
+        Ok(csg_box(
+            [w, w, w],
+            [self.width_m - w, self.depth_m - w, self.height_m - w],
+        ))
+    }
 }
 
 /// The box face whose outward direction is closest to `outward`.
@@ -154,6 +162,15 @@ pub fn csg_hole(pose: &MountPose, diameter_m: f64, thickness_m: f64) -> Value {
 /// Air volume as the voxel grid sees it: each `dx` cube counts the fraction of its
 /// 4 x 4 x 4 sample points that are in the air (README section 6.3, CHK-GEO-1).
 pub fn voxel_air_volume_m3(shape: &dyn OuterShape, dx: f64) -> Result<f64, String> {
+    voxel_air_volume_where(shape, dx, &|_| true)
+}
+
+/// As `voxel_air_volume_m3`, counting only air where `also` holds, such as inside a chamber.
+pub fn voxel_air_volume_where(
+    shape: &dyn OuterShape,
+    dx: f64,
+    also: &dyn Fn([f64; 3]) -> bool,
+) -> Result<f64, String> {
     let [sx, sy, sz] = shape.outer_size_m()?;
     let cells = |size: f64| (size / dx).ceil().max(1.0) as usize;
     let (nx, ny, nz) = (cells(sx), cells(sy), cells(sz));
@@ -172,7 +189,7 @@ pub fn voxel_air_volume_m3(shape: &dyn OuterShape, dx: f64) -> Result<f64, Strin
                                 j as f64 * dx + (b as f64 + 0.5) * step,
                                 k as f64 * dx + (c as f64 + 0.5) * step,
                             ];
-                            if shape.contains_air(point)? {
+                            if shape.contains_air(point)? && also(point) {
                                 inside += 1;
                             }
                         }
@@ -541,6 +558,16 @@ impl OuterShape for TubeShape {
                 .map(|(pose, diameter)| csg_hole(pose, *diameter, t)),
         );
         Ok(csg_difference(parts))
+    }
+
+    fn air_tree(&self) -> Result<Value, String> {
+        let r = self.outside_diameter_m / 2.0;
+        Ok(csg_cylinder(
+            [r, self.cap_thickness_m, r],
+            [0.0, 1.0, 0.0],
+            self.length_m,
+            self.inside_diameter_m / 2.0,
+        ))
     }
 }
 

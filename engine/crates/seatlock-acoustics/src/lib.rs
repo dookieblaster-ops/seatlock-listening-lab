@@ -2,6 +2,7 @@
 
 mod baffle;
 mod cone;
+pub mod network;
 mod point;
 mod response;
 mod sealed;
@@ -17,7 +18,9 @@ pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
 pub use point::{baffle_gain, pressure_from_volume_velocity};
 pub use response::blend_measured_curve;
 pub use sealed::z_ab_sealed;
-pub use vented::{effective_port_length_m, tuning_hz, vented_sample, PortSpec, VentedSample};
+pub use vented::{
+    effective_port_length_m, end_correction_m, tuning_hz, vented_sample, PortSpec, VentedSample,
+};
 pub use waveguide::{
     closed_duct_impedance, helmholtz, ported_box, solve, AcousticNode, WaveguideResult,
 };
