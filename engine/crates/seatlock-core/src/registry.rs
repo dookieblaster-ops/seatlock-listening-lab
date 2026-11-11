@@ -16,9 +16,79 @@ pub enum Family {
     DspBlock,
 }
 
+/// A point on a mounting surface and the direction that surface faces, outward.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MountPose {
+    pub position_m: [f64; 3],
+    pub outward: [f64; 3],
+}
+
+/// What a shape answers when it has not implemented part of the contract yet.
+pub const SHAPE_NOT_FINISHED: &str = "not finished yet";
+
+fn not_finished<T>() -> Result<T, String> {
+    Err(SHAPE_NOT_FINISHED.to_string())
+}
+
+/// The outer-shape contract of README section 3.3. Every question a shape cannot answer
+/// returns an error that says it is not finished; nothing ever falls back to a default box.
 pub trait OuterShape: Send + Sync {
     fn interior_volume_m3(&self) -> Result<f64, String>;
     fn baffle_width_m(&self) -> f64;
+
+    /// Bounding size of the outside, `[x, y, z]` in m. The origin is the outer
+    /// front-bottom-left corner (README section 4).
+    fn outer_size_m(&self) -> Result<[f64; 3], String> {
+        not_finished()
+    }
+
+    /// The named mounting surfaces.
+    fn surfaces(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Position and outward direction of a point on a surface, given in that surface's
+    /// own coordinates.
+    fn mount_pose(&self, _surface: &str, _at_m: [f64; 2]) -> Result<MountPose, String> {
+        not_finished()
+    }
+
+    /// The surface whose outward direction is closest to `outward`, if one faces that way.
+    fn surface_facing(&self, _outward: [f64; 3]) -> Option<String> {
+        None
+    }
+
+    /// Corners of a flat surface's outline, in order around it. A curved edge is many
+    /// short straight edges. Edge diffraction samples this outline (README section 5.6).
+    fn surface_outline(&self, _surface: &str) -> Result<Vec<[f64; 3]>, String> {
+        not_finished()
+    }
+
+    /// True when the point is in the cabinet's air. The voxel grid samples this.
+    fn contains_air(&self, _point_m: [f64; 3]) -> Result<bool, String> {
+        not_finished()
+    }
+
+    /// Thickness of the panel a mount on `surface` is cut through.
+    fn panel_thickness_m(&self, _surface: &str) -> Result<f64, String> {
+        not_finished()
+    }
+
+    /// Printed solid volume of one cabinet, with cut-outs `(surface, area in m^2)` removed.
+    fn print_solid_m3(&self, _cutouts: &[(String, f64)]) -> Result<f64, String> {
+        not_finished()
+    }
+
+    /// Stock pieces cut for one cabinet: `(stock id, cut length in m)`.
+    fn stock_cuts(&self) -> Vec<(String, f64)> {
+        Vec::new()
+    }
+
+    /// The printed parts as a constructive solid geometry tree in JSON, with each cut-out
+    /// given as `(pose, diameter in m)`. The page builds it with manifold-3d (README 6.3).
+    fn print_tree(&self, _cutouts: &[(MountPose, f64)]) -> Result<Value, String> {
+        not_finished()
+    }
 }
 
 /// A radiator evaluated at 1 V RMS, before the DSP chain.
