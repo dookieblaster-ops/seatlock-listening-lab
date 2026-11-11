@@ -757,7 +757,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - A: undo and redo; design history.
 - B: exciters and panel materials; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
-- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing.
+- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.

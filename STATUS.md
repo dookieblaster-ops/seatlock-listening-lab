@@ -33,7 +33,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 1. The rest of Level 2 M3: `sheet_box`, the other four shapes, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Then M4.
 2. The owner runs `./start.sh` once on the laptop. This closes the last Level 0 item. On 2026-11-10 the owner started: the repository is cloned, Rust and Node.js 22 are installed, and the first build had not yet finished.
-3. Owner request, 2026-11-10, waiting for the owner's go-ahead: show the 3D pressure field inside the cabinet (a pulse in slow motion and standing-wave patterns at a chosen frequency), and a bass-only 3D wave model of the room (below about 200 to 300 Hz). Claude recommended the first at Level 3 with the internal-geometry editor, and the second beside the `simple` room estimate.
+3. Owner request, 2026-11-10, approved and added to README Level 3 track D: show the 3D pressure field inside the cabinet (a pulse in slow motion and standing-wave patterns at a chosen frequency), and a bass-only 3D wave model of the room (below about 200 to 300 Hz). Both are Level 3; the first comes with the internal-geometry editor, the second beside the `simple` room estimate.
 
 ## What has been verified
 
