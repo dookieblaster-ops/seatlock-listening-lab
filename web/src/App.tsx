@@ -483,14 +483,9 @@ export default function App() {
             Air volume <span data-testid="formula-air">{geom.interior_volume_m3.toExponential(6)}</span> m³.
             Print solid <span data-testid="solid-volume">{solid.solidVolumeM3.toExponential(6)}</span> m³ implies{" "}
             <span data-testid="print-air">
-              {(
-                geom.width_m * geom.depth_m * geom.height_m -
-                solid.solidVolumeM3 -
-                geom.mounts.reduce(
-                  (sum, mount) => sum + Math.PI * (mount.cutout_diameter_m / 2) ** 2 * geom.wall_m,
-                  0,
-                )
-              ).toExponential(6)}
+              {/* Outside by formula is plastic plus air plus cut-outs, so the air the printed
+                  solid leaves is the formula's plastic and air minus the printed plastic. */}
+              {(geom.solid_volume_m3 + geom.interior_volume_m3 - solid.solidVolumeM3).toExponential(6)}
             </span>{" "}
             m³. 5 mm cells <span data-testid="voxel-air">{geom.voxel_air_volume_m3.toExponential(6)}</span> m³.
             Printed plastic by formula <span data-testid="formula-solid">{geom.solid_volume_m3.toExponential(6)}</span> m³.

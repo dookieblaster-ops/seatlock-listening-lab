@@ -92,3 +92,18 @@ test("an MDF box prints nothing, lists its panels, and buys a whole sheet", asyn
   await expect(page.getByRole("button", { name: "Export print file" })).toBeDisabled();
   await expect(page.getByTestId("scores")).toBeVisible();
 });
+
+for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism"]) {
+  test(`${name}: print solid, voxels, and formula agree, and the STL is solid`, async ({ page }) => {
+    await page.goto("/");
+    const example = path.resolve(import.meta.dirname, `../../designs/examples/${name}.seatlock.json`);
+    await page.getByTestId("open-design-input").setInputFiles(example);
+    await expect(page.getByTestId("formula-solid")).toBeVisible({ timeout: 20_000 });
+    const formula = Number(await page.getByTestId("formula-air").innerText());
+    const printed = Number(await page.getByTestId("print-air").innerText());
+    expect(Math.abs(printed - formula) / formula).toBeLessThan(0.005);
+    await checkVolumes(page, true);
+    await checkExportedStl(page);
+    await expect(page.getByTestId("scores")).toBeVisible();
+  });
+}

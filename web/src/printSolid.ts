@@ -23,6 +23,16 @@ async function manifold(): Promise<ManifoldToplevel> {
 export type PrintTree =
   | { op: "box"; min_m: number[]; max_m: number[] }
   | { op: "cylinder"; base_m: number[]; axis: number[]; length_m: number; radius_m: number; segments?: number }
+  | { op: "hull"; points_m: number[][] }
+  | {
+      op: "prism";
+      outline_m: number[][];
+      origin_m: number[];
+      u: number[];
+      v: number[];
+      w: number[];
+      length_m: number;
+    }
   | { op: "union" | "difference"; of: PrintTree[] };
 
 type Wasm = ManifoldToplevel;
@@ -53,6 +63,18 @@ function build(wasm: Wasm, node: PrintTree): Solid | null {
     const moved = turned.translate([node.base_m[0], node.base_m[1], node.base_m[2]]);
     turned.delete();
     return moved;
+  }
+  if (node.op === "hull") {
+    return Manifold.hull(node.points_m.map((p) => [p[0], p[1], p[2]] as [number, number, number]));
+  }
+  if (node.op === "prism") {
+    // The outline is extruded along +z, then placed by origin + a*u + b*v + z*w (column-major).
+    const outline = node.outline_m.map((p) => [p[0], p[1]] as [number, number]);
+    const blank = Manifold.extrude([outline], node.length_m);
+    const { u, v, w, origin_m: o } = node;
+    const placed = blank.transform([u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, w[0], w[1], w[2], 0, o[0], o[1], o[2], 1]);
+    blank.delete();
+    return placed;
   }
   const parts = node.of.map((child) => build(wasm, child)).filter((part): part is Solid => part !== null);
   if (parts.length === 0) {

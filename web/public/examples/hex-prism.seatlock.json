@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "name": "hex-prism",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "prism",
+        "outline_m": [
+          [
+            0.2,
+            0.086602
+          ],
+          [
+            0.15,
+            0.173205
+          ],
+          [
+            0.05,
+            0.173205
+          ],
+          [
+            0.0,
+            0.086603
+          ],
+          [
+            0.05,
+            0.0
+          ],
+          [
+            0.15,
+            0.0
+          ]
+        ],
+        "length_m": 0.2,
+        "wall_m": 0.008
+      },
+      "chambers": [],
+      "ducts": [],
+      "mounts": [
+        {
+          "id": "m1",
+          "surface": "front",
+          "at_m": [
+            0.1,
+            0.0866
+          ],
+          "rear_into": "main",
+          "recess_m": 0.0
+        }
+      ],
+      "solids": []
+    },
+    "radiators": [
+      {
+        "kind": "cone",
+        "driver_id": "dayton-tcp115-4",
+        "mount": "m1"
+      }
+    ],
+    "listening": {
+      "distance_m": 1.0
+    }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [
+      {
+        "blocks": [
+          {
+            "kind": "biquad",
+            "type": "highpass",
+            "f_hz": 35.0,
+            "q": 0.707
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      }
+    ],
+    "correction": {
+      "enabled": true,
+      "protected_band_hz": [
+        3000.0,
+        5000.0
+      ],
+      "max_filters": 10
+    }
+  },
+  "electronics": {
+    "amplifiers": [
+      "dayton-kabd-4100"
+    ],
+    "dsp_device": null
+  },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": true,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}

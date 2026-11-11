@@ -729,8 +729,8 @@ fn level_2_outer_shapes_register() {
     let mut sloped = serde_json::Map::new();
     sloped.insert("width_m".into(), serde_json::json!(0.2));
     sloped.insert("height_m".into(), serde_json::json!(0.3));
-    sloped.insert("depth_front_m".into(), serde_json::json!(0.12));
-    sloped.insert("depth_back_m".into(), serde_json::json!(0.2));
+    sloped.insert("depth_bottom_m".into(), serde_json::json!(0.2));
+    sloped.insert("depth_top_m".into(), serde_json::json!(0.12));
     sloped.insert("wall_m".into(), serde_json::json!(0.012));
     assert!(
         registry
@@ -1083,10 +1083,43 @@ fn a_tube_gets_the_diffraction_of_its_round_end_cap() {
     }
 }
 
+/// A shape that answers only the air volume, as a half-written new member would.
+struct HalfWritten;
+
+impl seatlock_core::registry::OuterShape for HalfWritten {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        Ok(0.005)
+    }
+    fn baffle_width_m(&self) -> f64 {
+        0.16
+    }
+}
+
 #[test]
 fn an_unfinished_shape_says_so_and_gives_no_curves() {
-    // Every registered shape that does not yet answer the whole outer-shape contract.
-    let unfinished = [
+    let mut registry = builtin();
+    registry.register_outer("half_written", |_| Ok(Box::new(HalfWritten)));
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    *value.pointer_mut("/speaker/enclosure/outer").unwrap() =
+        serde_json::json!({ "kind": "half_written" });
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let result = simulate(&design, &SimulateRequest::default(), &registry);
+    assert!(result.radiators.is_empty(), "gave curves");
+    assert!(
+        result
+            .issues
+            .iter()
+            .any(|issue| issue.message.contains("not finished yet")),
+        "{:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn the_level_2_shapes_simulate_with_baffle_radiation_from_their_own_front() {
+    // Each shape's front is where sealed-test's driver sits, and the baffle model takes edge
+    // diffraction from that shape's own outline, so each gives its own low-frequency step.
+    let shapes = [
         serde_json::json!({
             "kind": "rounded", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18,
             "wall_m": 0.008, "edge_radius_m": 0.02
@@ -1096,29 +1129,38 @@ fn an_unfinished_shape_says_so_and_gives_no_curves() {
             "wall_m": 0.008, "chamfer_m": 0.01
         }),
         serde_json::json!({
-            "kind": "sloped", "width_m": 0.16, "height_m": 0.25, "depth_front_m": 0.15,
-            "depth_back_m": 0.20, "wall_m": 0.008
+            "kind": "sloped", "width_m": 0.16, "height_m": 0.25, "depth_bottom_m": 0.20,
+            "depth_top_m": 0.15, "wall_m": 0.008
         }),
         serde_json::json!({
-            "kind": "prism", "length_m": 0.25, "wall_m": 0.008,
-            "outline_m": [[0.0, 0.0], [0.16, 0.0], [0.16, 0.18], [0.0, 0.18]]
+            "kind": "prism", "length_m": 0.18, "wall_m": 0.008,
+            "outline_m": [[0.0, 0.0], [0.16, 0.0], [0.16, 0.20], [0.08, 0.25], [0.0, 0.20]]
         }),
     ];
-    for outer in unfinished {
+    for outer in shapes {
         let kind = outer["kind"].as_str().unwrap().to_string();
         let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
         *value.pointer_mut("/speaker/enclosure/outer").unwrap() = outer;
         let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
-        let result = simulate(&design, &SimulateRequest::default(), &builtin());
-        assert!(result.radiators.is_empty(), "{kind} gave curves");
+        let request = SimulateRequest {
+            radiation: "baffle".into(),
+            space: "half".into(),
+            ..SimulateRequest::default()
+        };
+        let result = simulate(&design, &request, &builtin());
+        assert!(!result.radiators.is_empty(), "{kind}: {:?}", result.issues);
         assert!(
-            result
-                .issues
+            !result
+                .fidelity
+                .ignored
                 .iter()
-                .any(|issue| issue.message.contains("not finished yet")),
+                .any(|line| line.contains("treated as a point source")),
             "{kind}: {:?}",
-            result.issues
+            result.fidelity.ignored
         );
+        let report =
+            seatlock_sim::geometry_report(&design).unwrap_or_else(|err| panic!("{kind}: {err}"));
+        assert!(report.solid_volume_m3 > 0.0, "{kind}");
     }
 }
 
@@ -1161,4 +1203,28 @@ fn chk_cost_1_sheet_box_hand_calculation() {
         .map(|line| line.matches(" mm").count())
         .sum();
     assert_eq!(panels, 12, "{:?}", report.cost.cut_list);
+}
+
+#[test]
+fn chk_geo_1_every_example_design_simulates_and_its_voxels_agree() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../designs/examples");
+    let mut count = 0;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let design: seatlock_core::DesignFile = serde_json::from_str(&text).unwrap();
+        let name = path.display();
+        let result = simulate(&design, &SimulateRequest::default(), &builtin());
+        assert!(!result.radiators.is_empty(), "{name}: {:?}", result.issues);
+        let report =
+            seatlock_sim::geometry_report(&design).unwrap_or_else(|err| panic!("{name}: {err}"));
+        let air = report.interior_volume_m3;
+        assert!(
+            (report.voxel_air_volume_m3 - air).abs() / air < 0.02,
+            "{name}: formula {air:.6e}, voxels {:.6e}",
+            report.voxel_air_volume_m3
+        );
+        count += 1;
+    }
+    assert!(count >= 8, "{count} examples");
 }

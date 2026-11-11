@@ -509,6 +509,17 @@ A parametric model of the cabinet. The user edits numbers and drags handles, and
 
 **Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. Level 4 adds an imported mesh. The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
 
+The Level 2 printed shapes, as they appear in a design file:
+
+```jsonc
+{ "kind": "rounded",   "width_m": 0.16, "height_m": 0.26, "depth_m": 0.20, "wall_m": 0.008, "edge_radius_m": 0.02 }  // all 12 edges
+{ "kind": "chamfered", "width_m": 0.16, "height_m": 0.26, "depth_m": 0.20, "wall_m": 0.008, "chamfer_m": 0.015 }    // 45-degree, all 12 edges
+{ "kind": "sloped", "width_m": 0.16, "height_m": 0.26, "depth_bottom_m": 0.22, "depth_top_m": 0.16, "wall_m": 0.008 } // the front leans back; the back is vertical
+{ "kind": "prism", "outline_m": [[0.0, 0.0], [0.16, 0.0], [0.08, 0.2]], "length_m": 0.2, "wall_m": 0.008 }       // the front's [x, z] corners, extruded back along y
+```
+
+The wall follows the outside everywhere: the inside of a rounded box is rounded by `edge_radius_m - wall_m`, a chamfer's inside leg is `chamfer_m - wall_m * (2 - sqrt 2)`, and a prism's inside outline is every side moved inward by `wall_m`. Rounded and chamfered boxes keep the six box faces, and a mount must sit on the flat part of its face. A sloped box's faces are `front` (the slope), `back`, `top`, `bottom`, `left`, and `right`. A prism's faces are `front`, `back`, and `side-1`, `side-2`, ... for the sides from the first outline corner onward. On any face, `[u, v]` is measured from the lower-left corner as seen from outside, with `v` running up the face; the top and bottom keep the box's convention.
+
 **Build method.** Each part of the cabinet is either printed or a stock part from `catalog/stock/`, such as a length of PVC pipe or a cut sheet. A hybrid build combines them: for example, a stock pipe for the body with printed end caps, baffle, and port. The outer-shape member `tube` (Level 2) is a stock pipe or tube cut to length, whose diameter and wall come from its stock record. The member `sheet_box` (Level 2) is a box cut from sheet stock such as MDF, plywood, or foam board, with a cut list. Printed parts and stock parts both feed the air network, the voxel grid, the cost, and the export: print files for printed parts, and a cut list for stock parts.
 
 Printing is optional. A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. When the same cabinet can be built more than one way, the lab shows the ways side by side, each with its cost and its results. Printing earns its place through geometry that stock parts cannot make, such as shaped ports, folds, and curved baffles. Wall stiffness also differs between materials, but wall vibration is not simulated (section 15), so the comparison says so.

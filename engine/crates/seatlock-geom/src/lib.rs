@@ -1,5 +1,8 @@
 //! Cabinet geometry: air network, solid primitives, voxel grid, and volumes.
 
+pub mod edged;
+pub mod prism;
+
 pub use seatlock_core::registry::MountPose;
 use seatlock_core::registry::{OuterShape, Registry};
 use serde_json::{json, Map, Value};
@@ -377,80 +380,6 @@ fn parse_sheet_box(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, S
     }))
 }
 
-struct RoundedBox {
-    inner: BoxShape,
-    #[allow(dead_code)]
-    radius_m: f64,
-}
-
-impl OuterShape for RoundedBox {
-    fn interior_volume_m3(&self) -> Result<f64, String> {
-        self.inner.interior_volume_m3()
-    }
-    fn baffle_width_m(&self) -> f64 {
-        self.inner.baffle_width_m()
-    }
-}
-
-/// A box with chamfered outer edges. Not finished: it answers only the air volume (without
-/// the chamfers), so the simulator says so instead of treating it as a plain box.
-struct ChamferedBox {
-    inner: BoxShape,
-    #[allow(dead_code)]
-    chamfer_m: f64,
-}
-
-impl OuterShape for ChamferedBox {
-    fn interior_volume_m3(&self) -> Result<f64, String> {
-        self.inner.interior_volume_m3()
-    }
-    fn baffle_width_m(&self) -> f64 {
-        self.inner.baffle_width_m()
-    }
-}
-
-struct SlopedBox {
-    width_m: f64,
-    height_m: f64,
-    depth_front_m: f64,
-    depth_back_m: f64,
-    wall_m: f64,
-}
-
-impl OuterShape for SlopedBox {
-    fn interior_volume_m3(&self) -> Result<f64, String> {
-        let width = self.width_m - 2.0 * self.wall_m;
-        let height = self.height_m - 2.0 * self.wall_m;
-        let depth = 0.5 * (self.depth_front_m + self.depth_back_m) - 2.0 * self.wall_m;
-        if width <= 0.0 || height <= 0.0 || depth <= 0.0 {
-            return Err("The walls are thicker than the sloped box.".into());
-        }
-        Ok(width * height * depth)
-    }
-    fn baffle_width_m(&self) -> f64 {
-        self.width_m
-    }
-}
-
-struct Prism {
-    length_m: f64,
-    wall_m: f64,
-    area_m2: f64,
-}
-
-impl OuterShape for Prism {
-    fn interior_volume_m3(&self) -> Result<f64, String> {
-        let length = self.length_m - 2.0 * self.wall_m;
-        if length <= 0.0 || self.area_m2 <= 0.0 {
-            return Err("The prism has no air volume.".into());
-        }
-        Ok(self.area_m2 * length)
-    }
-    fn baffle_width_m(&self) -> f64 {
-        self.area_m2.sqrt()
-    }
-}
-
 pub struct TubeShape {
     pub inside_diameter_m: f64,
     pub outside_diameter_m: f64,
@@ -625,46 +554,45 @@ fn parse_box(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String>
 }
 
 fn parse_rounded(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
-    Ok(Box::new(RoundedBox {
-        inner: box_from(fields)?,
-        radius_m: required_f64(fields, "edge_radius_m")?,
-    }))
+    let edge = edged::Edge::Round(required_f64(fields, "edge_radius_m")?);
+    Ok(Box::new(edged::EdgedBox::new(box_from(fields)?, edge)?))
 }
 
 fn parse_chamfered(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
-    Ok(Box::new(ChamferedBox {
-        inner: box_from(fields)?,
-        chamfer_m: required_f64(fields, "chamfer_m")?,
-    }))
+    let edge = edged::Edge::Chamfer(required_f64(fields, "chamfer_m")?);
+    Ok(Box::new(edged::EdgedBox::new(box_from(fields)?, edge)?))
 }
 
 fn parse_sloped(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
-    Ok(Box::new(SlopedBox {
-        width_m: required_f64(fields, "width_m")?,
-        height_m: required_f64(fields, "height_m")?,
-        depth_front_m: required_f64(fields, "depth_front_m")?,
-        depth_back_m: required_f64(fields, "depth_back_m")?,
-        wall_m: required_f64(fields, "wall_m")?,
-    }))
+    Ok(Box::new(prism::sloped(
+        required_f64(fields, "width_m")?,
+        required_f64(fields, "height_m")?,
+        required_f64(fields, "depth_bottom_m")?,
+        required_f64(fields, "depth_top_m")?,
+        required_f64(fields, "wall_m")?,
+    )?))
 }
 
+/// `outline_m` is the front, `[x, z]` corners in order, extruded `length_m` back along y.
 fn parse_prism(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
-    let outline = fields
+    let outline: Vec<[f64; 2]> = fields
         .get("outline_m")
         .and_then(Value::as_array)
-        .ok_or("missing outline_m")?;
-    let mut area = 0.0;
-    for index in 0..outline.len() {
-        let next = (index + 1) % outline.len();
-        let (x0, y0) = point2(&outline[index]);
-        let (x1, y1) = point2(&outline[next]);
-        area += x0 * y1 - x1 * y0;
-    }
-    Ok(Box::new(Prism {
-        length_m: required_f64(fields, "length_m")?,
-        wall_m: required_f64(fields, "wall_m")?,
-        area_m2: area.abs() / 2.0,
-    }))
+        .ok_or("missing outline_m")?
+        .iter()
+        .map(|point| {
+            let (a, b) = point2(point);
+            [a, b]
+        })
+        .collect();
+    Ok(Box::new(prism::Prism::new(
+        prism::Axis::Y,
+        &outline,
+        required_f64(fields, "length_m")?,
+        required_f64(fields, "wall_m")?,
+        ["front", "back"],
+        None,
+    )?))
 }
 
 pub fn describe_tube(fields: &Map<String, Value>) -> Result<TubeShape, String> {
