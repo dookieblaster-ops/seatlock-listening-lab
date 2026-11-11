@@ -22,5 +22,19 @@
     "per": "5-pack",
     "url": "https://www.homedepot.com/p/Komatex-24-in-x-36-in-x-0-118-in-White-Foam-Project-Board-5-Pack-41656106/310981486",
     "read_on": "2026-11-10"
+  },
+  "density_range_kg_m3": [
+    550.0,
+    650.0
+  ],
+  "youngs_modulus_range_pa": [
+    850000000.0,
+    1100000000.0
+  ],
+  "stiffness_note": "Kommerling's Komatex data sheet prints apparent density 0.55 to 0.65 g/cm3 (DIN 53 479) and modulus of elasticity 850 to 1100 N/mm2 (DIN 53 457), as standard values for an average density; small variations with thickness are possible. At 0.118 in. this board is far thinner than a speaker wall, so it suits panels and baffles, not a whole box.",
+  "data_source": {
+    "url": "https://piedmontplastics.com/resources/literatures/kommerlingR-komatexR-data-sheet",
+    "title": "Kommerling Komatex Data Sheet (Kommerling USA)",
+    "read_on": "2026-11-10"
   }
 }
