@@ -5,8 +5,8 @@
 use seatlock_core::catalog;
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
 use seatlock_sim::{
-    builtin, correction_plan_with, geometry_report, listen_package, simulate_json,
-    simulate_with_progress, SimulateRequest,
+    builtin, compare, correction_plan_with, geometry_report, listen_package, optimize,
+    simulate_json, simulate_with_progress, SimulateRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -125,6 +125,54 @@ fn report_progress(steps: usize, max_steps: usize) -> bool {
     {
         let _ = (steps, max_steps);
         true
+    }
+}
+
+/// Cost and quality comparisons and the optimizer (README sections 9.2, 6.2, 11.3). The
+/// request is `{ "text": design, ...method fields }`.
+fn compare_call(method: &str, request: &str) -> String {
+    let error = |error: String| serde_json::to_string(&ErrorReply { error }).unwrap();
+    let value: serde_json::Value = match serde_json::from_str(request) {
+        Ok(value) => value,
+        Err(err) => return error(err.to_string()),
+    };
+    let text = value.get("text").and_then(|t| t.as_str()).unwrap_or("");
+    let design: seatlock_core::DesignFile = match serde_json::from_str(text) {
+        Ok(design) => design,
+        Err(err) => return error(err.to_string()),
+    };
+    let registry = builtin();
+    let reply = match method {
+        "compare.reference" => {
+            serde_json::to_value(compare::cheap_against_reference(&design, &registry))
+        }
+        "compare.methods" => {
+            let rows: Vec<serde_json::Value> = compare::build_methods(&design, &registry)
+                .into_iter()
+                .map(|row| match row {
+                    Ok(variant) => serde_json::to_value(variant).unwrap_or_default(),
+                    Err((label, problem)) => {
+                        serde_json::json!({ "label": label, "error": problem })
+                    }
+                })
+                .collect();
+            Ok(serde_json::Value::Array(rows))
+        }
+        "optimize.combos" => serde_json::to_value(optimize::combos(&design)),
+        _ => {
+            let parsed: optimize::OptimizeRequest = match serde_json::from_value(value.clone()) {
+                Ok(parsed) => parsed,
+                Err(err) => return error(err.to_string()),
+            };
+            match optimize::optimize_combo(&design, &parsed, &registry, &mut report_progress) {
+                Ok(result) => serde_json::to_value(result),
+                Err(problem) => return error(problem),
+            }
+        }
+    };
+    match reply {
+        Ok(value) => value.to_string(),
+        Err(err) => error(err.to_string()),
     }
 }
 
@@ -258,6 +306,9 @@ fn dispatch(method: &str, request: &str) -> String {
             }
         }
         "simulate.full3d" => full_3d(request),
+        "compare.reference" | "compare.methods" | "optimize.combos" | "optimize.combo" => {
+            compare_call(method, request)
+        }
         other => serde_json::to_string(&ErrorReply {
             error: format!("Unknown method: {other}"),
         })

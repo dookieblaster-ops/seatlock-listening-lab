@@ -78,7 +78,7 @@ pub fn correct(
     fixed_db: &[f64],
 ) -> CorrectionOutcome {
     let (natural_f6, _, _) = metrics(freqs, response_db, max_spl_db);
-    let (bass, f_low, _) = c2(
+    let (bass, f_low, bass_note) = c2(
         freqs,
         response_db,
         max_spl_db,
@@ -96,7 +96,9 @@ pub fn correct(
     }
     let anchor = mean_db(freqs, &with_bass);
     let (f6_after, _, _) = metrics(freqs, &with_bass, max_spl_db);
-    let bass_message = if f6_after + 1.0 < natural_f6 {
+    let bass_message = if !bass_note.is_empty() {
+        format!("{bass_note} Bass limit {f6_after:.0} Hz.")
+    } else if f6_after + 1.0 < natural_f6 {
         format!("Bass extended from {natural_f6:.0} Hz to {f6_after:.0} Hz, staying inside the driver's limits.")
     } else {
         format!(
@@ -173,37 +175,76 @@ fn c2(
     vented: bool,
     tuning_hz: f64,
 ) -> (Vec<CorrectionFilter>, f64, String) {
-    let _ = natural_f6_hz;
     // The analog shape can fit while the Linkwitz biquad still boosts the bass.
     // Keep walking up until the filters that will actually be used stay inside the limits.
-    let mut f_low = freqs.last().copied().unwrap_or(80.0);
     let floor = if vented { tuning_hz.max(20.0) } else { 20.0 };
-    for freq in freqs {
-        if *freq < floor {
-            continue;
-        }
-        if !shape_fits(freqs, max_spl_db, design_level_db, *freq, vented, tuning_hz) {
-            continue;
-        }
-        let trial = bass_filters(*freq, box_fc_hz, box_qtc, vented, tuning_hz);
-        if filters_stay_inside(
-            freqs,
-            response_db,
-            max_spl_db,
-            &trial,
-            design_level_db,
-            sample_rate_hz,
-        ) {
-            f_low = *freq;
-            break;
+    let search = |level: f64| -> Option<f64> {
+        freqs.iter().copied().find(|freq| {
+            *freq >= floor
+                && *freq <= BASS_SEARCH_TOP_HZ
+                && shape_fits(freqs, max_spl_db, level, *freq, vented, tuning_hz)
+                && filters_stay_inside(
+                    freqs,
+                    response_db,
+                    max_spl_db,
+                    &bass_filters(*freq, box_fc_hz, box_qtc, vented, tuning_hz),
+                    level,
+                    sample_rate_hz,
+                )
+        })
+    };
+    if let Some(f_low) = search(design_level_db) {
+        return (
+            bass_filters(f_low, box_fc_hz, box_qtc, vented, tuning_hz),
+            f_low,
+            String::new(),
+        );
+    }
+    // The speaker cannot play the design level even in its midrange. Shape the bass for the
+    // level it can reach there instead of pushing the bass limit up past the midrange.
+    // The level at 1 kHz at which the response first touches a limit somewhere from 300 Hz to
+    // 3 kHz, less a small margin.
+    let at_1k = freqs
+        .iter()
+        .position(|freq| *freq >= 1_000.0)
+        .map(|index| response_db[index])
+        .unwrap_or(0.0);
+    let reachable = freqs
+        .iter()
+        .enumerate()
+        .filter(|(_, freq)| (300.0..=3_000.0).contains(*freq))
+        .map(|(index, _)| max_spl_db[index] - (response_db[index] - at_1k))
+        .fold(f64::INFINITY, f64::min)
+        - 0.5;
+    if reachable.is_finite() && reachable < design_level_db {
+        if let Some(f_low) = search(reachable) {
+            return (
+                bass_filters(f_low, box_fc_hz, box_qtc, vented, tuning_hz),
+                f_low,
+                format!(
+                    "This speaker reaches only {reachable:.0} dB between 300 Hz and 3 kHz, so the bass is shaped for that level instead of {design_level_db:.0} dB."
+                ),
+            );
         }
     }
+    // Nothing fits: leave the natural bass, keeping only the protection a port needs.
+    let protect: Vec<CorrectionFilter> = if vented {
+        bass_filters(tuning_hz, box_fc_hz, box_qtc, true, tuning_hz)
+            .into_iter()
+            .take(1)
+            .collect()
+    } else {
+        Vec::new()
+    };
     (
-        bass_filters(f_low, box_fc_hz, box_qtc, vented, tuning_hz),
-        f_low,
-        String::new(),
+        protect,
+        natural_f6_hz,
+        "No bass shape fits inside this speaker's limits, so the natural bass is kept.".into(),
     )
 }
+
+/// The bass corner is never moved above this: a higher corner is no longer bass correction.
+const BASS_SEARCH_TOP_HZ: f64 = 300.0;
 
 fn bass_filters(
     f_low: f64,
@@ -291,6 +332,11 @@ fn filters_stay_inside(
             .iter()
             .map(|filter| filter_db(filter, *freq, sample_rate_hz))
             .sum();
+        // Above 3 kHz the bass filters change nothing; the coil and the amplifier set the limit
+        // there, which no bass shape can fix (see `shape_fits`).
+        if *freq > 3_000.0 && (gain - h_ref).abs() < 0.05 {
+            return true;
+        }
         let room = (max_spl_db[index] - design_level_db).max(0.0);
         if gain > room + 0.05 {
             return false;

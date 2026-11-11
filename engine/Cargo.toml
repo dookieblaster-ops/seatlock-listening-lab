@@ -16,3 +16,16 @@ rustfft = "6.4"
 # The 3D solver's checks take minutes unoptimized; optimize it even in test builds.
 [profile.dev.package.seatlock-fdtd]
 opt-level = 3
+
+# Scoring and the optimizer run many simulations; tests stay fast enough only when optimized.
+[profile.dev.package.seatlock-sim]
+opt-level = 2
+
+[profile.dev.package.seatlock-acoustics]
+opt-level = 2
+
+[profile.dev.package.seatlock-correct]
+opt-level = 2
+
+[profile.dev.package.seatlock-dsp]
+opt-level = 2

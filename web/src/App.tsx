@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CabinetView } from "./CabinetView";
 import { CostPanel } from "./CostPanel";
+import { CostQuality } from "./CostQuality";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
 import {
@@ -654,6 +655,13 @@ export default function App() {
           {fdtdRuns.length > 0 && <FullThreeD runs={fdtdRuns} quick={sim} />}
         </section>
       )}
+
+      <CostQuality
+        text={canonical}
+        onOpen={(next, label) => {
+          void publish(next as Design, label);
+        }}
+      />
 
       {curve && sim && (
         <section className="panel">

@@ -20,7 +20,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub mod chambers;
+pub mod compare;
 pub mod cost;
+pub mod optimize;
 pub mod ports;
 pub mod split;
 pub mod voxels;
@@ -603,6 +605,7 @@ pub fn simulate_with_progress(
     let amp_limit = amplifier_voltage_limit(design);
 
     let mut radiators = Vec::new();
+    let mut input_limit = vec![f64::MAX; freqs.len()];
     for (index, part) in design.speaker.radiators.iter().enumerate() {
         let radiator = match registry.create_radiator(&part.kind, &part.fields) {
             Ok(radiator) => radiator,
@@ -727,6 +730,10 @@ pub fn simulate_with_progress(
                 let volts = (0.05 * C0) / port_speed_1v[i];
                 clean = clean.min(spl_db(pressure_1v[i]) + 20.0 * volts.max(1e-12).log10());
             }
+            // The input level at which this radiator reaches its first limit, through its
+            // own DSP chain (the system's maximum level comes from the lowest of these).
+            let volts_at_limit = 10f64.powf((clean - spl_db(pressure_1v[i])) / 20.0);
+            input_limit[i] = input_limit[i].min(volts_at_limit / blocks_h[i].norm().max(1e-12));
             max_spl.push(clean);
         }
         let listened = room.at_listener(&pressure);
@@ -805,12 +812,20 @@ pub fn simulate_with_progress(
         }
     }
     let summed_spl_db: Vec<f64> = summed_pressure.iter().copied().map(spl_db).collect();
-    let mut max_spl_sum = vec![f64::MAX; freqs.len()];
-    for radiator in &radiators {
-        for (slot, level) in max_spl_sum.iter_mut().zip(&radiator.max_spl_db) {
-            *slot = slot.min(*level);
-        }
-    }
+    // The system plays louder until the first radiator reaches a limit; each radiator gets the
+    // input through its own crossover and EQ, so a woofer far above its crossover never limits.
+    let max_spl_sum: Vec<f64> = if radiators.is_empty() {
+        vec![f64::MAX; freqs.len()]
+    } else {
+        summed_spl_db
+            .iter()
+            .zip(&input_limit)
+            .map(|(level, limit)| {
+                level - 20.0 * request.voltage_v.max(1e-12).log10()
+                    + 20.0 * limit.max(1e-12).log10()
+            })
+            .collect()
+    };
     let (f6_hz, flatness_db, max_spl_metric_db) = metrics(&freqs, &summed_spl_db, &max_spl_sum);
 
     SimulateResult {
@@ -1512,6 +1527,12 @@ pub struct GeometryReport {
 }
 
 pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
+    geometry_report_with(design, true)
+}
+
+/// [`geometry_report`]; without `voxels` the 5 mm voxel air volume (CHK-GEO-1's third view,
+/// most of the time) is skipped and reported as 0. Cost does not use it.
+pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<GeometryReport, String> {
     let outer = &design.speaker.enclosure.outer;
     let registry = builtin();
     let shape = registry.create_outer(&outer.kind, &outer.fields)?;
@@ -1837,9 +1858,13 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
             chamber_list.iter().map(chambers::Chamber::volume_m3).sum()
         },
         solid_volume_m3: solid,
-        voxel_air_volume_m3: seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
-            chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p))
-        })?,
+        voxel_air_volume_m3: if voxels {
+            seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
+                chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p))
+            })?
+        } else {
+            0.0
+        },
         print_mass_kg: (solid + print_split.pins_m3) * density * design.build.infill_fraction,
         cost_note: catalog::cost_note(design),
         mounts,
@@ -1857,7 +1882,7 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
 /// The cost of a design, whatever its shape. A shape without a geometry report still gets
 /// its drivers and electronics priced, and says why the cabinet is missing.
 pub fn design_cost(design: &DesignFile) -> CostReport {
-    match geometry_report(design) {
+    match geometry_report_with(design, false) {
         Ok(report) => report.cost,
         Err(err) => cost::report(
             design,
@@ -2337,7 +2362,6 @@ fn search_shelf(
         let shortfall = (f6 / f6_max.max(1.0)).log2().max(0.0)
             + (flatness - flat_max).max(0.0) / 1.5
             + (level_db - loud).max(0.0) / 6.0;
-        eprintln!("shelf {gain} kept shortfall {shortfall:.3} f6 {f6:.1} flat {flatness:.2} loud {loud:.1}");
         if shortfall < best_short - 1e-4
             || (shortfall - best_short).abs() <= 1e-4 && gain >= best_gain
         {

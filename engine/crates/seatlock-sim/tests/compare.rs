@@ -1,0 +1,124 @@
+//! Cost beside score, cheap against reference, build methods, and the optimizer
+//! (README sections 6.2, 9.2, 11).
+
+use seatlock_core::catalog;
+use seatlock_sim::builtin;
+use seatlock_sim::compare::{build_methods, cheap_against_reference, score, score_as_is};
+use seatlock_sim::optimize::{combos, optimize_combo, OptimizeRequest};
+
+fn example(name: &str) -> seatlock_core::DesignFile {
+    let path = format!(
+        "{}/../../../designs/examples/{name}.seatlock.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[test]
+fn correction_keeps_the_bass_of_a_speaker_that_cannot_reach_the_design_level() {
+    // The TCP115-4 in its PVC tube reaches only about 91 dB in its midrange. Correction used to
+    // push the bass limit to 783 Hz looking for 95 dB; now it shapes the bass for 91 dB.
+    let registry = builtin();
+    let (corrected, _) = score(&example("pvc-tube"), &registry);
+    assert!(corrected.f6_hz < 150.0, "bass limit {}", corrected.f6_hz);
+}
+
+#[test]
+fn a_woofer_far_above_its_crossover_does_not_set_the_systems_clean_level() {
+    // Each radiator gets the input through its own crossover. Before, the woofer's own limit at
+    // 16 kHz, without its low-pass, capped the two-way at 41 dB.
+    let registry = builtin();
+    let (as_is, _) = score_as_is(&example("two-way-vented"), &registry);
+    assert!(as_is.max_spl_db > 85.0, "clean level {}", as_is.max_spl_db);
+}
+
+#[test]
+fn the_reference_build_uses_reference_parts_and_the_same_air() {
+    let registry = builtin();
+    let design = example("mdf-box");
+    let compared = cheap_against_reference(&design, &registry);
+    let reference = compared.reference.expect("built");
+    for radiator in &reference.design.speaker.radiators {
+        let id = radiator.fields["driver_id"].as_str().unwrap();
+        let record = catalog::driver(id).unwrap();
+        assert_eq!(record["tier"], "reference", "{id}");
+    }
+    let amp = catalog::amplifier(&reference.design.electronics.amplifiers[0]).unwrap();
+    assert_eq!(amp["tier"], "reference");
+    let outer = &reference.design.speaker.enclosure.outer;
+    assert_eq!(outer.kind, "sheet_box");
+    let stock = catalog::stock(outer.fields["stock_id"].as_str().unwrap()).unwrap();
+    assert_eq!(stock["tier"], "reference");
+    let a = compared.cheap.score.interior_volume_m3.unwrap();
+    let b = reference.score.interior_volume_m3.unwrap();
+    assert!((a / b - 1.0).abs() < 0.005, "{a} {b}");
+    assert!(reference.score.cost_usd > compared.cheap.score.cost_usd);
+}
+
+#[test]
+fn every_build_method_keeps_the_air_volume() {
+    let registry = builtin();
+    let design = example("pvc-tube");
+    let (now, _) = score_as_is(&design, &registry);
+    let volume = now.interior_volume_m3.unwrap();
+    let rows = build_methods(&design, &registry);
+    let built: Vec<_> = rows.iter().filter_map(|row| row.as_ref().ok()).collect();
+    assert!(built.len() >= 4, "{rows:?}");
+    let kinds: Vec<&str> = built
+        .iter()
+        .map(|v| v.design.speaker.enclosure.outer.kind.as_str())
+        .collect();
+    assert!(kinds.contains(&"box") && kinds.contains(&"sheet_box") && kinds.contains(&"tube"));
+    for variant in &built {
+        let v = variant.score.interior_volume_m3.unwrap();
+        assert!((v / volume - 1.0).abs() < 0.005, "{} {v}", variant.label);
+        assert!(variant.score.cost_usd > 0.0, "{}", variant.label);
+    }
+    // A stock part with no published wall cannot be built, and says why.
+    assert!(rows
+        .iter()
+        .any(|row| matches!(row, Err((_, why)) if why.contains("wall"))));
+}
+
+#[test]
+fn the_optimizer_repeats_from_its_seed_and_improves_on_the_start() {
+    let registry = builtin();
+    let design = example("two-way-vented");
+    let all = combos(&design);
+    assert_eq!(all.len(), 4);
+    let vented = all
+        .iter()
+        .find(|c| c.vented && c.crossover_order == Some(4))
+        .unwrap();
+    let request = OptimizeRequest {
+        seed: 7,
+        combo: vented.index,
+        evaluations: 10,
+    };
+    let first = optimize_combo(&design, &request, &registry, &mut |_, _| true).unwrap();
+    let again = optimize_combo(&design, &request, &registry, &mut |_, _| true).unwrap();
+    assert_eq!(first.evaluations, again.evaluations);
+    let summaries = |r: &seatlock_sim::optimize::ComboResult| {
+        r.best.iter().map(|c| c.summary.clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(summaries(&first), summaries(&again));
+    let (start, _) = score(&design, &registry);
+    let best = &first.best[0].score;
+    assert!(
+        best.shortfall < start.shortfall,
+        "best {} start {}",
+        best.shortfall,
+        start.shortfall
+    );
+    // Every result is a complete design that simulates.
+    let (rescored, _) = score_as_is(&first.best[0].design, &registry);
+    assert!(rescored.problems.is_empty());
+    // Canceling stops the search.
+    let mut calls = 0;
+    let canceled = optimize_combo(&design, &request, &registry, &mut |_, _| {
+        calls += 1;
+        calls < 2
+    })
+    .unwrap();
+    assert!(canceled.canceled && canceled.evaluations < 10);
+}
