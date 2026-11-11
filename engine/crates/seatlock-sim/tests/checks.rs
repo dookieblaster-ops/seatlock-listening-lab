@@ -275,7 +275,8 @@ fn chk_cost_1_sealed_test_hand_calculation() {
     // outer = 0.160 * 0.250 * 0.180
     // inner = (0.160 - 2*0.008) * (0.250 - 2*0.008) * (0.180 - 2*0.008)
     // hole = pi * (0.118/2)^2 * 0.008
-    // solid = outer - inner - hole
+    // bolts = 4 * pi * (0.0035/2)^2 * 0.008: four 3.5 mm pilot holes on the 0.132 m circle
+    // solid = outer - inner - hole - bolts
     // mass = solid * 1240 kg/m^3 * infill 1
     // driver, filament, and amplifier prices are null, so the price is unknown
     let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
@@ -283,7 +284,8 @@ fn chk_cost_1_sealed_test_hand_calculation() {
     let outer = 0.160 * 0.250 * 0.180;
     let air = (0.160 - 2.0 * 0.008) * (0.250 - 2.0 * 0.008) * (0.180 - 2.0 * 0.008);
     let hole = std::f64::consts::PI * (0.118_f64 / 2.0).powi(2) * 0.008;
-    let solid = outer - air - hole;
+    let bolts = 4.0 * std::f64::consts::PI * (0.0035_f64 / 2.0).powi(2) * 0.008;
+    let solid = outer - air - hole - bolts;
     let mass = solid * 1240.0;
     assert!((report.interior_volume_m3 - air).abs() < 1e-12);
     assert!(
@@ -997,14 +999,16 @@ fn chk_cost_1_tube_hand_calculation() {
     // drivers   2 x $15.98
     // pipe      both 0.5 m cuts fit one 3.048 m piece: 1 x $77.13
     // caps      per speaker: 2 discs of the 0.1143 m outside diameter, 0.008 m thick,
-    //           minus the 0.095758 m cut-out in the front cap; PLA 1240 kg/m^3 at $13.49/kg
+    //           minus the 0.095758 m cut-out and four 3.5 mm bolt holes in the front cap;
+    //           PLA 1240 kg/m^3 at $13.49/kg
     // amplifier 2 channels needed, one KABD-4100 has 4: 1 x $89.98
     let design = tube_design(0.5, true, "dayton-tcp115-4", "dayton-kabd-4100");
     let report = seatlock_sim::geometry_report(&design).unwrap();
     let pi = std::f64::consts::PI;
     let disc = pi * (0.1143_f64 / 2.0).powi(2) * 0.008;
     let hole = pi * (0.095758_f64 / 2.0).powi(2) * 0.008;
-    let caps_kg = (2.0 * disc - hole) * 1240.0 * 2.0;
+    let bolts = 4.0 * pi * (0.0035_f64 / 2.0).powi(2) * 0.008;
+    let caps_kg = (2.0 * disc - hole - bolts) * 1240.0 * 2.0;
     let expected = 2.0 * 15.98 + 77.13 + caps_kg * 13.49 + 89.98;
     assert!(report.cost.complete, "{:?}", report.cost.problems);
     assert!(!report.cost.unconfirmed);
@@ -1026,7 +1030,8 @@ fn chk_cost_1_sealed_test_dollars_and_print_time() {
     let outer = 0.160 * 0.250 * 0.180;
     let air = (0.160 - 2.0 * 0.008) * (0.250 - 2.0 * 0.008) * (0.180 - 2.0 * 0.008);
     let hole = std::f64::consts::PI * (0.118_f64 / 2.0).powi(2) * 0.008;
-    let solid = outer - air - hole;
+    let bolts = 4.0 * std::f64::consts::PI * (0.0035_f64 / 2.0).powi(2) * 0.008;
+    let solid = outer - air - hole - bolts;
     let pla = solid * 1240.0 * 2.0 * 13.49;
     assert!(!report.cost.complete);
     assert!(
@@ -1227,4 +1232,82 @@ fn chk_geo_1_every_example_design_simulates_and_its_voxels_agree() {
         count += 1;
     }
     assert!(count >= 8, "{count} examples");
+}
+
+fn sealed_with_mount(edit: impl Fn(&mut serde_json::Value)) -> seatlock_core::DesignFile {
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    edit(value.pointer_mut("/speaker/enclosure/mounts/0").unwrap());
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn a_recess_takes_the_flange_ring_out_and_shortens_the_bolt_holes() {
+    // test-woofer-a: flange 0.146 m, cut-out 0.118 m, four bolts on 0.132 m. Recess 3 mm.
+    let plain = seatlock_sim::geometry_report(&sealed_with_mount(|_| {})).unwrap();
+    let design = sealed_with_mount(|mount| mount["recess_m"] = serde_json::json!(0.003));
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let pi = std::f64::consts::PI;
+    let ring = pi * ((0.146_f64 / 2.0).powi(2) - (0.118_f64 / 2.0).powi(2)) * 0.003;
+    let bolts_shorter = 4.0 * pi * (0.0035_f64 / 2.0).powi(2) * 0.003;
+    let expected = plain.solid_volume_m3 - ring + bolts_shorter;
+    assert!(
+        (report.solid_volume_m3 - expected).abs() < 1e-12,
+        "{} against {expected}",
+        report.solid_volume_m3
+    );
+    assert!(report.can_export_print, "{:?}", report.warnings);
+    let tree = report.print_tree.to_string();
+    assert!(tree.contains("0.073"), "no flange-sized recess: {tree}");
+}
+
+#[test]
+fn bolt_holes_sit_on_the_bolt_circle_in_the_face() {
+    let report = seatlock_sim::geometry_report(&sealed_with_mount(|_| {})).unwrap();
+    // sealed-test's mount is at x 0.08, z 0.15 on the front (y = 0).
+    let mut found = 0;
+    fn walk(node: &serde_json::Value, found: &mut usize) {
+        if node["op"] == "cylinder" && (node["radius_m"].as_f64().unwrap() - 0.00175).abs() < 1e-12
+        {
+            let base = node["base_m"].as_array().unwrap();
+            let (x, z) = (base[0].as_f64().unwrap(), base[2].as_f64().unwrap());
+            let r = ((x - 0.08).powi(2) + (z - 0.15).powi(2)).sqrt();
+            assert!((r - 0.066).abs() < 1e-9, "bolt at radius {r}");
+            assert!(node["base_m"][1].as_f64().unwrap() < 0.0);
+            *found += 1;
+        }
+        if let Some(children) = node["of"].as_array() {
+            for child in children {
+                walk(child, found);
+            }
+        }
+    }
+    walk(&report.print_tree, &mut found);
+    assert_eq!(found, 4);
+}
+
+#[test]
+fn a_mounting_size_the_record_does_not_print_refuses_the_export() {
+    // dayton-nd65-4 prints no bolt circle; a recess needs the flange, and must be thinner
+    // than the wall.
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    value["speaker"]["radiators"][0]["driver_id"] = serde_json::json!("dayton-nd65-4");
+    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(!report.can_export_print);
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line.contains("bolt circle")),
+        "{:?}",
+        report.warnings
+    );
+    let deep = sealed_with_mount(|mount| mount["recess_m"] = serde_json::json!(0.008));
+    let report = seatlock_sim::geometry_report(&deep).unwrap();
+    assert!(!report.can_export_print);
+    assert!(
+        report.warnings.iter().any(|line| line.contains("recess")),
+        "{:?}",
+        report.warnings
+    );
 }

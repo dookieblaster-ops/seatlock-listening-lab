@@ -1143,6 +1143,8 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let mut cut_areas = Vec::new();
     let mut holes = Vec::new();
     let mut can_export = true;
+    let mut features = Vec::new();
+    let mut feature_volume = 0.0;
     for mount in &design.speaker.enclosure.mounts {
         let pose = shape
             .mount_pose(&mount.surface, mount.at_m)
@@ -1164,6 +1166,17 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
                 std::f64::consts::PI * (cutout * 0.5).powi(2),
             ));
             holes.push((pose, cutout));
+            let thickness = shape.panel_thickness_m(&mount.surface).unwrap_or(0.0);
+            match mount_features(design, mount, &pose, cutout, thickness) {
+                Ok((parts, volume)) => {
+                    features.extend(parts);
+                    feature_volume += volume;
+                }
+                Err(problem) => {
+                    warnings.push(format!("Mount {}: {problem}", mount.id));
+                    can_export = false;
+                }
+            }
         }
         mounts.push(MountView {
             surface: mount.surface.clone(),
@@ -1176,9 +1189,19 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let solid = shape
         .print_solid_m3(&cut_areas)
         .map_err(|err| shape_message(kind, &err))?;
-    let print_tree = shape
+    let solid = if solid > 0.0 {
+        (solid - feature_volume).max(0.0)
+    } else {
+        solid
+    };
+    let mut print_tree = shape
         .print_tree(&holes)
         .map_err(|err| shape_message(kind, &err))?;
+    if !features.is_empty() {
+        let mut parts = vec![print_tree];
+        parts.extend(features);
+        print_tree = seatlock_geom::csg_difference(parts);
+    }
     let density = catalog::material(&design.build.material)
         .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64))
         .unwrap_or(0.0);
@@ -1289,6 +1312,111 @@ fn print_split_note(parts: &[[f64; 3]]) -> String {
 }
 
 /// The cut-out diameter of the driver on a mount, from its catalog record.
+/// Pilot holes for the driver's screws, unless the mount gives `bolt_hole_m`. Makers print
+/// the bolt circle but not a hole size, so this is the lab's own default (STATUS decisions).
+pub const DEFAULT_BOLT_HOLE_M: f64 = 0.0035;
+
+/// The driver record mounted at `mount_id`.
+fn mount_driver(design: &DesignFile, mount_id: &str) -> Option<Value> {
+    design
+        .speaker
+        .radiators
+        .iter()
+        .find(|radiator| radiator.fields.get("mount").and_then(Value::as_str) == Some(mount_id))
+        .and_then(|radiator| radiator.fields.get("driver_id").and_then(Value::as_str))
+        .and_then(catalog::driver)
+}
+
+/// The recess for the driver's flange and its bolt holes, as CSG parts to subtract, and the
+/// plastic they remove beyond the cut-out. Both come from the driver's mounting record
+/// (README sections 6.4 and 9.1); a size the record does not print refuses the export.
+fn mount_features(
+    design: &DesignFile,
+    mount: &seatlock_core::design::MountRecord,
+    pose: &seatlock_geom::MountPose,
+    cutout_m: f64,
+    thickness_m: f64,
+) -> Result<(Vec<Value>, f64), String> {
+    let driver = mount_driver(design, &mount.id).ok_or("no driver record")?;
+    let size = |key: &str| {
+        driver
+            .pointer(&format!("/mounting/{key}"))
+            .and_then(Value::as_f64)
+            .filter(|value| *value > 0.0)
+    };
+    let pi = std::f64::consts::PI;
+    let recess = mount.recess_m;
+    let o = pose.outward;
+    let at = |offset: [f64; 3], out: f64| {
+        [
+            pose.position_m[0] + offset[0] + o[0] * out,
+            pose.position_m[1] + offset[1] + o[1] * out,
+            pose.position_m[2] + offset[2] + o[2] * out,
+        ]
+    };
+    let inward = [-o[0], -o[1], -o[2]];
+    let extra = 0.0005;
+    let mut parts = Vec::new();
+    let mut volume = 0.0;
+    if recess > 0.0 {
+        let flange = size("outer_diameter_m").ok_or(
+            "the driver's flange diameter is not published, so the recess cannot be cut and \
+             the print file is refused.",
+        )?;
+        if recess >= thickness_m {
+            return Err(format!(
+                "the {:.1} mm recess is as deep as the {:.1} mm panel; the print file is refused.",
+                recess * 1000.0,
+                thickness_m * 1000.0
+            ));
+        }
+        parts.push(seatlock_geom::csg_cylinder(
+            at([0.0; 3], extra),
+            inward,
+            recess + extra,
+            flange / 2.0,
+        ));
+        volume += pi * ((flange / 2.0).powi(2) - (cutout_m / 2.0).powi(2)) * recess;
+    }
+    let circle = size("bolt_circle_m").ok_or(
+        "the driver's bolt circle is not published, so its bolt holes cannot be drilled and \
+         the print file is refused.",
+    )?;
+    let count = size("bolt_count").map(|n| n.round() as usize).ok_or(
+        "the driver's bolt count is not published, so its bolt holes cannot be drilled and \
+         the print file is refused.",
+    )?;
+    let hole = mount
+        .extra
+        .get("bolt_hole_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(DEFAULT_BOLT_HOLE_M);
+    if circle / 2.0 - hole / 2.0 <= cutout_m / 2.0 {
+        return Err(
+            "the bolt holes would break into the cut-out; the print file is refused.".into(),
+        );
+    }
+    let (right, up) = seatlock_geom::prism::face_axes(o);
+    for index in 0..count {
+        let angle = 2.0 * pi * (index as f64 + 0.5) / count as f64;
+        let (s, c) = angle.sin_cos();
+        let r = circle / 2.0;
+        let offset = [
+            r * (s * right[0] + c * up[0]),
+            r * (s * right[1] + c * up[1]),
+            r * (s * right[2] + c * up[2]),
+        ];
+        parts.push(seatlock_geom::csg_cylinder(
+            at(offset, extra),
+            inward,
+            thickness_m + 2.0 * extra,
+            hole / 2.0,
+        ));
+        volume += pi * (hole / 2.0).powi(2) * (thickness_m - recess);
+    }
+    Ok((parts, volume))
+}
+
 fn mount_cutout(design: &DesignFile, mount_id: &str) -> Option<f64> {
     design
         .speaker
