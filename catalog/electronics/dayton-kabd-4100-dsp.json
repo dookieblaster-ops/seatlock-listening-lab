@@ -18,5 +18,7 @@
     "vendor": "Parts Express",
     "url": "https://www.parts-express.com/Dayton-Audio-KABD-4100-4-x-100W-Bluetooth-Amp-Board-with-DSP-325-434",
     "read_on": "2026-11-10"
-  }
+  },
+  "built_into": "dayton-kabd-4100",
+  "built_into_note": "The processor is the ADAU1701 on the KABD-4100 amplifier board; the price is the same board. It costs nothing extra when that board is already bought."
 }

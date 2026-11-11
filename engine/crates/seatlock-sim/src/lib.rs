@@ -19,6 +19,9 @@ use seatlock_dsp::{delay_block, gain_block, polarity_block, prefer_inverted_high
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+pub mod cost;
+pub use cost::{CabinetParts, CostLine, CostReport};
+
 pub fn builtin() -> Registry {
     let mut registry = Registry::new();
     seatlock_geom::register(&mut registry);
@@ -107,6 +110,8 @@ pub struct SimulateResult {
     pub issues: Vec<Issue>,
     pub fidelity: Fidelity,
     pub cost_note: String,
+    /// Dollars for the whole system, line by line (README section 9.2).
+    pub cost: CostReport,
     pub elapsed_ms: f64,
     pub f6_hz: f64,
     pub flatness_db: f64,
@@ -194,6 +199,7 @@ pub fn simulate(
         issues,
         fidelity,
         cost_note: catalog::cost_note(design),
+        cost: design_cost(design),
         elapsed_ms: elapsed_ms(started),
         f6_hz: 0.0,
         flatness_db: 0.0,
@@ -557,6 +563,7 @@ pub fn simulate(
         issues,
         fidelity,
         cost_note: catalog::cost_note(design),
+        cost: design_cost(design),
         elapsed_ms: elapsed_ms(started),
         f6_hz,
         flatness_db,
@@ -1095,6 +1102,7 @@ pub struct GeometryReport {
     pub cut_list: Vec<String>,
     pub print_note: String,
     pub user_wall: bool,
+    pub cost: CostReport,
 }
 
 pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
@@ -1172,6 +1180,14 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         .and_then(|record| record.get("density_kg_m3").and_then(|v| v.as_f64()))
         .unwrap_or(0.0);
     let print_mass_kg = solid * density * design.build.infill_fraction;
+    let cost = cost::report(
+        design,
+        &CabinetParts {
+            print_solid_m3: Some(solid),
+            stock_cuts: Vec::new(),
+            problems: Vec::new(),
+        },
+    );
     Ok(GeometryReport {
         width_m: shape.width_m,
         height_m: shape.height_m,
@@ -1188,32 +1204,80 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         cut_list: Vec::new(),
         print_note: print_split_note(shape.width_m, shape.depth_m, shape.height_m),
         user_wall: false,
+        cost,
     })
 }
 
+/// The cost of a design, whatever its shape. A shape without a geometry report still gets
+/// its drivers and electronics priced, and says why the cabinet is missing.
+pub fn design_cost(design: &DesignFile) -> CostReport {
+    match geometry_report(design) {
+        Ok(report) => report.cost,
+        Err(err) => cost::report(
+            design,
+            &CabinetParts {
+                print_solid_m3: None,
+                stock_cuts: Vec::new(),
+                problems: vec![err],
+            },
+        ),
+    }
+}
+
+/// The owner's printer from the catalog: name and main-nozzle build volume in m.
+fn printer_volume() -> (String, [f64; 3]) {
+    let record = catalog::printer(None);
+    let name = record
+        .as_ref()
+        .map(|r| {
+            format!(
+                "{} {}",
+                r.get("maker").and_then(Value::as_str).unwrap_or(""),
+                r.get("model").and_then(Value::as_str).unwrap_or("")
+            )
+            .trim()
+            .to_string()
+        })
+        .unwrap_or_else(|| "printer".into());
+    let volume = record
+        .as_ref()
+        .and_then(|r| r.get("build_volume_m").and_then(Value::as_array))
+        .and_then(|values| {
+            let v: Vec<f64> = values.iter().filter_map(Value::as_f64).collect();
+            (v.len() == 3).then(|| [v[0], v[1], v[2]])
+        })
+        .unwrap_or([0.0, 0.0, 0.0]);
+    (name, volume)
+}
+
 fn print_split_note(width_m: f64, depth_m: f64, height_m: f64) -> String {
+    let (name, [bx, by, bz]) = printer_volume();
+    if bx <= 0.0 || by <= 0.0 || bz <= 0.0 {
+        return "No printer is in the catalog, so the print is not split.".to_string();
+    }
+    let size = format!(
+        "{:.0} x {:.0} x {:.0} mm",
+        bx * 1000.0,
+        by * 1000.0,
+        bz * 1000.0
+    );
     let pieces = |size: f64, limit: f64| (size / limit).ceil().max(1.0) as i32;
-    let count = pieces(width_m, 0.22) * pieces(depth_m, 0.22) * pieces(height_m, 0.25);
+    let count = pieces(width_m, bx) * pieces(depth_m, by) * pieces(height_m, bz);
     if count <= 1 {
-        "Fits the placeholder printer of 220 x 220 x 250 mm.".to_string()
+        format!("Fits the {name} ({size}) in one piece.")
     } else {
-        format!("{count} printed pieces for the placeholder printer of 220 x 220 x 250 mm.")
+        format!("About {count} printed pieces for the {name} ({size}).")
     }
 }
 
 fn tube_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let fields = &design.speaker.enclosure.outer.fields;
     let tube = seatlock_geom::describe_tube(fields)?;
-    let stock_id = fields.get("stock_id").and_then(Value::as_str).unwrap_or("");
-    let record = catalog::stock(stock_id);
-    let sold = record
-        .as_ref()
-        .and_then(|item| item.get("length_m").and_then(Value::as_f64))
-        .unwrap_or(tube.length_m);
-    let offcut = (sold - tube.length_m).max(0.0);
-    let price = record
-        .as_ref()
-        .and_then(|item| item.pointer("/price/amount").and_then(Value::as_f64));
+    let stock_id = fields
+        .get("stock_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let mut warnings = Vec::new();
     if tube.wall_from_user {
         warnings.push(
@@ -1221,31 +1285,88 @@ fn tube_report(design: &DesignFile) -> Result<GeometryReport, String> {
                 .into(),
         );
     }
-    let money = match price {
-        Some(amount) => format!("Buys one whole piece at ${amount:.2}."),
-        None => "The stock piece has no price.".to_string(),
-    };
-    warnings.push(format!(
-        "{money} Cut {:.3} m. Offcut {:.3} m.",
-        tube.length_m, offcut
-    ));
+    // Drivers mount on the printed end caps.
+    let mut mounts = Vec::new();
+    let mut cutout_area = 0.0;
+    let mut can_export = true;
+    for mount in &design.speaker.enclosure.mounts {
+        let pose = tube.mount_pose(&mount.surface, mount.at_m)?;
+        let cutout = mount_cutout(design, &mount.id);
+        let cutout = match cutout {
+            Some(value) if value > 0.0 => value,
+            _ => {
+                warnings.push(
+                    "mounting size not published, so this mount is not cut into the print file."
+                        .into(),
+                );
+                can_export = false;
+                0.0
+            }
+        };
+        cutout_area += std::f64::consts::PI * (cutout * 0.5).powi(2);
+        mounts.push(MountView {
+            surface: mount.surface.clone(),
+            at_m: mount.at_m,
+            position_m: pose.position_m,
+            outward: pose.outward,
+            cutout_diameter_m: cutout,
+        });
+    }
+    let caps_m3 = tube.cap_volume_m3() - cutout_area * tube.cap_thickness_m;
+    let density = catalog::material(&design.build.material)
+        .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64))
+        .unwrap_or(0.0);
+    let cost = cost::report(
+        design,
+        &CabinetParts {
+            print_solid_m3: Some(caps_m3),
+            stock_cuts: vec![(stock_id, tube.length_m)],
+            problems: Vec::new(),
+        },
+    );
+    if !cost.problems.is_empty() {
+        can_export = false;
+    }
+    let interior = tube.interior_volume_m3()?;
+    let d = tube.outside_diameter_m;
     Ok(GeometryReport {
-        width_m: tube.outside_diameter_m,
-        height_m: tube.outside_diameter_m,
-        depth_m: tube.length_m,
-        wall_m: (tube.outside_diameter_m - tube.inside_diameter_m) / 2.0,
-        interior_volume_m3: tube.interior_volume_m3()?,
-        solid_volume_m3: 0.0,
-        voxel_air_volume_m3: tube.interior_volume_m3()?,
-        print_mass_kg: 0.0,
+        width_m: d,
+        height_m: d,
+        depth_m: tube.overall_length_m(),
+        wall_m: (d - tube.inside_diameter_m) / 2.0,
+        interior_volume_m3: interior,
+        solid_volume_m3: caps_m3,
+        voxel_air_volume_m3: interior,
+        print_mass_kg: caps_m3 * density * design.build.infill_fraction,
         cost_note: catalog::cost_note(design),
-        mounts: Vec::new(),
+        mounts,
         warnings,
-        can_export_print: true,
-        cut_list: vec![format!("pipe cut {:.3} m", tube.length_m)],
-        print_note: "Two printed end caps. The pipe is a stock cut, not a print. Placeholder printer 220 x 220 x 250 mm.".into(),
+        can_export_print: can_export,
+        cut_list: cost.cut_list.clone(),
+        print_note: format!(
+            "Two printed end caps, {:.1} mm thick. The pipe is a stock cut, not a print. {}",
+            tube.cap_thickness_m * 1000.0,
+            print_split_note(d, tube.cap_thickness_m, d)
+        ),
         user_wall: tube.wall_from_user,
+        cost,
     })
+}
+
+/// The cut-out diameter of the driver on a mount, from its catalog record.
+fn mount_cutout(design: &DesignFile, mount_id: &str) -> Option<f64> {
+    design
+        .speaker
+        .radiators
+        .iter()
+        .find(|radiator| radiator.fields.get("mount").and_then(Value::as_str) == Some(mount_id))
+        .and_then(|radiator| radiator.fields.get("driver_id").and_then(Value::as_str))
+        .and_then(catalog::driver)
+        .and_then(|driver| {
+            driver
+                .pointer("/mounting/cutout_diameter_m")
+                .and_then(Value::as_f64)
+        })
 }
 
 pub fn correction_plan_with(

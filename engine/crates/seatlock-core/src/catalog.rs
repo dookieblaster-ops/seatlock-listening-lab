@@ -23,6 +23,17 @@ pub fn stock(id: &str) -> Option<Value> {
     json_with_id("catalog/stock/", id)
 }
 
+/// The owner's printer: the record named by `id`, or the first one in `catalog/printers/`.
+pub fn printer(id: Option<&str>) -> Option<Value> {
+    if let Some(id) = id {
+        return json_with_id("catalog/printers/", id);
+    }
+    EMBEDDED
+        .iter()
+        .filter(|(path, _)| path.starts_with("catalog/printers/") && path.ends_with(".json"))
+        .find_map(|(_, text)| serde_json::from_str::<Value>(text).ok())
+}
+
 pub fn material(name: &str) -> Option<Value> {
     let text = embedded_file("catalog/materials.json")?;
     let value: Value = serde_json::from_str(text).ok()?;

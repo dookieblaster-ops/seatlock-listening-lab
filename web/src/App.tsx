@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CabinetView } from "./CabinetView";
+import { CostPanel } from "./CostPanel";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
 import { buildCabinetMesh, meshTo3mf, meshToStl, type SolidMesh } from "./printSolid";
@@ -492,9 +493,7 @@ export default function App() {
             </span>{" "}
             m³. 5 mm cells <span data-testid="voxel-air">{geom.voxel_air_volume_m3.toExponential(6)}</span> m³.
           </p>
-          <p data-testid="cost-note">
-            Price: {geom.cost_note}. Cabinet mass {geom.print_mass_kg.toFixed(3)} kg if the price were known.
-          </p>
+          <CostPanel cost={geom.cost} printNote={geom.print_note} />
           <CabinetView
             positions={solid.positions}
             indices={solid.indices}
@@ -636,7 +635,7 @@ export default function App() {
           </p>
           <p data-testid="scores">
             Bass limit {sim.f6_hz.toFixed(0)} Hz. Evenness {sim.flatness_db.toFixed(1)} dB. Maximum
-            clean level {sim.max_spl_metric_db.toFixed(0)} dB. Price: {sim.cost_note}.
+            clean level {sim.max_spl_metric_db.toFixed(0)} dB. Cost: {sim.cost.summary}
           </p>
           <div className="row">
             <button type="button" onClick={() => compareInputRef.current?.click()}>
@@ -667,7 +666,7 @@ export default function App() {
           {simB && (
             <p data-testid="scores-b">
               {nameB}: bass limit {simB.f6_hz.toFixed(0)} Hz. Evenness {simB.flatness_db.toFixed(1)} dB.
-              Maximum clean level {simB.max_spl_metric_db.toFixed(0)} dB. Price: {simB.cost_note}.
+              Maximum clean level {simB.max_spl_metric_db.toFixed(0)} dB. Cost: {simB.cost.summary}
             </p>
           )}
           <div className="row">
@@ -777,7 +776,7 @@ export default function App() {
               />
             </svg>
           )}
-          <p>Price: {sim.cost_note}</p>
+          <p>Cost: {sim.cost.summary}</p>
           {simIssues.length > 0 && (
             <ul className="issues">
               {simIssues.map((issue) => (

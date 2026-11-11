@@ -31,7 +31,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Claude finishes Assignment 10 directly: tube cost and the printer record, the shape contract for `box` and `tube` (the other four shapes warn instead of faking a box), and the exterior block test.
+1. Claude finishes Assignment 10 directly (cost and the printer record are done): the shape contract for `box` and `tube` (the other four shapes warn instead of faking a box), and the exterior block test.
 2. Then the rest of Level 2 M3: `sheet_box`, the other four shapes, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Then M4.
 3. The owner runs `./start.sh` once on the laptop. This closes the last Level 0 item.
 
@@ -41,6 +41,7 @@ The full history is in `docs/status-history.md`. The latest state:
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
 - 2026-11-10, Cursor's shelf fix: at the 95 dB target sealed-test under `baffle` keeps a 2.0 dB shelf. CHK-E2E-1 moved from bass limit 125 Hz, evenness 7.4 dB, clean level 83 dB to 113 Hz, 7.4 dB, 83 dB. A test-only 80 dB target keeps a shelf of at least 3 dB and improves evenness.
+- 2026-11-10, Claude, Assignment 10 item 2: the lab now prices a design in dollars, line by line (drivers, printed plastic, stock pieces, extras, amplifier units, a processor unless it is built into a bought board), with price dates, unconfirmed marks, a cut list per stock piece, and print time as a lower bound from the X2D's flow. Before this, no dollar figure existed anywhere; the new tests failed to build on the old code, which had no cost report, and the old tube report always bought one piece. A stereo pair of 1.6 m PVC cuts now buys two pieces, and a 3.2 m cut is an error. CHK-COST-1 for a TCP115-4 tube pair matches the hand calculation. Sealed-test costs at least $53.07 for the pair (its PLA); its test driver and test amplifier have no price. `tools/cloud-check.sh` passed: 66 engine tests and 7 browser tests.
 - Never yet run on the owner's laptop: `./start.sh` and `./check.sh`.
 
 ## Decisions log
@@ -77,6 +78,7 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: The baffle-step shelf is chosen by trying 0 to 6 dB in 0.5 dB steps and keeping the gain with the smaller shortfall (the larger gain on a tie). Headroom is checked from the bass limit up, because the protective high-pass takes the boost away below it. Reason: checking every frequency down to 10 Hz rejected every gain.
 - 2026-11-10: Print parts are split to the X2D's main-nozzle build volume, 256 x 256 x 260 mm, and print time is shown as a lower bound from its 40 mm^3/s maximum flow. Reason: the owner named the printer, and the maker's sheet gives the flow only as a maximum on a thin-walled test print.
 - 2026-11-10: PLA is the default print material. Reason: the owner is open to any filament, and PLA has the cheapest price sourced so far ($13.49/kg).
+- 2026-11-10: Amplifier units are bought from the design's list: one of each listed model, then more of the first listed model until every radiator in the system has a channel. A processor marked `built_into` an amplifier that is bought costs nothing extra. Tube end caps are flat printed discs of the pipe's outside diameter, 8 mm thick unless the design gives `cap_thickness_m`. Reason: README section 9.2 asks for the electronics that give every radiator a channel, and the KABD-4100's processor is on the same board as its amplifier.
 - 2026-11-10: Printing is optional (owner). A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. `sheet_box` moved from Level 3 to Level 2, because the cheap-against-reference comparison already needs a conventional box cut from sheets. The README opening and sections 2, 3.3, 6.2, 9.2, and 12 and `tasks/level-2.md` were updated.
 
 ## Tool versions

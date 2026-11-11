@@ -772,6 +772,10 @@ fn a_pvc_tube_buys_the_whole_pipe_and_names_the_offcut() {
         serde_json::json!("charlotte-pvc-sch40-4in"),
     );
     outer.insert("length_m".into(), serde_json::json!(0.5));
+    // The driver sits at the middle of the 0.1143 m end cap.
+    *value
+        .pointer_mut("/speaker/enclosure/mounts/0/at_m")
+        .unwrap() = serde_json::json!([0.05715, 0.05715]);
     let design = serde_json::from_value::<seatlock_core::DesignFile>(value).unwrap();
     let report = seatlock_sim::geometry_report(&design).unwrap();
     let radius = 0.1022604 / 2.0;
@@ -783,8 +787,14 @@ fn a_pvc_tube_buys_the_whole_pipe_and_names_the_offcut() {
     );
     assert!(!report.user_wall);
     assert!(report.cut_list.iter().any(|line| line.contains("0.500")));
-    assert!(report.warnings.iter().any(|line| line.contains("Offcut")));
-    assert!(report.warnings.iter().any(|line| line.contains("77.13")));
+    assert!(report.cut_list.iter().any(|line| line.contains("offcut")));
+    let pipe = report
+        .cost
+        .lines
+        .iter()
+        .find(|line| line.item.contains("PVC"))
+        .unwrap();
+    assert_eq!(pipe.unit_usd, Some(77.13));
 }
 
 #[test]
@@ -918,4 +928,119 @@ fn a_driver_farther_from_the_listener_is_delayed() {
     let back = seatlock_sim::geometric_delay_s(&design, 0);
     assert!(back > front);
     assert!(front.abs() < 1e-12);
+}
+
+fn tube_design(length_m: f64, stereo: bool, driver: &str, amp: &str) -> seatlock_core::DesignFile {
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    *value.pointer_mut("/speaker/enclosure/outer").unwrap() = serde_json::json!({
+        "kind": "tube", "stock_id": "charlotte-pvc-sch40-4in",
+        "length_m": length_m, "cap_thickness_m": 0.008
+    });
+    *value
+        .pointer_mut("/speaker/enclosure/mounts/0/at_m")
+        .unwrap() = serde_json::json!([0.05715, 0.05715]);
+    *value.pointer_mut("/speaker/radiators/0/driver_id").unwrap() = serde_json::json!(driver);
+    *value.pointer_mut("/electronics/amplifiers").unwrap() = serde_json::json!([amp]);
+    *value.pointer_mut("/build/stereo_pair").unwrap() = serde_json::json!(stereo);
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn a_stereo_pair_of_tubes_buys_pipe_for_every_cut() {
+    // Two 1.6 m cuts do not fit one 3.048 m pipe, so the pair needs two pieces.
+    let design = tube_design(1.6, true, "test-woofer-a", "test-amp-a");
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let pipe = report
+        .cost
+        .lines
+        .iter()
+        .find(|line| line.item.contains("PVC"))
+        .expect("a pipe line");
+    assert_eq!(pipe.quantity, 2.0);
+    assert_eq!(report.cost.cut_list.len(), 2, "{:?}", report.cost.cut_list);
+    // Two 0.5 m cuts share one piece.
+    let design = tube_design(0.5, true, "test-woofer-a", "test-amp-a");
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let pipe = report
+        .cost
+        .lines
+        .iter()
+        .find(|line| line.item.contains("PVC"))
+        .unwrap();
+    assert_eq!(pipe.quantity, 1.0);
+    assert!(
+        report.cost.cut_list[0].contains("2.048"),
+        "{:?}",
+        report.cost.cut_list
+    );
+}
+
+#[test]
+fn a_tube_cut_longer_than_the_piece_is_an_error() {
+    let design = tube_design(3.2, false, "test-woofer-a", "test-amp-a");
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(!report.cost.complete);
+    assert!(
+        report
+            .cost
+            .problems
+            .iter()
+            .any(|line| line.contains("longer than")),
+        "{:?}",
+        report.cost.problems
+    );
+}
+
+#[test]
+fn chk_cost_1_tube_hand_calculation() {
+    // A stereo pair: TCP115-4 in a 0.5 m cut of 4 in. Schedule 40 PVC with two printed PLA caps.
+    // drivers   2 x $15.98
+    // pipe      both 0.5 m cuts fit one 3.048 m piece: 1 x $77.13
+    // caps      per speaker: 2 discs of the 0.1143 m outside diameter, 0.008 m thick,
+    //           minus the 0.095758 m cut-out in the front cap; PLA 1240 kg/m^3 at $13.49/kg
+    // amplifier 2 channels needed, one KABD-4100 has 4: 1 x $89.98
+    let design = tube_design(0.5, true, "dayton-tcp115-4", "dayton-kabd-4100");
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let pi = std::f64::consts::PI;
+    let disc = pi * (0.1143_f64 / 2.0).powi(2) * 0.008;
+    let hole = pi * (0.095758_f64 / 2.0).powi(2) * 0.008;
+    let caps_kg = (2.0 * disc - hole) * 1240.0 * 2.0;
+    let expected = 2.0 * 15.98 + 77.13 + caps_kg * 13.49 + 89.98;
+    assert!(report.cost.complete, "{:?}", report.cost.problems);
+    assert!(!report.cost.unconfirmed);
+    assert!(
+        (report.cost.known_total_usd - expected).abs() < 1e-6,
+        "{} against {}",
+        report.cost.known_total_usd,
+        expected
+    );
+    assert!((report.cost.print_mass_kg - caps_kg).abs() < 1e-9);
+}
+
+#[test]
+fn chk_cost_1_sealed_test_dollars_and_print_time() {
+    // sealed-test is a stereo pair. Its test driver and test amplifier have no price,
+    // so the total is a lower bound: the PLA for two cabinets.
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let outer = 0.160 * 0.250 * 0.180;
+    let air = (0.160 - 2.0 * 0.008) * (0.250 - 2.0 * 0.008) * (0.180 - 2.0 * 0.008);
+    let hole = std::f64::consts::PI * (0.118_f64 / 2.0).powi(2) * 0.008;
+    let solid = outer - air - hole;
+    let pla = solid * 1240.0 * 2.0 * 13.49;
+    assert!(!report.cost.complete);
+    assert!(
+        (report.cost.known_total_usd - pla).abs() < 1e-9,
+        "{}",
+        report.cost.known_total_usd
+    );
+    // Print time from the X2D's 40 mm^3/s maximum flow is a lower bound.
+    let hours = solid * 2.0 / 4.0e-8 / 3600.0;
+    let shown = report.cost.print_time_h_at_least.unwrap();
+    assert!((shown - hours).abs() < 1e-9, "{shown}");
+    assert!(
+        report.print_note.contains("256 x 256 x 260"),
+        "{}",
+        report.print_note
+    );
 }

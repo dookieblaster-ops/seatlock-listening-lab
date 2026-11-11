@@ -156,6 +156,9 @@ export type GeometryReport = {
   voxel_air_volume_m3: number;
   print_mass_kg: number;
   cost_note: string;
+  cost: CostReport;
+  print_note?: string;
+  cut_list?: string[];
   warnings?: string[];
   can_export_print?: boolean;
   mounts: Array<{
@@ -164,6 +167,29 @@ export type GeometryReport = {
     cutout_diameter_m: number;
   }>;
   error?: string;
+};
+
+export type CostLine = {
+  item: string;
+  quantity: number;
+  unit: string;
+  unit_usd: number | null;
+  total_usd: number | null;
+  read_on: string | null;
+  unconfirmed: boolean;
+};
+
+export type CostReport = {
+  speakers: number;
+  lines: CostLine[];
+  known_total_usd: number;
+  complete: boolean;
+  unconfirmed: boolean;
+  summary: string;
+  problems: string[];
+  cut_list: string[];
+  print_mass_kg: number;
+  print_time_h_at_least: number | null;
 };
 
 export type SimulateResult = {
@@ -181,6 +207,7 @@ export type SimulateResult = {
   issues: Array<{ severity: string; code: string; message: string; field: string }>;
   fidelity: { enclosure: string; radiation: string; room: string; ignored: string[] };
   cost_note: string;
+  cost: CostReport;
   interior_volume_m3: number | null;
   f6_hz: number;
   flatness_db: number;

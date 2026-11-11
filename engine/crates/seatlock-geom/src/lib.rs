@@ -188,8 +188,53 @@ impl OuterShape for Prism {
 pub struct TubeShape {
     pub inside_diameter_m: f64,
     pub outside_diameter_m: f64,
+    /// Length of the stock cut. The printed end caps sit outside it.
     pub length_m: f64,
     pub wall_from_user: bool,
+    /// Thickness of each printed end cap: a flat disc of the tube's outside diameter.
+    pub cap_thickness_m: f64,
+}
+
+/// End caps are 8 mm thick unless the design says otherwise.
+pub const DEFAULT_CAP_THICKNESS_M: f64 = 0.008;
+
+impl TubeShape {
+    /// Overall length: the cut plus both caps. The front cap's outer face is at y = 0.
+    pub fn overall_length_m(&self) -> f64 {
+        self.length_m + 2.0 * self.cap_thickness_m
+    }
+
+    /// Mounts sit on the end caps. Surface coordinates are `[u, v]` from the lower-left corner
+    /// of the square around the cap, seen from outside, as on a flat box face.
+    pub fn mount_pose(&self, surface: &str, at_m: [f64; 2]) -> Result<MountPose, String> {
+        let d = self.outside_diameter_m;
+        let (u, v) = (at_m[0], at_m[1]);
+        let r = ((u - d / 2.0).powi(2) + (v - d / 2.0).powi(2)).sqrt();
+        if r > d / 2.0 {
+            return Err(format!(
+                "The mount at ({u:.3}, {v:.3}) m is outside the {:.0} mm end cap.",
+                d * 1000.0
+            ));
+        }
+        match surface {
+            "front" => Ok(MountPose {
+                position_m: [u, 0.0, v],
+                outward: [0.0, -1.0, 0.0],
+            }),
+            "back" => Ok(MountPose {
+                position_m: [d - u, self.overall_length_m(), v],
+                outward: [0.0, 1.0, 0.0],
+            }),
+            other => Err(format!(
+                "A tube has a front and a back end cap, not a {other} surface."
+            )),
+        }
+    }
+
+    /// Volume of both printed caps, before any cut-outs.
+    pub fn cap_volume_m3(&self) -> f64 {
+        2.0 * std::f64::consts::PI * (self.outside_diameter_m / 2.0).powi(2) * self.cap_thickness_m
+    }
 }
 
 impl OuterShape for TubeShape {
@@ -280,11 +325,16 @@ pub fn describe_tube(fields: &Map<String, Value>) -> Result<TubeShape, String> {
         let diameter = required_f64(fields, "inside_diameter_m")?;
         (diameter, diameter, false)
     };
+    let cap_thickness_m = fields
+        .get("cap_thickness_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(DEFAULT_CAP_THICKNESS_M);
     Ok(TubeShape {
         inside_diameter_m,
         outside_diameter_m,
         length_m,
         wall_from_user,
+        cap_thickness_m,
     })
 }
 
