@@ -33,7 +33,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-1. Cursor does the cut-down Assignment 10 in `COMS.md`, in order: the shelf fix, tube cost and the printer record, the shape contract for `box` and `tube` (the other four shapes warn instead of faking a box), and the exterior block test. Deferred until Cursor has credits: the other four shapes, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Claude does the catalog data work itself.
+1. Cursor does the cut-down Assignment 10 in `COMS.md`, in order: the shelf fix, tube cost and the printer record, the shape contract for `box` and `tube` (the other four shapes warn instead of faking a box), and the exterior block test. Deferred until Cursor has credits: the other four shapes, `sheet_box`, recesses and bolt holes, ports, print splitting, and CHK-FDTD-4. Claude does the catalog data work itself.
 2. The owner runs `./start.sh` once on the laptop, and Claude checks the running app there in the built-in browser. This closes the last Level 0 item.
 
 ## What has been verified
@@ -117,6 +117,7 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-10: A stock tube with no published wall uses the design's `wall_m` and says so. Reason: the SAKRETE page does not print a wall, and inventing one would be a catalog number.
 - 2026-11-10: Print parts are split to the X2D's main-nozzle build volume, 256 x 256 x 260 mm, and print time is shown as a lower bound from its 40 mm^3/s maximum flow. Reason: the owner named the printer, and the maker's sheet gives the flow only as a maximum on a thin-walled test print.
 - 2026-11-10: PLA is the default print material. Reason: the owner is open to any filament, and PLA has the cheapest price sourced so far ($13.49/kg).
+- 2026-11-10: Printing is optional (owner). A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. `sheet_box` moved from Level 3 to Level 2, because the cheap-against-reference comparison already needs a conventional box cut from sheets. The README opening and sections 2, 3.3, 6.2, 9.2, and 12 and `tasks/level-2.md` were updated.
 
 ## Tool versions
 

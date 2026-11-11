@@ -1,6 +1,6 @@
 # Seatlock Listening Lab
 
-Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a 3D-printable cabinet, both its outer form and its internal geometry, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them.
+Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a cabinet, both its outer form and its internal geometry, from stock materials, 3D-printed parts, or a mix, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them.
 
 The goal is hi-fi sound for the least money. Anyone can build a hi-fi system from expensive components; this lab is for doing it cheaply. Cheap off-the-shelf drivers and materials, digital processing, and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. Quality components and conventional materials stay in the catalog as a reference, so every cheap design can be compared with a conventional build of the same speaker. The simulator's job is to show which trades work before any money is spent.
 
@@ -88,7 +88,7 @@ A **radiator** is anything that turns one amplifier channel into sound. The firs
 ### 2.2 What the user does
 
 1. Picks drivers from a catalog of real parts with prices.
-2. Shapes the cabinet: an outer shape that can be a plain box or a novel form, walls, chambers, ports, internal ducts and folds, bracing. Sees it in 3D. Exports it for printing.
+2. Shapes the cabinet: an outer shape that can be a plain box or a novel form, walls, chambers, ports, internal ducts and folds, bracing. Sees it in 3D. Gets print files for the printed parts and a cut list for the stock parts.
 3. Places radiators on any surface, facing any way, including unconventional ones such as rear-facing DML panels.
 4. Sets the crossover, or has the lab propose one.
 5. Runs correction and auto EQ.
@@ -103,7 +103,7 @@ The stages depend on each other in a line. Cabinet shape sets the air load on th
 ### 2.4 Where the savings come from
 
 - Digital processing replaces passive crossover parts and corrects response errors that would otherwise need better drivers.
-- Printed geometry replaces woodworking and makes internal shapes possible that improve a cheap driver's result.
+- Printed geometry, where it helps, replaces woodworking and makes internal shapes possible that improve a cheap driver's result. Printing is an option, not a requirement: a part is printed only when that makes the sound better or the build cheaper.
 - Drivers are chosen by simulated result per dollar, not by price or reputation.
 - Cheap off-the-shelf materials such as PVC pipe, cardboard tubes, and foam board replace cabinet-grade wood where the physics allows, and printing is kept to the parts that need it.
 - Every part is new, off the shelf, and has public data. Used, salvaged, or untested parts are out of scope.
@@ -188,7 +188,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 
 | Family | A member must provide | First members (level) |
 | --- | --- | --- |
-| Outer shape | The print solid or stock parts; an inside test, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism` and `tube` (2), `revolved`, `loft`, and `sheet_box` (3), imported mesh (4) |
+| Outer shape | The print solid or stock parts; an inside test, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism`, `tube`, and `sheet_box` (2), `revolved` and `loft` (3), imported mesh (4) |
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6); its limits; what it needs from its mount; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
@@ -507,7 +507,9 @@ A parametric model of the cabinet. The user edits numbers and drags handles, and
 
 **Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. Level 4 adds an imported mesh. The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
 
-**Build method.** Each part of the cabinet is either printed or a stock part from `catalog/stock/`, such as a length of PVC pipe or a cut sheet. A hybrid build combines them: for example, a stock pipe for the body with printed end caps, baffle, and port. The outer-shape member `tube` (Level 2) is a stock pipe or tube cut to length, whose diameter and wall come from its stock record. The member `sheet_box` (Level 3) is a box cut from sheet stock, with a cut list. Printed parts and stock parts both feed the air network, the voxel grid, the cost, and the export: print files for printed parts, and a cut list for stock parts.
+**Build method.** Each part of the cabinet is either printed or a stock part from `catalog/stock/`, such as a length of PVC pipe or a cut sheet. A hybrid build combines them: for example, a stock pipe for the body with printed end caps, baffle, and port. The outer-shape member `tube` (Level 2) is a stock pipe or tube cut to length, whose diameter and wall come from its stock record. The member `sheet_box` (Level 2) is a box cut from sheet stock such as MDF, plywood, or foam board, with a cut list. Printed parts and stock parts both feed the air network, the voxel grid, the cost, and the export: print files for printed parts, and a cut list for stock parts.
+
+Printing is optional. A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. When the same cabinet can be built more than one way, the lab shows the ways side by side, each with its cost and its results. Printing earns its place through geometry that stock parts cannot make, such as shaped ports, folds, and curved baffles. Wall stiffness also differs between materials, but wall vibration is not simulated (section 15), so the comparison says so.
 
 **Mounts.** A mount names one of the outer shape's surfaces and a position on it. The outer shape returns the mount's position and outward direction, so a radiator can sit on any surface and face any way: front, back, side, top, or along a curve.
 
@@ -629,7 +631,8 @@ Exciters, from Level 3, are records like drivers. They hold what an exciter's da
 
 ```
 cost of one speaker = drivers and exciters + cabinet + panels + extras
-cabinet             = print_mass_kg * price_per_kg
+cabinet             = printed parts + stock parts
+printed parts       = print_mass_kg * price_per_kg
 print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
 print_time_h        = solid_volume_m3 * infill_fraction / printer_flow_m3_per_s / 3600   (a lower bound: the flow is the printer's maximum)
 panels              = printed like the cabinet, or bought sheet area * price_per_m2
@@ -740,7 +743,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - B: at least twelve sourced drivers across woofers, tweeters, and full-range units, with mounting data, at least nine of them `budget` and at least three `reference`; sourced `budget` amplifier boards and DSP options and one `reference` amplifier; stock materials (PVC pipe, cardboard tube, foam board, MDF, plywood); cost with electronics, stock parts, and stereo pairs; price dates shown.
 - C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
-- E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, and `tube` with printed end caps (a hybrid build); round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
+- E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, `tube` with printed end caps (a hybrid build), and `sheet_box` cut from sheet stock with a cut list; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
 - F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter. CHK-DSP-2.
 - G: C3 and C4; EQ per radiator and for the whole speaker.
 - H: all radiators playing; A/B between two designs at matched level; live limit indicators.
@@ -753,7 +756,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - B: exciters and panel materials; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing.
-- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved`, `loft`, and `sheet_box` outer shapes with cut lists; mounts on any surface.
+- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.
 - H: audible limit behavior and the room estimate in the virtual speaker.

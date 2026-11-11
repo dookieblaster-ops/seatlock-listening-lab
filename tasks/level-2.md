@@ -35,7 +35,7 @@ Goal: a two-way vented speaker simulates, plays, and compares against another de
 
 ## M3. Cabinet geometry and the 3D solver with openings
 
-1. **Outer shapes.** Rounded and chamfered edges, a sloped baffle, `prism`, and `tube` (README section 6.2), each registered as its own member. `tube` takes its diameter and wall from a stock record and gets printed end caps, so a hybrid build exports print files for the caps and a cut length for the pipe.
+1. **Outer shapes.** Rounded and chamfered edges, a sloped baffle, `prism`, and `tube` (README section 6.2), each registered as its own member. `tube` takes its diameter and wall from a stock record and gets printed end caps, so a hybrid build exports print files for the caps and a cut length for the pipe. `sheet_box` is a box cut from a sheet stock record, with a cut list and whole sheets in the cost; it prints nothing.
 2. **Inside.** Round and slot ports, several chambers, recesses, and bolt holes from mounting data.
 3. **Print parts.** Split the cabinet into parts that fit the printer's build volume, with alignment features. Export 3MF and report the print time. The printer's build volume and flow rate come from the owner. Until they are in STATUS, use a labeled placeholder of 220 x 220 x 250 mm.
 4. **`fdtd` with openings (README section 5.5).** An exterior air block with absorbing faces, `H_k` from the flow through each opening, and a two-resolution uncertainty. Background jobs with progress and cancel. Checks: CHK-FDTD-3 and CHK-FDTD-4. Check the exterior block size rule of section 5.5 and record the result.
@@ -43,5 +43,5 @@ Goal: a two-way vented speaker simulates, plays, and compares against another de
 ## M4. Optimizer and the end-to-end check
 
 1. **Optimizer (README section 11.3).** Over the continuous variables for the drivers the user chose: sealed or vented, box volume, tuning, crossover frequency and slope, and gains. Correction runs inside each evaluation, on `lumped` or `waveguide`. Results show within 30 s, can be canceled, and repeat from their seed. Output is a ranked list of complete designs and a cost-against-quality plot.
-2. **Cost first.** Cost beside every score, and the cheap-against-reference comparison of README section 9.2.
+2. **Cost first.** Cost beside every score, and the cheap-against-reference comparison of README section 9.2. When a cabinet can be built more than one way (printed, `sheet_box`, `tube`), show the ways side by side with cost and results (README section 6.2).
 3. **CHK-E2E-2 (README section 12).** `two-way-vented` passes the CHK-E2E-1 sequence, and its three enclosure models agree within 1.5 dB below 200 Hz.

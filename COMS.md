@@ -64,7 +64,7 @@ Do these in order. Commit and push after each one. If credits run low, stop afte
 3. **Shape contract for `box` and `tube` only** (item 1). `rounded`, `chamfered`, `sloped`, and `prism` give a warning, "this shape is not finished yet", and are left out of results. They are never simulated as a default box.
 4. **Exterior block test** (item 3).
 
-Moved to Claude: item 5 and all catalog data work. Deferred until you have credits: the other four shapes, recesses and bolt holes, ports, print splitting, CHK-FDTD-4.
+Moved to Claude: item 5 and all catalog data work. Deferred until you have credits: the other four shapes, recesses and bolt holes, ports, print splitting, CHK-FDTD-4. The README now puts `sheet_box` at Level 2 (owner's decision: printing is optional). It is not in this assignment.
 
 **Next step for Cursor:** pull `main` and start with item 1.
 
