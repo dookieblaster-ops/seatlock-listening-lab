@@ -191,3 +191,36 @@ fn a_wall_too_thick_for_the_outline_is_refused() {
         .unwrap();
     assert!(err.contains("wall"), "{err}");
 }
+
+#[test]
+fn every_printed_shape_knows_where_its_plastic_is() {
+    let mut list = all();
+    list.push((
+        "box",
+        json!({ "kind": "box", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18, "wall_m": 0.008 }),
+    ));
+    for (name, fields) in list {
+        let shape = shape(fields);
+        // Inside the front wall's thickness, low and central; then in the air; then outside.
+        let [sx, _, _] = shape.outer_size_m().unwrap();
+        let in_wall = shape.mount_pose("front", [sx / 2.0, 0.05]).unwrap();
+        let o = in_wall.outward;
+        let p = in_wall.position_m;
+        let wall = [
+            p[0] - o[0] * 0.004,
+            p[1] - o[1] * 0.004,
+            p[2] - o[2] * 0.004,
+        ];
+        assert!(shape.contains_solid(wall).unwrap(), "{name} wall");
+        assert!(
+            !shape.contains_solid([0.08, 0.09, 0.1]).unwrap(),
+            "{name} air"
+        );
+        let out = [
+            p[0] + o[0] * 0.004,
+            p[1] + o[1] * 0.004,
+            p[2] + o[2] * 0.004,
+        ];
+        assert!(!shape.contains_solid(out).unwrap(), "{name} outside");
+    }
+}

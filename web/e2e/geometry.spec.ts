@@ -39,9 +39,9 @@ async function checkExportedStl(page: Page) {
   expect(signed).toBeGreaterThan(0);
   expect(maxCoord).toBeGreaterThan(10);
   expect(maxCoord).toBeLessThan(1000);
-  for (const count of edges.values()) {
-    expect(count).toBe(2);
-  }
+  // One assertion for all edges: an expect() per edge takes seconds on a large mesh.
+  const unshared = [...edges.values()].filter((count) => count !== 2).length;
+  expect(unshared).toBe(0);
   const solidM3 = Number(await page.getByTestId("solid-volume").innerText());
   expect(Math.abs(signed / 1e9 - solidM3) / solidM3).toBeLessThan(0.001);
 }
@@ -107,3 +107,32 @@ for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism"
     await expect(page.getByTestId("scores")).toBeVisible();
   });
 }
+
+test("a cabinet too big for the printer is cut into parts that fit, with pins, in one 3MF", async ({ page }) => {
+  await page.goto("/");
+  const example = path.resolve(import.meta.dirname, "../../designs/examples/two-chamber.seatlock.json");
+  await page.getByTestId("open-design-input").setInputFiles(example);
+  const table = page.getByTestId("print-parts");
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  const rows = table.locator("tbody tr");
+  const names = await rows.locator("td:first-child").allInnerTexts();
+  const cabinetParts = names.filter((name) => name.startsWith("part"));
+  const pins = names.filter((name) => name.startsWith("pin"));
+  expect(cabinetParts.length).toBe(8);
+  expect(pins.length).toBeGreaterThanOrEqual(24);
+  for (const size of await rows.locator("td:nth-child(2)").allInnerTexts()) {
+    const mm = size.replace(" mm", "").split(" x ").map(Number).sort((a, b) => a - b);
+    expect(mm[0]).toBeLessThanOrEqual(256);
+    expect(mm[1]).toBeLessThanOrEqual(256);
+    expect(mm[2]).toBeLessThanOrEqual(260);
+  }
+  await expect(page.getByTestId("print-time")).toContainText("8 parts");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export 3MF" }).click();
+  const download = await downloadPromise;
+  const text = fs.readFileSync((await download.path())!).toString("latin1");
+  const objects = text.match(/<object id=/g) ?? [];
+  expect(objects.length).toBe(names.length);
+  expect(text).toContain('name="part 1"');
+  expect(text).toContain('name="pin 1"');
+});

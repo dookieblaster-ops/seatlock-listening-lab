@@ -22,6 +22,7 @@ use serde_json::{Map, Value};
 pub mod chambers;
 pub mod cost;
 pub mod ports;
+pub mod split;
 pub use cost::{CabinetParts, CostLine, CostReport};
 
 pub fn builtin() -> Registry {
@@ -1205,6 +1206,8 @@ pub struct GeometryReport {
     pub user_wall: bool,
     /// The printed parts as a CSG tree for manifold-3d on the page (README section 6.3).
     pub print_tree: Value,
+    /// How the print is cut into parts that fit the printer, with alignment pins (6.4).
+    pub print_split: split::PrintSplit,
     pub cost: CostReport,
 }
 
@@ -1421,13 +1424,81 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         parts.extend(features);
         print_tree = seatlock_geom::csg_difference(parts);
     }
+    // Split into parts that fit the printer, with pin holes where there is plastic for them.
+    let (_, bed) = printer_volume();
+    let mut print_split = split::PrintSplit::default();
+    let printed = solid > 0.0 && !shape.printed_part_sizes_m().is_empty();
+    let whole_print = shape.printed_part_sizes_m().len() == 1;
+    if printed && whole_print && bed.iter().all(|v| *v > 0.0) {
+        let size = [width_m, depth_m, height_m];
+        let mut keep_clear: Vec<([f64; 3], f64)> = mounts
+            .iter()
+            .zip(&design.speaker.enclosure.mounts)
+            .map(|(view, mount)| {
+                let flange = mount_driver(design, &mount.id)
+                    .and_then(|d| {
+                        d.pointer("/mounting/outer_diameter_m")
+                            .and_then(Value::as_f64)
+                    })
+                    .unwrap_or(view.cutout_diameter_m);
+                (view.position_m, flange / 2.0 + 0.003)
+            })
+            .collect();
+        for port in ports::printed_ports(design, shape.as_ref(), &chamber_list)
+            .into_iter()
+            .flatten()
+        {
+            keep_clear.push((port.opening_m, port.half_width_m + 0.003));
+        }
+        let duct_lines: Vec<([f64; 3], [f64; 3], f64)> =
+            ports::printed_ports(design, shape.as_ref(), &chamber_list)
+                .into_iter()
+                .flatten()
+                .filter_map(|port| {
+                    let ends = port.shell.get("base_m").and_then(Value::as_array)?;
+                    let base = [ends[0].as_f64()?, ends[1].as_f64()?, ends[2].as_f64()?];
+                    Some((base, port.opening_m, port.half_width_m + 0.003))
+                })
+                .collect();
+        let solid_at = |p: [f64; 3]| -> bool {
+            let plastic = shape.contains_solid(p).unwrap_or(false)
+                || (!chamber_list.is_empty()
+                    && shape.contains_air(p).unwrap_or(false)
+                    && !chamber_list.iter().any(|c| c.contains(p)));
+            if !plastic {
+                return false;
+            }
+            let near = |a: [f64; 3], r: f64| {
+                ((p[0] - a[0]).powi(2) + (p[1] - a[1]).powi(2) + (p[2] - a[2]).powi(2)).sqrt() < r
+            };
+            if keep_clear.iter().any(|(at, r)| near(*at, *r)) {
+                return false;
+            }
+            duct_lines.iter().all(|(a, b, r)| {
+                let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+                let len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+                let t = (((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1] + (p[2] - a[2]) * d[2])
+                    / len2.max(1e-12))
+                .clamp(0.0, 1.0);
+                let q = [a[0] + d[0] * t, a[1] + d[1] * t, a[2] + d[2] * t];
+                !near(q, *r)
+            })
+        };
+        print_split = split::plan(size, bed, &solid_at);
+        if !print_split.pins.is_empty() {
+            let mut parts = vec![print_tree];
+            parts.extend(split::hole_tree(&print_split));
+            print_tree = seatlock_geom::csg_difference(parts);
+            solid -= print_split.pin_holes_m3;
+        }
+    }
     let density = catalog::material(&design.build.material)
         .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64))
         .unwrap_or(0.0);
     let cost = cost::report(
         design,
         &CabinetParts {
-            print_solid_m3: Some(solid),
+            print_solid_m3: Some(solid + print_split.pins_m3),
             stock_cuts: shape.stock_cuts(),
             stock_panels: shape.stock_panels(),
             problems: Vec::new(),
@@ -1436,7 +1507,22 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     if !cost.problems.is_empty() || solid <= 0.0 {
         can_export = false;
     }
-    let mut print_note = print_split_note(&shape.printed_part_sizes_m());
+    let mut print_note = if print_split.parts.is_empty() {
+        print_split_note(&shape.printed_part_sizes_m())
+    } else {
+        let (name, _) = printer_volume();
+        let mut note = format!(
+            "Printed in {} parts that fit the {name}, lined up by {} printed pins, 4 mm across \
+             and 15 mm long.",
+            print_split.parts.len(),
+            print_split.pins.len()
+        );
+        for extra in &print_split.notes {
+            note.push(' ');
+            note.push_str(extra);
+        }
+        note
+    };
     if !shape.stock_cuts().is_empty() || !shape.stock_panels().is_empty() {
         print_note.push_str(" Stock parts are cut, not printed; see the cut list.");
     }
@@ -1454,7 +1540,7 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         voxel_air_volume_m3: seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
             chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p))
         })?,
-        print_mass_kg: solid * density * design.build.infill_fraction,
+        print_mass_kg: (solid + print_split.pins_m3) * density * design.build.infill_fraction,
         cost_note: catalog::cost_note(design),
         mounts,
         warnings,
@@ -1463,6 +1549,7 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         print_note,
         user_wall,
         print_tree,
+        print_split,
         cost,
     })
 }

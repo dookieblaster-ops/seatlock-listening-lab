@@ -95,36 +95,108 @@ function build(wasm: Wasm, node: PrintTree): Solid | null {
   if (parts.length === 0) {
     return null;
   }
-  let result = parts[0];
-  for (const part of parts.slice(1)) {
-    const next = node.op === "union" ? result.add(part) : result.subtract(part);
-    result.delete();
-    part.delete();
-    result = next;
+  // Batch booleans: one union of everything, or the first minus one union of the rest.
+  // Subtracting dozens of pin and bolt holes one at a time is many times slower.
+  if (node.op === "union") {
+    if (parts.length === 1) {
+      return parts[0];
+    }
+    const joined = Manifold.union(parts);
+    parts.forEach((part) => part.delete());
+    return joined;
+  }
+  const [first, ...rest] = parts;
+  if (rest.length === 0) {
+    return first;
+  }
+  const cutter = rest.length === 1 ? rest[0] : Manifold.union(rest);
+  const result = first.subtract(cutter);
+  first.delete();
+  cutter.delete();
+  if (rest.length > 1) {
+    rest.forEach((part) => part.delete());
   }
   return result;
 }
 
-/** The printed parts of a cabinet, built from the engine's tree (README section 6.3). */
-export async function buildCabinetMesh(input: { print_tree: PrintTree }): Promise<SolidMesh> {
-  const wasm = await manifold();
-  const solid = build(wasm, input.print_tree);
-  if (!solid) {
-    return { positions: new Float32Array(), indices: new Uint32Array(), solidVolumeM3: 0 };
-  }
-  const volume = solid.volume();
+/** The engine's plan for cutting the print into parts (GeometryReport.print_split). */
+export type PrintSplit = {
+  parts: Array<{ name: string; min_m: number[]; max_m: number[] }>;
+  pins: Array<{ center_m: number[]; axis: number }>;
+  pin_radius_m: number;
+  pin_length_m: number;
+};
+
+export type PrintPart = MeshObject & { volumeM3: number; sizeMm: number[] };
+
+function toMesh(solid: Solid, name: string): PrintPart {
   const mesh = solid.getMesh();
   const stride = mesh.numProp;
   const count = mesh.vertProperties.length / stride;
   const positions = new Float32Array(count * 3);
+  const low = [Infinity, Infinity, Infinity];
+  const high = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < count; i += 1) {
-    positions[i * 3] = mesh.vertProperties[i * stride];
-    positions[i * 3 + 1] = mesh.vertProperties[i * stride + 1];
-    positions[i * 3 + 2] = mesh.vertProperties[i * stride + 2];
+    for (let k = 0; k < 3; k += 1) {
+      const value = mesh.vertProperties[i * stride + k];
+      positions[i * 3 + k] = value;
+      low[k] = Math.min(low[k], value);
+      high[k] = Math.max(high[k], value);
+    }
   }
-  const indices = new Uint32Array(mesh.triVerts);
-  solid.delete();
-  return { positions, indices, solidVolumeM3: volume };
+  return {
+    name,
+    positions,
+    indices: new Uint32Array(mesh.triVerts),
+    volumeM3: solid.volume(),
+    sizeMm: [0, 1, 2].map((k) => (count ? (high[k] - low[k]) * 1000 : 0)),
+  };
+}
+
+/**
+ * The whole cabinet for the 3D view, and the print cut into the parts the engine planned
+ * followed by the alignment pins, each its own object; the solid is built once. Pins lie in
+ * a row beside the cabinet. With no plan, the whole cabinet is one part.
+ */
+export async function buildPrint(input: {
+  print_tree: PrintTree;
+  print_split?: PrintSplit;
+}): Promise<{ mesh: SolidMesh; parts: PrintPart[] }> {
+  const wasm = await manifold();
+  const { Manifold } = wasm;
+  const whole = build(wasm, input.print_tree);
+  if (!whole) {
+    return { mesh: { positions: new Float32Array(), indices: new Uint32Array(), solidVolumeM3: 0 }, parts: [] };
+  }
+  const all = toMesh(whole, "cabinet");
+  const mesh = { positions: all.positions, indices: all.indices, solidVolumeM3: all.volumeM3 };
+  const split = input.print_split;
+  if (!split || split.parts.length === 0) {
+    whole.delete();
+    return { mesh, parts: [all] };
+  }
+  const parts: PrintPart[] = [];
+  for (const part of split.parts) {
+    const size = [0, 1, 2].map((k) => part.max_m[k] - part.min_m[k]) as [number, number, number];
+    const cell = Manifold.cube(size, false);
+    const placed = cell.translate([part.min_m[0], part.min_m[1], part.min_m[2]]);
+    cell.delete();
+    const piece = whole.intersect(placed);
+    placed.delete();
+    if (!piece.isEmpty()) {
+      parts.push(toMesh(piece, part.name));
+    }
+    piece.delete();
+  }
+  whole.delete();
+  split.pins.forEach((_, index) => {
+    const pin = Manifold.cylinder(split.pin_length_m, split.pin_radius_m, split.pin_radius_m, 48, false);
+    const placed = pin.translate([-0.02 - 0.01 * (index % 10), 0.01 * Math.floor(index / 10), 0]);
+    pin.delete();
+    parts.push(toMesh(placed, `pin ${index + 1}`));
+    placed.delete();
+  });
+  return { mesh, parts };
 }
 
 function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array {
@@ -172,25 +244,38 @@ function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array 
   return out;
 }
 
-export function meshTo3mf(positions: Float32Array, indices: Uint32Array): Uint8Array {
+/** One mesh for a 3MF file, in meters. */
+export type MeshObject = { name: string; positions: Float32Array; indices: Uint32Array };
+
+/** A 3MF package with one object per mesh (README section 6.4), in millimeters. */
+export function meshTo3mf(objects: MeshObject[]): Uint8Array {
   const encoder = new TextEncoder();
-  const vertices: string[] = [];
-  for (let i = 0; i < positions.length; i += 3) {
-    vertices.push(
-      `<vertex x="${positions[i] * 1000}" y="${positions[i + 1] * 1000}" z="${positions[i + 2] * 1000}"/>`,
+  const resources: string[] = [];
+  const items: string[] = [];
+  objects.forEach((object, index) => {
+    const id = index + 1;
+    const vertices: string[] = [];
+    for (let i = 0; i < object.positions.length; i += 3) {
+      vertices.push(
+        `<vertex x="${object.positions[i] * 1000}" y="${object.positions[i + 1] * 1000}" z="${object.positions[i + 2] * 1000}"/>`,
+      );
+    }
+    const triangles: string[] = [];
+    for (let i = 0; i < object.indices.length; i += 3) {
+      triangles.push(
+        `<triangle v1="${object.indices[i]}" v2="${object.indices[i + 1]}" v3="${object.indices[i + 2]}"/>`,
+      );
+    }
+    const name = object.name.replace(/[<>&"]/g, "");
+    resources.push(
+      `<object id="${id}" type="model" name="${name}"><mesh><vertices>${vertices.join("")}</vertices><triangles>${triangles.join("")}</triangles></mesh></object>`,
     );
-  }
-  const triangles: string[] = [];
-  for (let i = 0; i < indices.length; i += 3) {
-    triangles.push(`<triangle v1="${indices[i]}" v2="${indices[i + 1]}" v3="${indices[i + 2]}"/>`);
-  }
+    items.push(`<item objectid="${id}"/>`);
+  });
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-  <resources><object id="1" type="model"><mesh>
-    <vertices>${vertices.join("")}</vertices>
-    <triangles>${triangles.join("")}</triangles>
-  </mesh></object></resources>
-  <build><item objectid="1"/></build>
+  <resources>${resources.join("")}</resources>
+  <build>${items.join("")}</build>
 </model>`;
   const types = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

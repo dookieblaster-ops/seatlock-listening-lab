@@ -555,7 +555,7 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 - Binary STL from Level 1 and 3MF from Level 2. Print files are in millimeters, so multiply by 1000 on export.
 - Solids are watertight and manifold (CHK-GEO-2).
 - Driver cut-outs, recesses, and bolt holes come from the driver's mounting data.
-- From Level 2, split the cabinet into parts that fit the printer's build volume, add alignment features, and report part count, material mass, and print time.
+- From Level 2, split the cabinet into parts that fit the printer's build volume, add alignment features, and report part count, material mass, and print time. The engine picks the number of pieces along each axis for whichever way the cabinet can stand on the bed gives the fewest parts, cuts evenly, and places up to three alignment pin holes (4.2 mm, 8 mm deep each side) across every joint where there is plastic all around them, away from driver flanges and ports. The pins are printed (4 mm by 15 mm) and counted in the plastic. The page cuts the solid into the parts with manifold-3d and exports one 3MF object per part and per pin.
 - Enforce a minimum wall thickness and warn about thin features. Wall vibration is not simulated, and the interface says so.
 
 ## 7. Crossover and DSP chain

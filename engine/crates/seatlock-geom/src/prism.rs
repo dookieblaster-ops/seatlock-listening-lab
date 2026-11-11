@@ -403,6 +403,16 @@ impl OuterShape for Prism {
         Ok(csg_difference(parts))
     }
 
+    fn contains_solid(&self, point_m: [f64; 3]) -> Result<bool, String> {
+        let [x, y, z] = point_m;
+        let (a, b, t) = match self.axis {
+            Axis::Y => (x, z, y),
+            Axis::X => (y, z, x),
+        };
+        let outer = t > 0.0 && t < self.length_m && point_in_polygon(&self.outline, [a, b]);
+        Ok(outer && !self.contains_air(point_m)?)
+    }
+
     fn air_tree(&self) -> Result<Value, String> {
         Ok(self.csg(&self.inside, self.wall_m, self.length_m - self.wall_m))
     }

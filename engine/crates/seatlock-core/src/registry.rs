@@ -107,6 +107,12 @@ pub trait OuterShape: Send + Sync {
         not_finished()
     }
 
+    /// True when the point is in the printed plastic of the cabinet's walls, before any
+    /// cut-out. Alignment pins for print splitting are placed where this holds.
+    fn contains_solid(&self, _point_m: [f64; 3]) -> Result<bool, String> {
+        not_finished()
+    }
+
     /// The cabinet's inside air as a CSG tree. Partition walls between chambers are this air
     /// minus the chambers (README section 6.2).
     fn air_tree(&self) -> Result<Value, String> {

@@ -1529,3 +1529,74 @@ fn chambers_that_do_not_fit_are_refused_with_the_reason() {
         .iter()
         .any(|line| line.contains("does not open into chamber front")));
 }
+
+#[test]
+fn a_cabinet_that_fits_the_printer_is_not_split() {
+    let design: seatlock_core::DesignFile = serde_json::from_str(&read_example()).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(report.print_split.parts.is_empty());
+    assert!(report.print_split.pins.is_empty());
+    assert!(report.print_note.contains("fits"), "{}", report.print_note);
+}
+
+#[test]
+fn the_fewest_parts_win_whichever_way_the_cabinet_stands() {
+    let bed = [0.256, 0.256, 0.260];
+    // A 0.30 m side is longer than every side of the bed, so it is cut once whichever way.
+    assert_eq!(
+        seatlock_sim::split::pieces([0.25, 0.20, 0.30], bed),
+        [1, 1, 2]
+    );
+    // 0.259 m tall fits standing on the 0.260 m axis.
+    assert_eq!(
+        seatlock_sim::split::pieces([0.20, 0.20, 0.259], bed),
+        [1, 1, 1]
+    );
+    // 0.259 m deep fits too, by standing the cabinet on its back.
+    assert_eq!(
+        seatlock_sim::split::pieces([0.20, 0.259, 0.20], bed),
+        [1, 1, 1]
+    );
+    assert_eq!(
+        seatlock_sim::split::pieces([0.274, 0.30, 0.44], bed),
+        [2, 2, 2]
+    );
+}
+
+#[test]
+fn a_split_cabinet_has_pins_in_plastic_across_every_cut_and_parts_that_fit() {
+    // two-chamber is 0.274 x 0.30 x 0.44 m: no side fits the 256 x 256 x 260 mm bed, so it
+    // is cut in half along each axis into 8 parts, with 12 mm walls to hold 4.2 mm pin holes.
+    let design: seatlock_core::DesignFile = serde_json::from_value(example("two-chamber")).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let split = &report.print_split;
+    assert_eq!(split.parts.len(), 8);
+    for part in &split.parts {
+        let mut size: Vec<f64> = (0..3)
+            .map(|i| part.max_m[i] - part.min_m[i] - 0.001)
+            .collect();
+        size.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert!(
+            size[0] <= 0.256 && size[1] <= 0.256 && size[2] <= 0.260,
+            "{size:?}"
+        );
+    }
+    assert!(split.pins.len() >= 24, "{} pins", split.pins.len());
+    // Every pin sits on a cut plane, in plastic, away from the drivers' flanges.
+    for pin in &split.pins {
+        let half = [0.137, 0.15, 0.22][pin.axis];
+        assert!((pin.center_m[pin.axis] - half).abs() < 1e-12, "{pin:?}");
+    }
+    let pi = std::f64::consts::PI;
+    let hole = pi * 0.0021_f64.powi(2) * 0.016;
+    assert!((split.pin_holes_m3 - split.pins.len() as f64 * hole).abs() < 1e-15);
+    // The pins are printed too, so the plastic bought includes them.
+    let density = 1240.0;
+    let mass = (report.solid_volume_m3 + split.pins_m3) * density;
+    assert!((report.print_mass_kg - mass).abs() < 1e-12);
+    assert!(
+        report.print_note.contains("8 parts"),
+        "{}",
+        report.print_note
+    );
+}

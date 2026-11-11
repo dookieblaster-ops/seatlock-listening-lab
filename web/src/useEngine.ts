@@ -158,6 +158,7 @@ export type GeometryReport = {
   cost_note: string;
   cost: CostReport;
   print_tree: import("./printSolid").PrintTree;
+  print_split?: import("./printSolid").PrintSplit & { pins_m3: number };
   print_note?: string;
   cut_list?: string[];
   warnings?: string[];

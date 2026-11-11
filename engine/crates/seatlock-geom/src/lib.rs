@@ -91,6 +91,16 @@ impl OuterShape for BoxShape {
         Ok(csg_difference(parts))
     }
 
+    fn contains_solid(&self, p: [f64; 3]) -> Result<bool, String> {
+        let outside = p[0] > 0.0
+            && p[0] < self.width_m
+            && p[1] > 0.0
+            && p[1] < self.depth_m
+            && p[2] > 0.0
+            && p[2] < self.height_m;
+        Ok(outside && !BoxShape::contains_air(self, p))
+    }
+
     fn air_tree(&self) -> Result<Value, String> {
         let w = self.wall_m;
         Ok(csg_box(
@@ -558,6 +568,14 @@ impl OuterShape for TubeShape {
                 .map(|(pose, diameter)| csg_hole(pose, *diameter, t)),
         );
         Ok(csg_difference(parts))
+    }
+
+    fn contains_solid(&self, p: [f64; 3]) -> Result<bool, String> {
+        let r = self.outside_diameter_m / 2.0;
+        let radial = ((p[0] - r).powi(2) + (p[2] - r).powi(2)).sqrt();
+        let t = self.cap_thickness_m;
+        let end = self.overall_length_m();
+        Ok(radial < r && ((p[1] > 0.0 && p[1] < t) || (p[1] > end - t && p[1] < end)))
     }
 
     fn air_tree(&self) -> Result<Value, String> {

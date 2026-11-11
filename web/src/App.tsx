@@ -4,7 +4,13 @@ import { CabinetView } from "./CabinetView";
 import { CostPanel } from "./CostPanel";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
-import { buildCabinetMesh, meshTo3mf, meshToStl, type SolidMesh } from "./printSolid";
+import {
+  buildPrint,
+  meshTo3mf,
+  meshToStl,
+  type PrintPart,
+  type SolidMesh,
+} from "./printSolid";
 import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
 import { coefficientMessage, useListen, type ListenSource } from "./useListen";
 import "./App.css";
@@ -67,6 +73,7 @@ export default function App() {
   const [sim, setSim] = useState<SimulateResult | null>(null);
   const [simIssues, setSimIssues] = useState<SimulateResult["issues"]>([]);
   const [geom, setGeom] = useState<GeometryReport | null>(null);
+  const [parts, setParts] = useState<PrintPart[]>([]);
   const [solid, setSolid] = useState<SolidMesh | null>(null);
   const [fdtdNote, setFdtdNote] = useState("The full 3D air model has not been run.");
   const [fdtdWarning, setFdtdWarning] = useState("");
@@ -119,11 +126,12 @@ export default function App() {
       return;
     }
     setGeom(report);
-    const mesh = await buildCabinetMesh(report);
+    const built = await buildPrint(report);
     if (rev !== revision.current) {
       return;
     }
-    setSolid(mesh);
+    setSolid(built.mesh);
+    setParts(built.parts);
   }
 
   async function onOpenFile(file: File) {
@@ -497,6 +505,38 @@ export default function App() {
             driver={geom.mounts[0]?.position_m ?? null}
           />
           <div className="row">
+            {(geom.print_split?.parts.length ?? 0) > 0 && parts.length > 0 && (
+              <table data-testid="print-parts" title="Each printed part for one speaker, cut to fit the printer.">
+                <thead>
+                  <tr>
+                    <th>Part</th>
+                    <th>Size</th>
+                    <th>Plastic</th>
+                    <th>Print time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parts.map((part) => {
+                    // The engine's own plastic per cubic meter and hours per kilogram.
+                    const perM3 =
+                      geom.print_mass_kg / (geom.solid_volume_m3 + (geom.print_split?.pins_m3 ?? 0));
+                    const kg = part.volumeM3 * perM3;
+                    const hoursPerKg =
+                      geom.cost.print_mass_kg > 0
+                        ? (geom.cost.print_time_h_at_least ?? 0) / geom.cost.print_mass_kg
+                        : 0;
+                    return (
+                      <tr key={part.name}>
+                        <td>{part.name}</td>
+                        <td>{part.sizeMm.map((v) => v.toFixed(0)).join(" x ")} mm</td>
+                        <td>{(kg * 1000).toFixed(0)} g</td>
+                        <td>at least {(kg * hoursPerKg).toFixed(1)} h</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
             {geom.warnings?.map((line) => (
               <p key={line} data-testid="mount-warning">{line}</p>
             ))}
@@ -528,7 +568,9 @@ export default function App() {
                 if (geom.can_export_print === false) {
                   return;
                 }
-                const bytes = meshTo3mf(solid.positions, solid.indices);
+                const bytes = meshTo3mf(
+                  parts.length > 0 ? parts : [{ name: "cabinet", positions: solid.positions, indices: solid.indices }],
+                );
                 const copy = new ArrayBuffer(bytes.byteLength);
                 new Uint8Array(copy).set(bytes);
                 const blob = new Blob([copy], { type: "model/3mf" });

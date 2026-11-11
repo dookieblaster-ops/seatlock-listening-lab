@@ -315,6 +315,11 @@ impl OuterShape for EdgedBox {
         Ok(csg_difference(parts))
     }
 
+    fn contains_solid(&self, p: [f64; 3]) -> Result<bool, String> {
+        let outer = inside(p, [0.0; 3], self.outer_size(), self.edge);
+        Ok(outer && !self.contains_air(p)?)
+    }
+
     fn air_tree(&self) -> Result<Value, String> {
         let (min, max) = self.inner_bounds();
         Ok(csg_hull(hull_points(
