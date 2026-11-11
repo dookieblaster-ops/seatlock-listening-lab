@@ -52,7 +52,7 @@ A simulator is worth using only if its numbers can be trusted. These rules exist
 
 ### 1.4 Sessions, handoffs, and helpers
 
-Each chat is a separate session with no memory of the others. Sessions pass work to each other through `COMS.md`, not through chat the owner may not see. The owner starts a session by opening a chat on this repository and typing **Check COMS.md**.
+Each chat is a separate session with no memory of the others. Sessions pass work to each other through `COMS.md`, not through chat the owner may not see. The owner starts a session by opening a new chat and sending: `Work on my GitHub repository dookieblaster-ops/seatlock-listening-lab. Attach it, then Check COMS.md.` No project is needed: the session attaches the repository itself. A chat that already has it needs only **Check COMS.md**.
 
 | Role | Who | Job |
 | --- | --- | --- |
