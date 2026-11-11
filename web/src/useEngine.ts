@@ -109,7 +109,8 @@ export function useEngine() {
         maker?: string;
         model?: string;
         tier?: string;
-        price?: { amount?: number; currency?: string; vendor?: string; read_on?: string } | null;
+        price?: { amount?: number; currency?: string; vendor?: string; read_on?: string; via?: string } | null;
+        mounting?: { via?: string };
         error?: string;
       };
     },
@@ -155,6 +156,8 @@ export type GeometryReport = {
   voxel_air_volume_m3: number;
   print_mass_kg: number;
   cost_note: string;
+  warnings?: string[];
+  can_export_print?: boolean;
   mounts: Array<{
     position_m: number[];
     outward: number[];

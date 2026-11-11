@@ -13,14 +13,8 @@
     "re_ohm": 5.4,
     "le_h": 0.00009,
     "sd_m2": 0.00066,
-    "pe_w": 50.0
-  },
-  "mounting": {
-    "cutout_diameter_m": 0.0,
-    "outer_diameter_m": 0.0,
-    "bolt_circle_m": 0.0,
-    "bolt_count": 0,
-    "depth_m": 0.0
+    "pe_w": 50.0,
+    "sens_db_1w": 89.0
   },
   "response_file": null,
   "source": {

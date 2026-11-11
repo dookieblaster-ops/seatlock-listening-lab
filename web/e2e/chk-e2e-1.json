@@ -1,6 +1,6 @@
 {
-  "bass_hz": "65",
-  "evenness_db": "6.5",
+  "bass_hz": "125",
+  "evenness_db": "7.4",
   "max_clean_db": "83",
   "cost": "price unknown"
 }

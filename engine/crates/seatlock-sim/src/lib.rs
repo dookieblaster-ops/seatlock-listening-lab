@@ -1090,10 +1090,18 @@ pub struct GeometryReport {
     pub print_mass_kg: f64,
     pub cost_note: String,
     pub mounts: Vec<MountView>,
+    pub warnings: Vec<String>,
+    pub can_export_print: bool,
+    pub cut_list: Vec<String>,
+    pub print_note: String,
+    pub user_wall: bool,
 }
 
 pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     let outer = &design.speaker.enclosure.outer;
+    if outer.kind == "tube" {
+        return tube_report(design);
+    }
     if outer.kind != "box" {
         return Err(format!("geometry report needs a box, found {}", outer.kind));
     }
@@ -1121,6 +1129,8 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
     };
     let mut cutout_area = 0.0;
     let mut mounts = Vec::new();
+    let mut warnings = Vec::new();
+    let mut can_export = true;
     for mount in &design.speaker.enclosure.mounts {
         let pose = shape.mount_pose(&mount.surface, mount.at_m)?;
         let cutout = design
@@ -1136,8 +1146,18 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
                 driver
                     .pointer("/mounting/cutout_diameter_m")
                     .and_then(|v| v.as_f64())
-            })
-            .unwrap_or(0.0);
+            });
+        let cutout = match cutout {
+            Some(value) if value > 0.0 => value,
+            _ => {
+                warnings.push(
+                    "mounting size not published, so this mount is not cut into the print file."
+                        .into(),
+                );
+                can_export = false;
+                0.0
+            }
+        };
         cutout_area += std::f64::consts::PI * (cutout * 0.5).powi(2);
         mounts.push(MountView {
             surface: mount.surface.clone(),
@@ -1163,7 +1183,78 @@ pub fn geometry_report(design: &DesignFile) -> Result<GeometryReport, String> {
         print_mass_kg,
         cost_note: catalog::cost_note(design),
         mounts,
+        warnings,
+        can_export_print: can_export,
+        cut_list: Vec::new(),
+        print_note: print_split_note(shape.width_m, shape.depth_m, shape.height_m),
+        user_wall: false,
     })
+}
+
+fn print_split_note(width_m: f64, depth_m: f64, height_m: f64) -> String {
+    let pieces = |size: f64, limit: f64| (size / limit).ceil().max(1.0) as i32;
+    let count = pieces(width_m, 0.22) * pieces(depth_m, 0.22) * pieces(height_m, 0.25);
+    if count <= 1 {
+        "Fits the placeholder printer of 220 x 220 x 250 mm.".to_string()
+    } else {
+        format!("{count} printed pieces for the placeholder printer of 220 x 220 x 250 mm.")
+    }
+}
+
+fn tube_report(design: &DesignFile) -> Result<GeometryReport, String> {
+    let fields = &design.speaker.enclosure.outer.fields;
+    let tube = seatlock_geom::describe_tube(fields)?;
+    let stock_id = fields.get("stock_id").and_then(Value::as_str).unwrap_or("");
+    let record = catalog::stock(stock_id);
+    let sold = record
+        .as_ref()
+        .and_then(|item| item.get("length_m").and_then(Value::as_f64))
+        .unwrap_or(tube.length_m);
+    let offcut = (sold - tube.length_m).max(0.0);
+    let price = record
+        .as_ref()
+        .and_then(|item| item.pointer("/price/amount").and_then(Value::as_f64));
+    let mut warnings = Vec::new();
+    if tube.wall_from_user {
+        warnings.push(
+            "The seller does not print a wall thickness, so this wall is the user's own number."
+                .into(),
+        );
+    }
+    let money = match price {
+        Some(amount) => format!("Buys one whole piece at ${amount:.2}."),
+        None => "The stock piece has no price.".to_string(),
+    };
+    warnings.push(format!(
+        "{money} Cut {:.3} m. Offcut {:.3} m.",
+        tube.length_m, offcut
+    ));
+    Ok(GeometryReport {
+        width_m: tube.outside_diameter_m,
+        height_m: tube.outside_diameter_m,
+        depth_m: tube.length_m,
+        wall_m: (tube.outside_diameter_m - tube.inside_diameter_m) / 2.0,
+        interior_volume_m3: tube.interior_volume_m3()?,
+        solid_volume_m3: 0.0,
+        voxel_air_volume_m3: tube.interior_volume_m3()?,
+        print_mass_kg: 0.0,
+        cost_note: catalog::cost_note(design),
+        mounts: Vec::new(),
+        warnings,
+        can_export_print: true,
+        cut_list: vec![format!("pipe cut {:.3} m", tube.length_m)],
+        print_note: "Two printed end caps. The pipe is a stock cut, not a print. Placeholder printer 220 x 220 x 250 mm.".into(),
+        user_wall: tube.wall_from_user,
+    })
+}
+
+pub fn correction_plan_with(
+    design: &DesignFile,
+    registry: &Registry,
+    radiation: &str,
+    space: &str,
+) -> Value {
+    correction_plan_for(design, registry, radiation, space)
 }
 
 fn box_alignment(design: &DesignFile, volume_m3: f64) -> (f64, f64) {
@@ -1196,6 +1287,15 @@ fn box_alignment(design: &DesignFile, volume_m3: f64) -> (f64, f64) {
 }
 
 pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
+    correction_plan_for(design, registry, "point", "half")
+}
+
+fn correction_plan_for(
+    design: &DesignFile,
+    registry: &Registry,
+    radiation: &str,
+    space: &str,
+) -> Value {
     let level = catalog::target(&design.target)
         .and_then(|target| {
             target
@@ -1207,6 +1307,8 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
     let result = simulate(
         design,
         &SimulateRequest {
+            radiation: radiation.to_string(),
+            space: space.to_string(),
             frequencies_hz: Some(freqs.clone()),
             ..SimulateRequest::default()
         },
@@ -1223,13 +1325,50 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
         seatlock_acoustics::tuning_hz(result.interior_volume_m3.unwrap_or(0.01), &ports)
     };
     let protected = design.dsp.correction.protected_band_hz;
+    let width = outer_field(design, "width_m", 0.2);
+    let corner = baffle_step_hz(width, outer_field(design, "height_m", 0.3));
+    let shows_step = radiation == "baffle" || (radiation == "point" && space == "step");
+    let (shelf_gain, shelf_note) = if shows_step {
+        result
+            .radiators
+            .first()
+            .map(|curve| fit_baffle_shelf(curve, &freqs, level, corner, design))
+            .unwrap_or((0.0, String::new()))
+    } else {
+        (0.0, String::new())
+    };
+    let shelf_reason = if shelf_gain > 0.0 {
+        "Raises the bass to make up for sound wrapping around the cabinet edge.".to_string()
+    } else if shelf_note.is_empty() {
+        "Raises the bass 6 dB to make up for sound wrapping around the cabinet edge.".to_string()
+    } else {
+        shelf_note.clone()
+    };
     let mut plans = Vec::new();
     for (index, curve) in result.radiators.iter().enumerate() {
         let fixed = fixed_block_shape(design, registry, &freqs, index);
+        let (spl, max_spl) = if shelf_gain > 0.0 {
+            (
+                curve
+                    .spl_db
+                    .iter()
+                    .zip(&freqs)
+                    .map(|(level_db, freq)| level_db + shelf_db(shelf_gain, corner, *freq, design))
+                    .collect(),
+                curve
+                    .max_spl_db
+                    .iter()
+                    .zip(&freqs)
+                    .map(|(level_db, freq)| level_db - shelf_db(shelf_gain, corner, *freq, design))
+                    .collect(),
+            )
+        } else {
+            (curve.spl_db.clone(), curve.max_spl_db.clone())
+        };
         let outcome = seatlock_correct::correct(
             &freqs,
-            &curve.spl_db,
-            &curve.max_spl_db,
+            &spl,
+            &max_spl,
             level,
             protected,
             design.dsp.correction.max_filters as usize,
@@ -1240,29 +1379,155 @@ pub fn correction_plan(design: &DesignFile, registry: &Registry) -> Value {
             tuning,
             &fixed,
         );
+        let mut filters: Vec<Value> = outcome.filters.iter().map(filter_json).collect();
+        if shelf_gain > 0.0 {
+            filters.insert(0, shelf_filter(corner, shelf_gain, &shelf_reason));
+        }
         plans.push(serde_json::json!({
             "message": outcome.message,
-            "filters": outcome.filters.iter().map(filter_json).collect::<Vec<_>>(),
+            "filters": filters,
         }));
     }
     let first = plans.first().cloned().unwrap_or(serde_json::json!({}));
-    let width = outer_field(design, "width_m", 0.2);
-    let reason = "Raises the bass 6 dB to make up for sound wrapping around the cabinet edge.";
-    let message = format!("{} {reason}", first["message"].as_str().unwrap_or(""));
+    let message = format!("{} {shelf_reason}", first["message"].as_str().unwrap_or(""));
     serde_json::json!({
         "message": message,
         "filters": first["filters"],
         "per_radiator": plans,
-        "baffle_step": {
-            "kind": "biquad",
-            "type": "lowshelf",
-            "f_hz": baffle_step_hz(width, outer_field(design, "height_m", 0.3)),
-            "q": 0.707,
-            "gain_db": 6.0,
-            "reason": reason,
-            "correction": true
-        }
+        "baffle_step": shelf_filter(corner, if shelf_gain > 0.0 { shelf_gain } else { 6.0 }, &shelf_reason)
     })
+}
+
+fn shelf_filter(corner_hz: f64, gain_db: f64, reason: &str) -> Value {
+    serde_json::json!({
+        "kind": "biquad",
+        "type": "lowshelf",
+        "f_hz": corner_hz,
+        "q": 0.707,
+        "gain_db": gain_db,
+        "from_hz": corner_hz,
+        "from_q": 0.707,
+        "reason": reason,
+        "correction": true
+    })
+}
+
+fn shelf_db(gain_db: f64, corner_hz: f64, freq_hz: f64, design: &DesignFile) -> f64 {
+    seatlock_correct::filter_db(
+        &seatlock_correct::CorrectionFilter {
+            filter_type: "lowshelf".to_string(),
+            f_hz: corner_hz,
+            q: 0.707,
+            gain_db,
+            from_hz: corner_hz,
+            from_q: 0.707,
+            reason: String::new(),
+        },
+        freq_hz,
+        design.dsp.sample_rate_hz as f64,
+    )
+}
+
+fn fit_baffle_shelf(
+    curve: &RadiatorCurve,
+    freqs: &[f64],
+    level_db: f64,
+    corner_hz: f64,
+    design: &DesignFile,
+) -> (f64, String) {
+    let fits = |gain: f64| {
+        freqs.iter().enumerate().all(|(index, freq)| {
+            let boost = shelf_db(gain, corner_hz, *freq, design);
+            let room = curve.max_spl_db[index] - level_db;
+            boost <= room.max(0.0) + 0.05
+        })
+    };
+    if fits(6.0) {
+        return (6.0, String::new());
+    }
+    let mut worst_index = 0usize;
+    let mut worst_over = f64::MIN;
+    for (index, freq) in freqs.iter().enumerate() {
+        let room = curve.max_spl_db[index] - level_db;
+        let over = shelf_db(6.0, corner_hz, *freq, design) - room.max(0.0);
+        if over > worst_over {
+            worst_over = over;
+            worst_index = index;
+        }
+    }
+    let name = tightest_limit(curve, worst_index, design);
+    let mut gain = 5.5;
+    while gain >= 0.5 {
+        if fits(gain) {
+            return (
+                gain,
+                format!("{name} reduces the baffle-step shelf to {gain:.1} dB."),
+            );
+        }
+        gain -= 0.5;
+    }
+    (
+        0.0,
+        format!("{name} stops the baffle-step shelf, so it is not applied."),
+    )
+}
+
+fn tightest_limit(curve: &RadiatorCurve, index: usize, design: &DesignFile) -> &'static str {
+    let voltage = 2.83_f64;
+    let travel = curve.cone_travel_m.get(index).copied().unwrap_or(0.0);
+    let ohms = curve
+        .impedance_ohm
+        .get(index)
+        .copied()
+        .unwrap_or(1.0)
+        .max(1e-6);
+    let (xmax, re, pe) = first_driver_limits(design);
+    let excursion = if travel > 1e-12 {
+        xmax / travel
+    } else {
+        f64::MAX
+    };
+    let heat = if re > 0.0 {
+        (pe / re).sqrt() / (voltage / ohms)
+    } else {
+        f64::MAX
+    };
+    let amp = amplifier_voltage_limit(design)
+        .map(|limit| limit / voltage)
+        .unwrap_or(f64::MAX);
+    if excursion <= heat && excursion <= amp {
+        "Cone travel"
+    } else if heat <= amp {
+        "Voice-coil heating"
+    } else {
+        "The amplifier"
+    }
+}
+
+fn first_driver_limits(design: &DesignFile) -> (f64, f64, f64) {
+    let Some(id) = design
+        .speaker
+        .radiators
+        .first()
+        .and_then(|radiator| radiator.fields.get("driver_id"))
+        .and_then(Value::as_str)
+    else {
+        return (0.004, 6.0, 30.0);
+    };
+    let Some(record) = catalog::driver(id) else {
+        return (0.004, 6.0, 30.0);
+    };
+    let number = |key: &str, fallback: f64| {
+        record
+            .pointer(&format!("/published/{key}"))
+            .and_then(Value::as_f64)
+            .unwrap_or(fallback)
+    };
+    (
+        number("xmax_m", 0.004),
+        number("re_ohm", 6.0),
+        number("pe_w", 30.0),
+    )
 }
 
 fn filter_json(filter: &seatlock_correct::CorrectionFilter) -> Value {
@@ -1403,6 +1668,7 @@ pub fn listen_package(
     let level = simulate(
         design,
         &SimulateRequest {
+            radiation: "baffle".to_string(),
             voltage_v: 2.83,
             ..SimulateRequest::default()
         },
@@ -1580,6 +1846,7 @@ fn impulse_responses(
     let result = simulate(
         &acoustic,
         &SimulateRequest {
+            radiation: "baffle".to_string(),
             voltage_v: 1.0,
             frequencies_hz: Some(freqs),
             ..SimulateRequest::default()

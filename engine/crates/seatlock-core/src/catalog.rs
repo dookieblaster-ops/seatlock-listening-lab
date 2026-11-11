@@ -19,6 +19,10 @@ pub fn amplifier(id: &str) -> Option<Value> {
     json_with_id("catalog/electronics/", id)
 }
 
+pub fn stock(id: &str) -> Option<Value> {
+    json_with_id("catalog/stock/", id)
+}
+
 pub fn material(name: &str) -> Option<Value> {
     let text = embedded_file("catalog/materials.json")?;
     let value: Value = serde_json::from_str(text).ok()?;
@@ -47,6 +51,7 @@ fn json_with_id(prefix: &str, id: &str) -> Option<Value> {
 /// Prices stay blank until a catalog record has one. Never invent a number.
 pub fn cost_note(design: &DesignFile) -> String {
     let mut unknown = false;
+    let mut unconfirmed = false;
     for radiator in &design.speaker.radiators {
         if radiator.kind != "cone" {
             continue;
@@ -63,6 +68,16 @@ pub fn cost_note(design: &DesignFile) -> String {
             Some(record) => {
                 if record.get("price").is_none_or(|price| price.is_null()) {
                     unknown = true;
+                } else if record
+                    .pointer("/price/via")
+                    .and_then(|value| value.as_str())
+                    .is_some()
+                    || record
+                        .pointer("/mounting/via")
+                        .and_then(|value| value.as_str())
+                        .is_some()
+                {
+                    unconfirmed = true;
                 }
             }
             None => unknown = true,
@@ -73,6 +88,35 @@ pub fn cost_note(design: &DesignFile) -> String {
             Some(record) => {
                 if record.get("price").is_none_or(|price| price.is_null()) {
                     unknown = true;
+                } else if record
+                    .pointer("/price/via")
+                    .and_then(|value| value.as_str())
+                    .is_some()
+                {
+                    unconfirmed = true;
+                }
+            }
+            None => unknown = true,
+        }
+    }
+    if let Some(stock_id) = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("stock_id")
+        .and_then(|value| value.as_str())
+    {
+        match stock(stock_id) {
+            Some(record) => {
+                if record.get("price").is_none_or(|price| price.is_null()) {
+                    unknown = true;
+                } else if record
+                    .pointer("/price/via")
+                    .and_then(|value| value.as_str())
+                    .is_some()
+                {
+                    unconfirmed = true;
                 }
             }
             None => unknown = true,
@@ -89,8 +133,12 @@ pub fn cost_note(design: &DesignFile) -> String {
         }
         None => unknown = true,
     }
-    if unknown {
+    if unknown && unconfirmed {
+        "price unknown, and one figure is unconfirmed".to_string()
+    } else if unknown {
         "price unknown".to_string()
+    } else if unconfirmed {
+        "priced, includes an unconfirmed figure".to_string()
     } else {
         "priced".to_string()
     }

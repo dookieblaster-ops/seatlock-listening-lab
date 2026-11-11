@@ -24,7 +24,8 @@
     "outer_diameter_m": 0.125984,
     "bolt_circle_m": 0.11303,
     "bolt_count": 4,
-    "depth_m": 0.059944
+    "depth_m": 0.059944,
+    "via": "search_extract"
   },
   "response_file": null,
   "source": {
@@ -37,6 +38,7 @@
     "currency": "USD",
     "vendor": "Parts Express",
     "url": "https://www.parts-express.com/Dayton-Audio-PC105-8-4-Full-Range-Poly-Cone-Driver-295-160",
-    "read_on": "2026-11-10"
+    "read_on": "2026-11-10",
+    "via": "search_extract"
   }
 }

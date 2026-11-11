@@ -97,6 +97,87 @@ export async function buildCabinetMesh(input: {
   return { positions, indices, solidVolumeM3: volume };
 }
 
+function zipStore(files: Array<{ name: string; data: Uint8Array }>): Uint8Array {
+  const parts: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  const encoder = new TextEncoder();
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const local = new Uint8Array(30 + name.length);
+    const view = new DataView(local.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(8, 0, true);
+    view.setUint32(18, file.data.length, true);
+    view.setUint32(22, file.data.length, true);
+    view.setUint16(26, name.length, true);
+    local.set(name, 30);
+    parts.push(local, file.data);
+    const dir = new Uint8Array(46 + name.length);
+    const dirView = new DataView(dir.buffer);
+    dirView.setUint32(0, 0x02014b50, true);
+    dirView.setUint32(20, file.data.length, true);
+    dirView.setUint32(24, file.data.length, true);
+    dirView.setUint16(28, name.length, true);
+    dirView.setUint32(42, offset, true);
+    dir.set(name, 46);
+    central.push(dir);
+    offset += local.length + file.data.length;
+  }
+  const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  const total = offset + centralSize + end.length;
+  const out = new Uint8Array(total);
+  let cursor = 0;
+  for (const part of [...parts, ...central, end]) {
+    out.set(part, cursor);
+    cursor += part.length;
+  }
+  return out;
+}
+
+export function meshTo3mf(positions: Float32Array, indices: Uint32Array): Uint8Array {
+  const encoder = new TextEncoder();
+  const vertices: string[] = [];
+  for (let i = 0; i < positions.length; i += 3) {
+    vertices.push(
+      `<vertex x="${positions[i] * 1000}" y="${positions[i + 1] * 1000}" z="${positions[i + 2] * 1000}"/>`,
+    );
+  }
+  const triangles: string[] = [];
+  for (let i = 0; i < indices.length; i += 3) {
+    triangles.push(`<triangle v1="${indices[i]}" v2="${indices[i + 1]}" v3="${indices[i + 2]}"/>`);
+  }
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources><object id="1" type="model"><mesh>
+    <vertices>${vertices.join("")}</vertices>
+    <triangles>${triangles.join("")}</triangles>
+  </mesh></object></resources>
+  <build><item objectid="1"/></build>
+</model>`;
+  const types = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+</Types>`;
+  const rels = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>`;
+  return zipStore([
+    { name: "[Content_Types].xml", data: encoder.encode(types) },
+    { name: "_rels/.rels", data: encoder.encode(rels) },
+    { name: "3D/3dmodel.model", data: encoder.encode(model) },
+  ]);
+}
+
 export function meshToStl(positions: Float32Array, indices: Uint32Array): ArrayBuffer {
   const triangles = indices.length / 3;
   const buffer = new ArrayBuffer(84 + triangles * 50);

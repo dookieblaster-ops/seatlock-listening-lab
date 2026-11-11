@@ -56,6 +56,79 @@ fn chk_fdtd_2_low_frequency_compliance() {
 }
 
 #[test]
+fn chk_fdtd_3_helmholtz_neck() {
+    let curve = seatlock_fdtd::helmholtz_neck(3.0);
+    eprintln!("FDTD3 steps {} ms {}", curve.steps, curve.elapsed_ms);
+    let mut best_f = 0.0;
+    let mut best = 0.0;
+    for index in 0..curve.frequencies_hz.len() {
+        let freq = curve.frequencies_hz[index];
+        if !(40.0..=120.0).contains(&freq) {
+            continue;
+        }
+        let mag = (curve.z_real[index].powi(2) + curve.z_imag[index].powi(2)).sqrt();
+        if mag > best {
+            best = mag;
+            best_f = freq;
+        }
+    }
+    eprintln!("FDTD3 peak {best_f} Hz");
+    assert!((best_f - 65.7).abs() / 65.7 <= 0.02, "peak {best_f}");
+    let sample = |freq: f64| -> (f64, f64) {
+        let index = curve
+            .frequencies_hz
+            .iter()
+            .position(|value| *value >= freq)
+            .unwrap()
+            .max(1);
+        let f0 = curve.frequencies_hz[index - 1];
+        let f1 = curve.frequencies_hz[index];
+        let mix = (freq - f0) / (f1 - f0);
+        let re = curve.h_real[index - 1] + mix * (curve.h_real[index] - curve.h_real[index - 1]);
+        let im = curve.h_imag[index - 1] + mix * (curve.h_imag[index] - curve.h_imag[index - 1]);
+        (re, im)
+    };
+    let (re10, im10) = sample(10.0);
+    let (re20, im20) = sample(20.0);
+    eprintln!("H 10 Hz {re10} {im10}; 20 Hz {re20} {im20}");
+    assert!((re10 - 1.024).abs() <= 0.01 * 1.024, "H10 {re10}");
+    assert!(im10.abs() < 0.05, "im10 {im10}");
+    assert!((re20 - 1.103).abs() <= 0.01 * 1.103, "H20 {re20}");
+    assert!(im20.abs() < 0.05, "im20 {im20}");
+}
+
+#[test]
+#[ignore = "larger exterior block; run with --release -- --ignored to record the size check"]
+fn exterior_block_doubling_changes_the_peak_by_under_one_percent() {
+    let small = seatlock_fdtd::helmholtz_neck(3.0);
+    let large = seatlock_fdtd::helmholtz_neck(6.0);
+    let peak = |curve: &seatlock_fdtd::OpeningCurve| {
+        let mut best_f = 0.0;
+        let mut best = 0.0;
+        for index in 0..curve.frequencies_hz.len() {
+            let freq = curve.frequencies_hz[index];
+            if !(40.0..=120.0).contains(&freq) {
+                continue;
+            }
+            let mag = (curve.z_real[index].powi(2) + curve.z_imag[index].powi(2)).sqrt();
+            if mag > best {
+                best = mag;
+                best_f = freq;
+            }
+        }
+        (best_f, best)
+    };
+    let (f_small, z_small) = peak(&small);
+    let (f_large, z_large) = peak(&large);
+    let freq_change = (f_large - f_small).abs() / f_small;
+    let level_change = (z_large - z_small).abs() / z_small;
+    eprintln!(
+        "BLOCK small {f_small} Hz {z_small}; large {f_large} Hz {z_large}; freq {freq_change} level {level_change}"
+    );
+    assert!(freq_change < 0.01, "frequency moved by {freq_change}");
+}
+
+#[test]
 fn sealed_test_box_at_10mm() {
     let dx: f64 = 0.01;
     let depth = 0.180 - 2.0 * 0.008;

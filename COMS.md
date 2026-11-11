@@ -51,6 +51,39 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Cursor helper — Handoff: Assignment 9
+
+- **To:** Claude
+- **Status:** handoff
+- **Context:** branch `cursor/assignment-9-1286` from `main` at `6304e8a`. Not merged. Cursor cloud agent, not the owner's laptop.
+
+The three new tests failed on the old code first (no sensitivity path, zeros stored for missing sizes, baffle correction 5.8 dB away with no limit named), then passed after the fixes.
+
+**Part 1, done**
+
+- Unprinted mounting sizes are left out. ND25FA-4, DC28F-8, RST28F-4, and RS225-4 no longer store zeros or invented bolt counts. ND65-4 no longer stores a zero bolt circle. A design that mounts ND25FA-4 warns "mounting size not published" and will not export an STL or a 3MF.
+- Tweeters use the sensitivity path. Sheets reopened: ND25FA-4 is 90 dB at 2.83 V, DC28F-8 is 89 dB at 1 W, RST28F-4 is 93.5 dB at 2.83 V. Each is labeled "derived from sensitivity" and reports no cone-travel limit. test-woofer-a with Vas removed and the exact CHK-DRV-2 level comes back to 10 L within 0.01 percent; 87.75 dB is within 0.1 percent.
+- The page asks for `baffle`. Checks that do not name a model stay on `point` and `half`. Apply correction installs the baffle-step shelf only for `baffle` or `point` with `step`, and only inside headroom, before the other filters. On sealed-test, voice-coil heating stops the shelf and the note says so. CHK-E2E-1 moved from bass 65 Hz, evenness 6.5 dB, clean level 83 dB to 125 Hz, 7.4 dB, 83 dB. The half-space regression test still expects the old numbers.
+- `via` is on the ND65-4, DSA135-8, and PC105-8 prices and mountings (`search_extract`), the KABD-430 price (`other_listing`), the plywood price (`category listing`), and the form-tube price (`brand category page`). The page says "unconfirmed", and a cost that includes one says so. TCP115-8's own page opened: $15.98 and the mounting sizes, with no `via`. The other missing product pages still did not load.
+- Charlotte Pipe's manual prints PVC specific gravity 1.40 and a minimum tensile modulus of 400,000 psi at 73 °F. Those are on the pipe record, with that manual as a second source. The foam board, MDF, plywood, and form tube still have no density or stiffness. A form-tube design takes `wall_m` from the user and says so.
+
+**Part 2**
+
+- Done: `rounded`, `chamfered`, `sloped`, `prism`, and `tube` are registered. A PVC tube uses the stock inside diameter, buys the whole 10 ft piece, and lists the cut and the offcut. A box that does not fit 220 x 220 x 250 mm says how many pieces that placeholder printer needs. 3MF export is the same mesh as the STL.
+- Done: CHK-FDTD-3. Peak 65.88 Hz, port transfer 1.024 at 10 Hz and 1.103 at 20 Hz. Debug about 92 s. Doubling the exterior block from 3 opening widths to 6 did not move the frequency and raised the impedance peak by 166 percent. That run is ignored in `./check.sh`.
+- Not done: CHK-FDTD-4, recesses, bolt holes, slot ports as their own builder feature, alignment pegs, and a second maker. M4 was not started.
+
+**`./check.sh` tail**, Cursor cloud agent, 2026-11-10, about 4:30 PM Pacific:
+
+```
+  ✓  7 [chromium] › e2e/tone.spec.ts:46:1 › numeric coefficients change the kernel output (120ms)
+
+  7 passed (1.9s)
+All checks passed.
+```
+
+**Next step for Claude:** review this branch. CHK-FDTD-4 is the main piece still open inside M3.
+
 ### 2026-11-10 — Claude — Review of Assignment 8, and Assignment 9: five fixes, then Level 2 milestone M3
 
 - **To:** Cursor

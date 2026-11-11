@@ -148,6 +148,9 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
     if let Some(note) = printed_disagreement(&record) {
         notes.push(note);
     }
+    if let Some(note) = sensitivity_disagreement(&record) {
+        notes.push(note);
+    }
     Ok(Box::new(ConeRadiator {
         published,
         missing_displacement,
@@ -192,9 +195,11 @@ pub fn published_from_catalog(record: &Value) -> Result<Published, String> {
         let mms = bl_printed * bl_printed * qes / (omega * re_ohm);
         let cms = 1.0 / (omega * omega * mms);
         cms * RHO0 * C0 * C0 * sd_m2 * sd_m2
+    } else if let Some(sens_1w) = sensitivity_1w_db(published, re_ohm) {
+        vas_from_sensitivity(sens_1w, fs_hz, qes)
     } else {
         return Err(
-            "This sheet does not print Vas, moving mass, or force factor, so the cone model cannot be built."
+            "This sheet does not print Vas, moving mass, force factor, or sensitivity, so the cone model cannot be built."
                 .into(),
         );
     };
@@ -245,7 +250,72 @@ pub fn derivation_note(record: &Value) -> Option<String> {
             "Vas was not printed, so moving mass was derived from the printed force factor.".into(),
         );
     }
+    let re = published
+        .get("re_ohm")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    if sensitivity_1w_db(published, re).is_some() {
+        return Some("This driver is derived from sensitivity.".into());
+    }
     None
+}
+
+fn sensitivity_1w_db(published: &Value, re_ohm: f64) -> Option<f64> {
+    if let Some(one_watt) = published.get("sens_db_1w").and_then(Value::as_f64) {
+        return Some(one_watt);
+    }
+    let at_2v83 = published.get("sens_db_2v83").and_then(Value::as_f64)?;
+    if re_ohm <= 0.0 {
+        return None;
+    }
+    Some(at_2v83 - 10.0 * (2.83_f64.powi(2) / re_ohm).log10())
+}
+
+fn vas_from_sensitivity(sens_db_1w: f64, fs_hz: f64, qes: f64) -> f64 {
+    let k_half = 10.0 * (RHO0 * C0 / (2.0 * PI * P_REF * P_REF)).log10();
+    let eta0 = 10_f64.powf((sens_db_1w - k_half) / 10.0);
+    eta0 * C0.powi(3) * qes / (4.0 * PI * PI * fs_hz.powi(3))
+}
+
+/// Printed sensitivity more than 1.5 dB from the Vas path. Vas is kept.
+pub fn sensitivity_disagreement(record: &Value) -> Option<String> {
+    let published = record.get("published")?;
+    let vas = published
+        .get("vas_m3")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    if vas <= 0.0 {
+        return None;
+    }
+    let re = published.get("re_ohm")?.as_f64()?;
+    let sens_1w = sensitivity_1w_db(published, re)?;
+    let printed_2v83 = sens_1w + 10.0 * (2.83_f64.powi(2) / re).log10();
+    let from_vas = reference_half_space_spl_db(
+        &Published {
+            fs_hz: published.get("fs_hz")?.as_f64()?,
+            qes: published.get("qes")?.as_f64()?,
+            qms: published.get("qms").and_then(Value::as_f64).unwrap_or(1.0),
+            vas_m3: vas,
+            re_ohm: re,
+            le_h: 0.0,
+            sd_m2: published
+                .get("sd_m2")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.001),
+            xmax_m: 0.0,
+            pe_w: 1.0,
+        },
+        2.83,
+        1.0,
+    );
+    let difference = (from_vas - printed_2v83).abs();
+    if difference > 1.5 {
+        Some(format!(
+            "The printed sensitivity is {difference:.1} dB away from the Vas calculation, so the simulation keeps Vas."
+        ))
+    } else {
+        None
+    }
 }
 
 /// The sheet printed a mechanical number more than 10% away from the Vas derivation.

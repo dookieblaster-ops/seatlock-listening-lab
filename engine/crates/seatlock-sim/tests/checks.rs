@@ -582,6 +582,227 @@ fn two_way_example_is_canonical_and_tuned_near_40_hz() {
 }
 
 #[test]
+fn sealed_baffle_correction_stays_near_half_space_or_names_the_limit() {
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let plan = seatlock_sim::correction_plan_with(&design, &builtin(), "baffle", "half");
+    let message = plan["message"].as_str().unwrap_or("");
+    let mut with_filters = design.clone();
+    if let Some(filters) = plan["filters"].as_array() {
+        for filter in filters {
+            let part =
+                serde_json::from_value::<seatlock_core::design::KindPart>(filter.clone()).unwrap();
+            with_filters.dsp.per_radiator[0].blocks.push(part);
+        }
+    }
+    let freqs = log_grid(10.0, 20_000.0, 24.0);
+    let half = simulate(
+        &with_filters,
+        &SimulateRequest {
+            radiation: "point".into(),
+            space: "half".into(),
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let baffle = simulate(
+        &with_filters,
+        &SimulateRequest {
+            radiation: "baffle".into(),
+            space: "half".into(),
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let start = half.f6_hz;
+    let mut worst = 0.0_f64;
+    for (freq, (left, right)) in freqs
+        .iter()
+        .zip(half.summed_spl_db.iter().zip(&baffle.summed_spl_db))
+    {
+        if *freq >= start && *freq <= 200.0 {
+            worst = worst.max((left - right).abs());
+        }
+    }
+    assert!(
+        worst <= 1.0 || message.contains("baffle-step"),
+        "worst {worst} dB, note: {message}"
+    );
+}
+
+#[test]
+fn baffle_scores_for_the_page() {
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
+    let plan = seatlock_sim::correction_plan_with(&design, &builtin(), "baffle", "half");
+    let mut corrected = design.clone();
+    for filter in plan["filters"].as_array().unwrap() {
+        let part =
+            serde_json::from_value::<seatlock_core::design::KindPart>(filter.clone()).unwrap();
+        corrected.dsp.per_radiator[0].blocks.push(part);
+    }
+    let start = 20.0_f64;
+    let end = 20_000.0_f64;
+    let per = 48.0_f64;
+    let steps = ((end / start).log2() * per).round() as i32;
+    let mut freqs = Vec::new();
+    for i in 0..=steps {
+        let freq = start * 2_f64.powf(i as f64 / per);
+        if freq < end {
+            freqs.push(freq);
+        }
+    }
+    freqs.push(end);
+    let result = simulate(
+        &corrected,
+        &SimulateRequest {
+            radiation: "baffle".into(),
+            space: "half".into(),
+            frequencies_hz: Some(freqs),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert_eq!(format!("{:.0}", result.f6_hz), "125");
+    assert_eq!(format!("{:.1}", result.flatness_db), "7.4");
+    assert_eq!(format!("{:.0}", result.max_spl_metric_db), "83");
+}
+
+#[test]
+fn level_2_outer_shapes_register() {
+    let registry = builtin();
+    let mut fields = serde_json::Map::new();
+    fields.insert("width_m".into(), serde_json::json!(0.2));
+    fields.insert("height_m".into(), serde_json::json!(0.3));
+    fields.insert("depth_m".into(), serde_json::json!(0.2));
+    fields.insert("wall_m".into(), serde_json::json!(0.012));
+    fields.insert("edge_radius_m".into(), serde_json::json!(0.008));
+    let rounded = registry.create_outer("rounded", &fields).unwrap();
+    assert!(rounded.interior_volume_m3().unwrap() > 0.005);
+    fields.insert("chamfer_m".into(), serde_json::json!(0.005));
+    assert!(registry.create_outer("chamfered", &fields).is_ok());
+    let mut sloped = serde_json::Map::new();
+    sloped.insert("width_m".into(), serde_json::json!(0.2));
+    sloped.insert("height_m".into(), serde_json::json!(0.3));
+    sloped.insert("depth_front_m".into(), serde_json::json!(0.12));
+    sloped.insert("depth_back_m".into(), serde_json::json!(0.2));
+    sloped.insert("wall_m".into(), serde_json::json!(0.012));
+    assert!(
+        registry
+            .create_outer("sloped", &sloped)
+            .unwrap()
+            .interior_volume_m3()
+            .unwrap()
+            > 0.0
+    );
+    let mut prism = serde_json::Map::new();
+    prism.insert(
+        "outline_m".into(),
+        serde_json::json!([[0.0, 0.0], [0.2, 0.0], [0.1, 0.2]]),
+    );
+    prism.insert("length_m".into(), serde_json::json!(0.25));
+    prism.insert("wall_m".into(), serde_json::json!(0.012));
+    assert!(
+        registry
+            .create_outer("prism", &prism)
+            .unwrap()
+            .interior_volume_m3()
+            .unwrap()
+            > 0.0
+    );
+}
+
+#[test]
+fn a_pvc_tube_buys_the_whole_pipe_and_names_the_offcut() {
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    let outer = value
+        .pointer_mut("/speaker/enclosure/outer")
+        .unwrap()
+        .as_object_mut()
+        .unwrap();
+    outer.clear();
+    outer.insert("kind".into(), serde_json::json!("tube"));
+    outer.insert(
+        "stock_id".into(),
+        serde_json::json!("charlotte-pvc-sch40-4in"),
+    );
+    outer.insert("length_m".into(), serde_json::json!(0.5));
+    let design = serde_json::from_value::<seatlock_core::DesignFile>(value).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    let radius = 0.1022604 / 2.0;
+    let expected = std::f64::consts::PI * radius * radius * 0.5;
+    assert!(
+        (report.interior_volume_m3 - expected).abs() < 1e-9,
+        "{}",
+        report.interior_volume_m3
+    );
+    assert!(!report.user_wall);
+    assert!(report.cut_list.iter().any(|line| line.contains("0.500")));
+    assert!(report.warnings.iter().any(|line| line.contains("Offcut")));
+    assert!(report.warnings.iter().any(|line| line.contains("77.13")));
+}
+
+#[test]
+fn a_form_tube_wall_is_the_users_own_number() {
+    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    let outer = value
+        .pointer_mut("/speaker/enclosure/outer")
+        .unwrap()
+        .as_object_mut()
+        .unwrap();
+    outer.clear();
+    outer.insert("kind".into(), serde_json::json!("tube"));
+    outer.insert(
+        "stock_id".into(),
+        serde_json::json!("sakrete-form-tube-8in"),
+    );
+    outer.insert("length_m".into(), serde_json::json!(1.0));
+    outer.insert("wall_m".into(), serde_json::json!(0.003));
+    let design = serde_json::from_value::<seatlock_core::DesignFile>(value).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(report.user_wall);
+    assert!(report
+        .warnings
+        .iter()
+        .any(|line| line.contains("user's own")));
+    let inside = 0.2032_f64 - 2.0 * 0.003;
+    let radius = inside / 2.0;
+    let expected = std::f64::consts::PI * radius * radius;
+    assert!((report.interior_volume_m3 - expected).abs() < 1e-9);
+}
+
+#[test]
+fn nd25_simulates_without_a_cone_travel_limit() {
+    let mut text = read_example();
+    text = text.replace("test-woofer-a", "dayton-nd25fa-4");
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let result = simulate(&design, &SimulateRequest::default(), &builtin());
+    assert!(!result.radiators.is_empty());
+    assert!(result
+        .issues
+        .iter()
+        .any(|issue| issue.message.contains("cone travel")));
+    assert!(result.radiators[0].spl_db.iter().any(|level| *level > 0.0));
+}
+
+#[test]
+fn nd25_on_the_front_is_not_exported() {
+    let mut text = read_example();
+    text = text.replace("test-woofer-a", "dayton-nd25fa-4");
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let report = seatlock_sim::geometry_report(&design).unwrap();
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|line| line.contains("mounting size not published")),
+        "{:?}",
+        report.warnings
+    );
+    assert!(!report.can_export_print);
+}
+
+#[test]
 fn baffle_radiation_drops_about_six_decibels_at_low_frequency() {
     let design = serde_json::from_str::<seatlock_core::DesignFile>(&read_example()).unwrap();
     let freqs = vec![30.0];
