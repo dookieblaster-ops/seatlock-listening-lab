@@ -161,6 +161,8 @@ web/               TypeScript and React app
 catalog/           drivers/, electronics/, materials.json
 targets/           quality targets
 designs/examples/  example designs used by checks and demos
+docs/              archives: older COMS.md threads and STATUS.md history
+tools/             cloud-check.sh: ./check.sh for Claude's cloud workspace (not for the owner)
 ```
 
 Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock-dsp` and `seatlock-rt` never depend on physics crates. Nothing under `engine/` depends on the browser except the two wrapper crates. You may merge or split crates if you keep that direction and record why.
