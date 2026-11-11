@@ -29,7 +29,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - Claude runs the full check suite in its cloud workspace with `tools/cloud-check.sh`: the same steps as `./check.sh`, with the standard library built from source for WebAssembly (rustup cannot download the wasm32 target there) and the preinstalled Chromium. The owner never runs that script; `./start.sh` and `./check.sh` stay the owner's and the laptop's.
 - If a helper session joins, Claude posts its assignment in `COMS.md` and reviews and merges its branch, as with Cursor.
 - Every lead session ends with a handoff at the top of the active thread in `COMS.md`, written so the next chat can continue without asking. A new chat is cheaper than a very long one, so the owner opens a fresh chat when a conversation grows long.
-- Claude Fable 5.2: the owner has a limited allowance and holds it for the hardest physics of Level 3 (exterior radiation, DML panels, losses in the 3D model, the 3D wave views). The lead tells the owner when Level 2 is complete, and posts a brief in `COMS.md` for that session first.
+- Claude Fable 5.2: the owner has a limited allowance (only a few hours left as of 2026-11-10) and holds it for the hardest physics of Level 3 (exterior radiation, DML panels, losses in the 3D model, the 3D wave views). The lead tells the owner when Level 2 is complete, and posts a brief in `COMS.md` for that session first.
 - When the laptop is linked, Claude can run `./start.sh` there and look at the running app in the Claude app's built-in browser.
 
 ## Next steps
