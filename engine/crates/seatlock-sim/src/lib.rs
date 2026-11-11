@@ -23,6 +23,7 @@ use serde_json::{Map, Value};
 pub mod chambers;
 pub mod compare;
 pub mod cost;
+pub mod exterior;
 pub mod optimize;
 pub mod ports;
 pub mod split;
@@ -34,6 +35,7 @@ pub fn builtin() -> Registry {
     seatlock_geom::register(&mut registry);
     seatlock_acoustics::register(&mut registry);
     seatlock_dsp::register(&mut registry);
+    registry.register_radiation("exterior", exterior::parse);
     registry
 }
 
@@ -57,6 +59,10 @@ pub struct SimulateRequest {
     /// Also return sound power and the directivity index (a room asks for them itself).
     #[serde(default)]
     pub sound_power: bool,
+    /// Cell size of the air outside the cabinet when `radiation` is `exterior`; 10 mm by
+    /// default.
+    #[serde(default)]
+    pub exterior_dx_m: Option<f64>,
 }
 
 fn default_enclosure() -> String {
@@ -83,6 +89,7 @@ impl Default for SimulateRequest {
             revision: 0,
             fdtd_dx_m: None,
             sound_power: false,
+            exterior_dx_m: None,
         }
     }
 }
@@ -582,7 +589,11 @@ pub fn simulate_with_progress(
         }
     }
     let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
-    let radiation = match registry.create_radiation(&request.radiation, &Map::new()) {
+    let mut radiation_fields = Map::new();
+    if let Some(dx) = request.exterior_dx_m {
+        radiation_fields.insert("dx_m".into(), serde_json::json!(dx));
+    }
+    let radiation = match registry.create_radiation(&request.radiation, &radiation_fields) {
         Ok(model) => model,
         Err(err) => {
             issues.push(Issue::error(
@@ -786,6 +797,18 @@ pub fn simulate_with_progress(
         }
     };
     add_notes(&mut fidelity, &direct.notes);
+    if direct
+        .notes
+        .iter()
+        .any(|note| note == seatlock_acoustics::SHADOW_NOTE)
+    {
+        issues.push(Issue::warning(
+            "source_faces_away",
+            "A sound source faces away from the listener. This everyday model only estimates \
+             what bends around its panel; run the full 3D outside model to judge such a design.",
+            "speaker.enclosure.mounts",
+        ));
+    }
 
     let mut radiators = Vec::new();
     let mut input_limit = vec![f64::MAX; freqs.len()];

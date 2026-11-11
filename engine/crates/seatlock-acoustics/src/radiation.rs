@@ -19,7 +19,8 @@ pub const POINT_FALLBACK_NOTE: &str =
     "A source on a surface without a flat outline is treated as a point source.";
 pub const EDGE_NOTE: &str = "Edge diffraction ignores cabinet depth and the shape of the edge.";
 pub const SHADOW_NOTE: &str = "Behind a source's own panel, only the sound that bends around the \
-     panel's edge is counted; the cabinet's depth is ignored.";
+     panel's edge is counted; the cabinet's depth is ignored. That is rough for a source on a side, \
+     top, or back; the full 3D outside model is the one to trust there.";
 
 fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()

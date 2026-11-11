@@ -5,4 +5,5 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+num-complex.workspace = true
 seatlock-core = { path = "../seatlock-core" }

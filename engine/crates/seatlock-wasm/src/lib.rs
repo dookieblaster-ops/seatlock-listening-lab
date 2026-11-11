@@ -34,6 +34,8 @@ struct CallRequest {
     sample_rate_hz: Option<f64>,
     #[serde(default)]
     fdtd_dx_m: Option<f64>,
+    #[serde(default)]
+    exterior_dx_m: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -106,6 +108,7 @@ fn parse_request(request: &str) -> CallRequest {
         impulse_len: None,
         sample_rate_hz: None,
         fdtd_dx_m: None,
+        exterior_dx_m: None,
     })
 }
 
@@ -191,7 +194,7 @@ fn full_3d(request: &str) -> String {
     };
     let defaults = SimulateRequest::default();
     let sim_request = SimulateRequest {
-        enclosure: "fdtd".to_string(),
+        enclosure: parsed.enclosure.unwrap_or_else(|| "fdtd".to_string()),
         radiation: parsed.radiation.unwrap_or(defaults.radiation),
         space: parsed.space.unwrap_or(defaults.space),
         voltage_v: parsed.voltage_v.unwrap_or(defaults.voltage_v),
@@ -199,6 +202,7 @@ fn full_3d(request: &str) -> String {
         revision: parsed.revision,
         fdtd_dx_m: parsed.fdtd_dx_m,
         sound_power: false,
+        exterior_dx_m: parsed.exterior_dx_m,
     };
     let result = simulate_with_progress(&design, &sim_request, &builtin(), &mut report_progress);
     serde_json::to_string(&result).unwrap_or_else(|error| {

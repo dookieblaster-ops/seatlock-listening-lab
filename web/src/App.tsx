@@ -93,6 +93,9 @@ export default function App() {
   const [canonicalB, setCanonicalB] = useState<string | null>(null);
   const [fdtdRuns, setFdtdRuns] = useState<SimulateResult[]>([]);
   const fdtdWorker = useRef<Worker | null>(null);
+  const outsideWorker = useRef<Worker | null>(null);
+  const [outsideRuns, setOutsideRuns] = useState<OutsideRun[]>([]);
+  const [outsideNote, setOutsideNote] = useState("");
 
   async function publish(next: Design, label: string) {
     const rev = ++revision.current;
@@ -673,7 +676,68 @@ export default function App() {
             >
               Cancel full 3D
             </button>
+            <button
+              type="button"
+              data-testid="outside-run"
+              disabled={!canonical}
+              title="Solve the air around the cabinet in 3D: first with 10 mm cells, then 5 mm. This is the model for drivers on the back, the sides, or the top, and for cabinets that are not boxes. With a room it takes several minutes."
+              onClick={() => {
+                if (!canonical) {
+                  return;
+                }
+                outsideWorker.current?.terminate();
+                const worker = new Worker(new URL("./fdtdWorker.ts", import.meta.url), { type: "module" });
+                outsideWorker.current = worker;
+                setOutsideRuns([]);
+                setOutsideNote("Solving the air outside in 3D…");
+                const finished: OutsideRun[] = [];
+                worker.onmessage = (event: MessageEvent<FullMessage>) => {
+                  const message = event.data;
+                  if (message.type === "progress") {
+                    const percent = Math.min(99, Math.round((100 * message.steps) / Math.max(message.maxSteps, 1)));
+                    setOutsideNote(
+                      `Solving the air outside in 3D with ${(message.dx * 1000).toFixed(0)} mm cells… a run is ${percent}% through its time limit.`,
+                    );
+                  } else if (message.type === "result") {
+                    const result = JSON.parse(message.json) as SimulateResult;
+                    const failed = result.error ?? result.issues.find((issue) => issue.severity === "error")?.message;
+                    if (failed || result.summed_spl_db.length === 0) {
+                      setOutsideNote(`The outside in 3D failed: ${failed ?? "it gave no result."}`);
+                      return;
+                    }
+                    finished.push({ dx: message.dx, elapsedMs: message.elapsedMs, result });
+                    setOutsideRuns([...finished]);
+                  } else if (message.type === "done") {
+                    const times = finished
+                      .map((run) => `${(run.dx * 1000).toFixed(0)} mm in ${(run.elapsedMs / 1000).toFixed(1)} s`)
+                      .join(", ");
+                    if (finished.length > 0) {
+                      setOutsideNote(`The outside in 3D finished: ${times}.`);
+                    }
+                    worker.terminate();
+                    outsideWorker.current = null;
+                  } else {
+                    setOutsideNote(`The outside in 3D failed: ${message.message}`);
+                  }
+                };
+                worker.postMessage({ text: canonical, cellSizes: [0.01, 0.005], frequencies: grid, outside: true });
+              }}
+            >
+              Run the outside in 3D
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                outsideWorker.current?.terminate();
+                outsideWorker.current = null;
+                setOutsideNote("The outside in 3D was canceled.");
+              }}
+            >
+              Cancel the outside
+            </button>
           </div>
+          <p data-testid="outside-note">{outsideNote}</p>
+          {outsideRuns.length > 0 && <OutsideThreeD runs={outsideRuns} quick={sim} />}
           <p data-testid="fdtd-note">{fdtdNote}</p>
           {fdtdNote.includes("unreachable") || fdtdNote.includes("RuntimeError") ? (
             <p data-testid="fdtd-error">{fdtdNote}</p>
@@ -1116,6 +1180,64 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+type OutsideRun = { dx: number; elapsedMs: number; result: SimulateResult };
+
+/** The air around the cabinet in 3D (README 5.6, `exterior`), against the everyday model. */
+function OutsideThreeD({ runs, quick }: { runs: OutsideRun[]; quick: SimulateResult | null }) {
+  const finest = runs.reduce((best, run) => (run.dx < best.dx ? run : best));
+  const coarse = runs.find((run) => run !== finest);
+  const result = finest.result;
+  const cell = `${(finest.dx * 1000).toFixed(0)} mm`;
+  // Two cell sizes: their largest and typical difference up to the coarse grid's limit.
+  let spread: { most: number; median: number; below: number } | null = null;
+  if (coarse) {
+    const below = 343.2 / (10 * coarse.dx);
+    const all: number[] = [];
+    result.frequencies_hz.forEach((freq, index) => {
+      if (freq <= below) {
+        all.push(Math.abs(result.summed_spl_db[index] - coarse.result.summed_spl_db[index]));
+      }
+    });
+    all.sort((a, b) => a - b);
+    if (all.length > 0) {
+      spread = { most: all[all.length - 1], median: all[Math.floor(all.length / 2)], below };
+    }
+  }
+  const label = `${result.fidelity.enclosure} enclosure, ${result.fidelity.radiation} radiation (${cell}), ${result.fidelity.room} room. ${result.fidelity.ignored.join(" ")}`;
+  return (
+    <div data-testid="outside-results">
+      {spread ? (
+        <p data-testid="outside-uncertainty">
+          The 10 mm and 5 mm grids differ by {spread.median.toFixed(2)} dB typically and {spread.most.toFixed(2)} dB at
+          most, up to {(spread.below / 1000).toFixed(1)} kHz. That is the uncertainty from turning the cabinet into cells.
+        </p>
+      ) : null}
+      <Graph
+        title="Level with the outside in 3D"
+        explanation={`Green is the direct sound with the air around the cabinet solved in 3D at ${cell} cells. Brown is the everyday model.`}
+        freqs={result.frequencies_hz}
+        values={result.summed_spl_db}
+        overlay={quick?.summed_spl_db}
+        unit="dB SPL"
+        testId="outside-spl-graph"
+        fidelity={label}
+      />
+      {result.in_room && (
+        <Graph
+          title="Loudness in the room with the outside in 3D"
+          explanation="Green is the sound at the listening position with the wall behind the speaker and the room's reverberant sound, from the 3D model. Brown is the direct sound alone."
+          freqs={result.frequencies_hz}
+          values={result.in_room.spl_db}
+          overlay={result.summed_spl_db}
+          unit="dB SPL"
+          testId="outside-room-graph"
+          fidelity={label}
+        />
+      )}
+    </div>
   );
 }
 

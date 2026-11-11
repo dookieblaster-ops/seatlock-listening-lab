@@ -176,7 +176,7 @@ Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock
 simulate(design, request) -> results
   request:  { enclosure: "lumped" | "waveguide" | "fdtd",
               radiation: "point" | "baffle" | "exterior", space: "full" | "half" | "step",
-              frequency grid, which outputs }
+              frequency grid, which outputs (sound_power), cell sizes (fdtd_dx_m, exterior_dx_m) }
   results:  per radiator and summed: complex pressure response, impedance, cone travel,
             opening air speed, limits, maximum level; score; cost; warnings;
             and for every curve the fidelity label of section 5.8
@@ -430,7 +430,25 @@ At low frequency that is the full-space level, the same as in front; at high fre
 
 Sound power under `baffle` is the far-field integral below, taken over 48 directions spread evenly over the sphere. With up to eight sources the geometry's part (how each pair of sources adds up over all directions) is computed on every sixth frequency and interpolated, then combined with the sources' volume velocities on the full grid.
 
-**`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a point source at the listening position and the pressure recorded all over the cabinet's skin, gives the transfer from every possible surface source to that position at once. Sound power needs such runs for a set of directions around the cabinet. This model is an outline: nothing has validated it yet.
+**`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a simple source at the listening position and the pressure recorded on the cabinet's skin, gives the transfer from every surface source to that position at once: `p(listener) / U(skin point) = p(skin point) / U(listener)`.
+
+As built:
+
+- **Only the scattered field is on the grid.** The listening position is usually outside the block, and its source's own wave is known in closed form: `p_inc = RHO0 * Q'(t - r/c) / (4*pi*r)` and `v_inc = r_hat * (Q'(t - r/c) / (4*pi*r*c) + Q(t - r/c) / (4*pi*r^2))`, with `Q(t)` a Gaussian pulse. Every face between the body and the air is given the velocity `-v_inc . n`, so the total normal velocity on the rigid skin is zero, and the total pressure is the closed-form incident pressure plus the grid's scattered pressure. At low frequency the scattered part is small, so the result is exact where the grid's outer faces are weakest. A point farther than 20 m sends a plane wave (used for sound power).
+- **The outermost layer of cells absorbs** an outgoing spherical wave centered on the body's middle: `dp/dt + (c / cos) * dp/dn + (c / r) * p = 0` along the inward axis, in Mur's box form between the cell and its inward neighbor, with `cos = r_hat . n` the angle at which that wave crosses the layer (kept at 0.58 or more). The folded admittance of section 5.5 takes the pressure half a cell from the face, which reflects about 14 % at the grid's limit; that is harmless inside a cabinet at low frequency and too much here. With this layer, a moving face on one solid cell matches a simple source in free space within 5 % up to 2 kHz at 10 mm, and moving the outer faces from 0.3 m to 0.5 m changes nothing by more than 2 %.
+- **The block** reaches 0.2 m past the cabinet's bounding box on every side. A cell is solid when its center is inside the outer shape (`contains_cabinet`). Valid up to `C0 / (10*dx)`; above that the `baffle` model's value is used as it is, and the fidelity label says so. The request's `exterior_dx_m` sets the cell, 10 mm by default.
+- **A source's skin cells** are the air cells that touch the body within the source's radius of its position, between 0.75 cells behind and 1.75 cells in front of its surface, with the body behind them as the source sees it; a source smaller than a cell takes the nearest one. The source's transfer is the mean over its cells. A source the shape cannot place keeps the `baffle` model's value.
+- **Sound power** is 14 plane-wave runs, from the six axis directions (weight 1/15) and the eight diagonals (weight 3/40), then `|p|^2 / (RHO0*C0)` summed over the far sphere.
+- **Cost**: about 0.4 s per run at 10 mm for a 7-liter box in a native test build. A design with a room needs 16 runs (the listening position, its mirror image, and the 14 directions).
+
+What validated it (CHK-RAD-3, CHK-RAD-4, and three more tests beside them):
+
+- A rigid sphere of radius 0.1 m against the closed-form series, from `k*a = 0.18` to 6: where the wave arrives and at the side, within 0.75 dB at both cell sizes. In the deep shadow behind the sphere the level reads high near the grid's limit, by up to 3.4 dB at 10 mm and 1.7 dB at 5 mm. The error halves with the cell: it comes from stair-stepped cells on a curved surface, where sound creeps around steps. A box has no stair-steps.
+- Reciprocity on a box: the reciprocity run against a plain radiation run (a skin face moving, pressure recorded at the far point), beside the box and behind it: within 7 % and 10 degrees from 50 Hz to 3 kHz. The plain run carries the grid's dispersion over the whole path, so it is the less exact of the two.
+- The CHK-RAD-2 arrangement in 3D (a source at the middle of a disc of radius 0.1 m, 10 mm thick): -6.02 dB at 10 Hz, +3.88 dB at 1716 Hz, -6.54 dB at 3432 Hz against half space, within 0.75 dB of the simple edge model at five frequencies. Two unrelated models agree.
+- A body far smaller than the wavelength changes nothing for a far listener (within 0.05 dB at 10 and 20 Hz). For a listener at 1 m the near face of a small box reads about 0.7 dB above a simple source, which is real: a source on a body acts from a point a little in front of it.
+
+Not modeled: wall vibration, openings as openings (a port's mouth is a patch of rigid skin that moves), and anything that needs smooth curved surfaces in deep shadow.
 
 Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field. The results give it as a level in dB re 1 pW, with the directivity index: the on-axis intensity at the listening distance against the mean over all directions, `10*log10(|p_axis|^2 * 4*pi*r^2 / (RHO0*C0*W))`. Both are computed when the design has a room, or when the request sets `sound_power`.
 
@@ -840,6 +858,8 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-EXT-2 | A design file containing a part of a kind this build does not know. | It opens, saves unchanged, simulates the rest, and reports a warning naming the unknown part. |
 | CHK-RAD-1 | `baffle` radiation, a rigid piston of radius 50 mm on a very large flat surface, at `k*a = 3` (3277 Hz). | 30° off axis the level is 2.57 dB below the on-axis level, and 60° off axis it is 8.81 dB below. Within 0.1 dB. |
 | CHK-RAD-2 | `baffle` radiation, a point source at the center of a circular baffle of radius 0.10 m, listener on axis at 100 m. | Relative to `half` space: -6.02 dB at 10 Hz, +3.52 dB at 1716 Hz (where `k*R = pi`), and -6.02 dB at 3432 Hz (where `k*R = 2*pi`). Within 0.05 dB. |
+| CHK-RAD-3 | `exterior` solver, a rigid sphere of radius 0.1 m in a plane wave, `k*a` from 0.18 to 6, at 10 mm and 5 mm cells. | Against the closed-form series `p = -j/(ka)^2 * sum (2m+1) j^m P_m(cos theta) / h_m'(ka)`: within 0.75 dB at the point facing the wave and at 90 degrees. At the shadowed point within 3.6 dB at 10 mm and 1.8 dB at 5 mm (stair-steps on a curved surface). |
+| CHK-RAD-4 | `exterior` solver, a box 0.2 x 0.16 x 0.24 m, 10 mm cells, one skin cell on its front, one point beside it and one behind it. | The reciprocity run and a plain radiation run the other way round agree within 7 % and 10 degrees at 50, 200, 500, 1000, 2000, and 3000 Hz. |
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
 | CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
@@ -852,7 +872,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - Editing feels instant. `lumped` and `waveguide` results update within 50 ms of a change. Slower work shows progress and can be canceled. Results that no longer match the design are grayed out until they are recomputed.
 - Interface work never makes the audio glitch.
 - Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
-- The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model.
+- The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
 - A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.

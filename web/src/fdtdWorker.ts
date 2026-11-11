@@ -6,10 +6,12 @@ export type FullRequest = {
   text: string;
   cellSizes: number[];
   frequencies: number[];
+  /** Solve the air outside the cabinet (README 5.6, `exterior`) instead of the air inside. */
+  outside?: boolean;
 };
 export type FullMessage =
   | { type: "progress"; dx: number; steps: number; maxSteps: number }
-  | { type: "result"; dx: number; json: string }
+  | { type: "result"; dx: number; json: string; elapsedMs: number }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -39,12 +41,22 @@ self.addEventListener("message", async (event: MessageEvent<FullRequest>) => {
       const started = performance.now();
       let json = engine.call(
         "simulate.full3d",
-        JSON.stringify({
-          text: event.data.text,
-          fdtd_dx_m: dx,
-          radiation: "baffle",
-          frequencies_hz: event.data.frequencies,
-        }),
+        JSON.stringify(
+          event.data.outside
+            ? {
+                text: event.data.text,
+                enclosure: "waveguide",
+                radiation: "exterior",
+                exterior_dx_m: dx,
+                frequencies_hz: event.data.frequencies,
+              }
+            : {
+                text: event.data.text,
+                fdtd_dx_m: dx,
+                radiation: "baffle",
+                frequencies_hz: event.data.frequencies,
+              },
+        ),
       );
       // The engine has no clock in WebAssembly; time the run here.
       const result = JSON.parse(json) as { fdtd?: { elapsed_ms: number } | null };
@@ -52,7 +64,7 @@ self.addEventListener("message", async (event: MessageEvent<FullRequest>) => {
         result.fdtd.elapsed_ms = performance.now() - started;
         json = JSON.stringify(result);
       }
-      post({ type: "result", dx, json });
+      post({ type: "result", dx, json, elapsedMs: performance.now() - started });
     }
     post({ type: "done" });
   } catch (error) {

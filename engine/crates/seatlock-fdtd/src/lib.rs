@@ -3,6 +3,7 @@
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
 
+pub mod exterior;
 pub mod grid;
 pub use grid::Grid;
 
