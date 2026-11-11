@@ -1085,22 +1085,41 @@ fn a_tube_gets_the_diffraction_of_its_round_end_cap() {
 
 #[test]
 fn an_unfinished_shape_says_so_and_gives_no_curves() {
-    let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
-    *value.pointer_mut("/speaker/enclosure/outer").unwrap() = serde_json::json!({
-        "kind": "rounded", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18,
-        "wall_m": 0.008, "edge_radius_m": 0.02
-    });
-    let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
-    let result = simulate(&design, &SimulateRequest::default(), &builtin());
-    assert!(result.radiators.is_empty());
-    assert!(
-        result
-            .issues
-            .iter()
-            .any(|issue| issue.message.contains("not finished yet")),
-        "{:?}",
-        result.issues
-    );
+    // Every registered shape that does not yet answer the whole outer-shape contract.
+    let unfinished = [
+        serde_json::json!({
+            "kind": "rounded", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18,
+            "wall_m": 0.008, "edge_radius_m": 0.02
+        }),
+        serde_json::json!({
+            "kind": "chamfered", "width_m": 0.16, "height_m": 0.25, "depth_m": 0.18,
+            "wall_m": 0.008, "chamfer_m": 0.01
+        }),
+        serde_json::json!({
+            "kind": "sloped", "width_m": 0.16, "height_m": 0.25, "depth_front_m": 0.15,
+            "depth_back_m": 0.20, "wall_m": 0.008
+        }),
+        serde_json::json!({
+            "kind": "prism", "length_m": 0.25, "wall_m": 0.008,
+            "outline_m": [[0.0, 0.0], [0.16, 0.0], [0.16, 0.18], [0.0, 0.18]]
+        }),
+    ];
+    for outer in unfinished {
+        let kind = outer["kind"].as_str().unwrap().to_string();
+        let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+        *value.pointer_mut("/speaker/enclosure/outer").unwrap() = outer;
+        let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
+        let result = simulate(&design, &SimulateRequest::default(), &builtin());
+        assert!(result.radiators.is_empty(), "{kind} gave curves");
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|issue| issue.message.contains("not finished yet")),
+            "{kind}: {:?}",
+            result.issues
+        );
+    }
 }
 
 #[test]

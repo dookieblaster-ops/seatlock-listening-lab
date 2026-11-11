@@ -392,6 +392,23 @@ impl OuterShape for RoundedBox {
     }
 }
 
+/// A box with chamfered outer edges. Not finished: it answers only the air volume (without
+/// the chamfers), so the simulator says so instead of treating it as a plain box.
+struct ChamferedBox {
+    inner: BoxShape,
+    #[allow(dead_code)]
+    chamfer_m: f64,
+}
+
+impl OuterShape for ChamferedBox {
+    fn interior_volume_m3(&self) -> Result<f64, String> {
+        self.inner.interior_volume_m3()
+    }
+    fn baffle_width_m(&self) -> f64 {
+        self.inner.baffle_width_m()
+    }
+}
+
 struct SlopedBox {
     width_m: f64,
     height_m: f64,
@@ -615,8 +632,10 @@ fn parse_rounded(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, Str
 }
 
 fn parse_chamfered(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
-    let _chamfer = required_f64(fields, "chamfer_m")?;
-    Ok(Box::new(box_from(fields)?))
+    Ok(Box::new(ChamferedBox {
+        inner: box_from(fields)?,
+        chamfer_m: required_f64(fields, "chamfer_m")?,
+    }))
 }
 
 fn parse_sloped(fields: &Map<String, Value>) -> Result<Box<dyn OuterShape>, String> {
