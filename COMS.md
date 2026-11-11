@@ -45,6 +45,53 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Handoff: start here. Assignment 12 (Level 2 M4)
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 2: M1, M2, and M3 done; M4 not started. No helper is active.
+
+**First steps**
+
+1. Read README sections 1 to 4, 9.2, 11, and 12. Then STATUS and this post.
+2. Fetch every branch (standing rule 1). Nothing is waiting for review.
+3. Run `tools/cloud-check.sh`. Last run, 2026-11-10 on `main` at this post's commit: rustfmt, clippy, 100 engine tests (CHK-FDTD-4 takes about 90 s), bindings, both wasm modules, type check, vitest, build, 18 of 18 browser tests (about 45 s).
+
+**Done this session (Assignment 11 item 5; M3 complete)**
+
+- `seatlock-fdtd/src/grid.rs`: one general solver on a masked grid (dense loops over 0/1 face masks; face slot = index of the cell on the high side), source patch, exterior blocks with spherical-wave absorbing faces, flow per opening, DFT at requested frequencies, progress callback and cancel. `EXTERIOR_WIDTHS = 5`. The block-doubling test now passes (ignored only because it takes 75 s; run with `--ignored`).
+- `seatlock-sim/src/voxels.rs`: grid for any builder cabinet (shape air, chambers, bores from `ports::bores`, tube walls closed, driver body, per-axis shift, leak closing). `simulate` with `enclosure: "fdtd"` and `fdtd_dx_m` (`full_3d_enclosure` in `lib.rs`); result field `fdtd` (`FdtdReport`). Contract gained `contains_cabinet`.
+- wasm method `simulate.full3d` with a `seatlock_progress` import; `web/src/fdtdWorker.ts` runs 10 mm then 5 mm; `FullThreeD` in `App.tsx` shows both graphs and the two-grid difference.
+- `engine/.cargo/config.toml`: `+simd128` for wasm32.
+- CHK-FDTD-4 in `seatlock-sim/tests/full_3d.rs` (fixture `chk-fdtd-4`): 1.4 % tuning, 0.35 dB.
+
+**Open items from item 5** (not before M4 unless cheap)
+
+- 10 mm preview of a 20 L cabinet with a port takes 26 s in the browser against the 20 s target. The exterior block is most of the cells; a half-sphere block, or a block only on the open side, may halve it, but the doubling rule must be rechecked for any new block shape.
+- The vented self-check reads 5.1 % at 5 mm; it carries a warning that explains the ports' end corrections. Consider comparing a sealed variant instead.
+- `simulate` warns "Openings are not part of the sealed-box model yet" for every design with ducts, even though `lumped` handles ports. Pre-existing; remove or reword it.
+- Earlier follow-ups still stand: `waveguide` for several chambers, printing bent ports, showing the print cuts in the 3D view.
+
+**Assignment 12: Level 2 M4** (`tasks/level-2.md` M4): the optimizer (README 11.3), cost beside every score, the cheap-against-reference comparison (README 9.2), the side-by-side build methods (README 6.2), and CHK-E2E-2 with `two-way-vented`. STATUS question 1 (quality target) was put to the owner at the end of this session with the recommendation to keep the placeholders; if the answer is in the chat or STATUS, record it in `targets/hifi-default.json`, README 11.2, and STATUS before the optimizer depends on it. Question 2 (playback hardware) is due during Level 2; ask it after question 1 is answered, one at a time, with a recommendation. Build the parts that do not depend on the target first (cost beside every score, cheap against reference, side-by-side build methods).
+
+**Then Level 3, and Fable.** Unchanged: when Level 2 is complete, tell the owner it is time, and post the Fable brief here first (exact files, checks, order; `exterior` radiation and the `simple` room first, then the DML panel; losses in the 3D model; the two 3D wave views). The new general grid (`seatlock_fdtd::grid::Grid` and `run`) and the spherical-wave absorbing faces are the natural base for `exterior` radiation by reciprocity.
+
+**The owner and the laptop**
+
+- The owner is not a programmer (README 1.1). Report result first, in plain language, without file names.
+- The laptop is linked to the Claude app as `nathan-latitude-5521`, but these chats get file access only, no terminal. The owner runs commands when asked; `start.sh` works there. The full 3D run times have not been measured on the laptop.
+
+**Pitfalls in the cloud workspace**
+
+- Rust is the installed stable (1.97.0), not the pinned 1.99.1. Set `RUSTUP_TOOLCHAIN=stable` for direct `cargo` calls; run `cargo fmt --all` from `engine/`.
+- Use `tools/cloud-check.sh`, not `./check.sh`. Browser tests run against the production build: after changing `web/src`, run `npm run build` before rerunning one spec with `cd web && PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/seatlock-cloud/pw npx playwright test e2e/<file> -g "<name>"`.
+- Do not run `npx prettier` on `web/src`: the repository is not formatted with it, and it rewrites whole files.
+- In browser tests, avoid one `expect()` per mesh element.
+- The engine must not call `Instant::now` in WebAssembly; the worker times wasm runs with `performance.now()`.
+- CHK-E2E-1's stored values are regression values only. Change them only with a reason in STATUS (last: $53.06, bolt holes).
+
+**Next step:** Assignment 12.
+
 ### 2026-11-10 — Claude — Handoff: start here. Assignment 11 item 5 (3D model with openings), then Assignment 12 (M4)
 
 - **To:** next lead session (any Claude model)
@@ -150,6 +197,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-10: Assignment 11 item 5 (full 3D for builder cabinets with ports, CHK-FDTD-4, the exterior-block rule) done on `main` by Claude; Level 2 M3 complete.
 - 2026-11-10: Assignment 11 items 1 to 4 (shapes, recesses and bolt holes, ports and chambers, print splitting) done on `main` by Claude; item 5 handed to the next lead session. Level 0 closed by the owner's laptop run.
 - 2026-11-10: Cursor went inactive; Claude built directly, finished Assignment 10, added `sheet_box`, and handed off to the next lead session.
 - 2026-11-10: Assignment 10 item 1 (shelf fix) merged into `main` by Claude; Cursor went inactive, and Claude continues the rest directly.
