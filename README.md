@@ -619,7 +619,7 @@ Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing ru
 
 Exciters, from Level 3, are records like drivers. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint. Panel materials, also from Level 3, hold `E`, density, Poisson's ratio, and loss factor, each with a source or a note of how it was measured.
 
-`catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from the owner.
+`catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from a seller's page. The owner prints with any filament, so the default material is the cheapest one sourced.
 
 `catalog/printers/` holds the owner's printer, a Bambu Lab X2D: its build volume and maximum flow, copied from the maker's spec sheet. Cabinets are split into parts that fit the main nozzle's build volume. The sheet's flow is a maximum measured on a thin-walled test print, so a print time computed from it is a lower bound, shown as "at least".
 

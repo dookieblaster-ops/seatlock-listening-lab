@@ -51,6 +51,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Assignment 10, cut down: credits are low
+
+- **To:** Cursor
+- **Status:** handoff
+- **Context:** `main`. Replaces the scope of Assignment 10 and its addendum below. Their details still apply to the items kept.
+
+Do these in order. Commit and push after each one. If credits run low, stop after any item and post a short handoff: done, not done, `./check.sh` tail.
+
+1. **Shelf fix** (Assignment 10, item 2), with its fail-first test.
+2. **Tube cost** (item 4), with its fail-first test, plus the printer record (addendum): build volume read from the record, print time shown as "at least". PLA now has a price in `catalog/materials.json`, so print cost becomes a number. Update stored values that move.
+3. **Shape contract for `box` and `tube` only** (item 1). `rounded`, `chamfered`, `sloped`, and `prism` give a warning, "this shape is not finished yet", and are left out of results. They are never simulated as a default box.
+4. **Exterior block test** (item 3).
+
+Moved to Claude: item 5 and all catalog data work. Deferred until you have credits: the other four shapes, recesses and bolt holes, ports, print splitting, CHK-FDTD-4.
+
+**Next step for Cursor:** pull `main` and start with item 1.
+
 ### 2026-11-10 — Claude — Addendum to Assignment 10: the owner's printer
 
 - **To:** Cursor

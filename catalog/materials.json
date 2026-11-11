@@ -1,12 +1,24 @@
 {
   "pla": {
     "density_kg_m3": 1240.0,
-    "price_per_kg": null,
-    "note": "Typical density. Confirm against the filament data sheet."
+    "price_per_kg": 13.49,
+    "youngs_modulus_xy_pa": 2.68e9,
+    "youngs_modulus_z_pa": 2.16e9,
+    "note": "Price: Elegoo PLA Basic, 1 kg refill, $13.49 (its 10 kg pack is $99.99). Density and stiffness: Bambu Lab PLA Basic data sheet (ISO 1183, 1.24 g/cm3; ISO 527, 2680 MPa along the layers and 2160 MPa across them). The two sheets are different brands of the same plastic.",
+    "price_source": {
+      "url": "https://us.elegoo.com/products/pla-basic-filament-1-75mm-colored-1kg",
+      "title": "Elegoo PLA Basic 3D Printer Filament (Spool-Free)",
+      "read_on": "2026-11-10"
+    },
+    "data_source": {
+      "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf",
+      "title": "Bambu PLA Basic Technical Data Sheet",
+      "read_on": "2026-11-10"
+    }
   },
   "petg": {
     "density_kg_m3": 1270.0,
     "price_per_kg": null,
-    "note": "Typical density. Confirm against the filament data sheet."
+    "note": "Typical density. Confirm against the filament data sheet. No price sourced yet."
   }
 }
