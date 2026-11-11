@@ -437,7 +437,7 @@ voice-coil heating  |I(f)|^2 * re_ohm              <= pe_w
 amplifier           V(f)                           <= sqrt(amp_power_w * amp_rated_load_ohm)
 ```
 
-`max_spl(f)` is the SPL at 1 m when the first limit is reached with a sine at frequency `f`. `headroom(f) = max_spl(f) - design_level`, where the design level is the target's `max_spl_db_min` (section 11). The limits above belong to the `cone` radiator and its enclosure. Every radiator kind states its own (section 3.3).
+`max_spl(f)` is the SPL at 1 m when the first limit is reached with a sine at frequency `f`. For the whole speaker, the input rises until the first radiator reaches one of its limits, each radiator receiving the input through its own DSP chain; `max_spl(f)` is the summed level at that input. A woofer far above its crossover therefore never sets the speaker's limit. `headroom(f) = max_spl(f) - design_level`, where the design level is the target's `max_spl_db_min` (section 11). The limits above belong to the `cone` radiator and its enclosure. Every radiator kind states its own (section 3.3).
 
 ### 5.8 Fidelity labels
 
@@ -596,7 +596,7 @@ C1 works this way, so that behavior is the same from session to session:
 6. Total boost at any frequency stays within `headroom(f)`.
 7. Keep the result only if it helps. If flatness improves by less than 0.2 dB, or any target metric gets worse, return no correction and say why.
 
-C2 finds the lowest frequency `f_low` at which `max_spl(f)` still reaches the design level, shapes the low end into a clean high-pass at `f_low` (second order for a sealed box, fourth order for a vented one) by boosting within headroom, and always adds a protective high-pass below. Below a vented box's tuning the cone is unloaded, so that high-pass is not optional.
+C2 finds the lowest frequency `f_low` (at most 300 Hz) at which `max_spl(f)` still reaches the design level, shapes the low end into a clean high-pass at `f_low` (second order for a sealed box, fourth order for a vented one) by boosting within headroom, and always adds a protective high-pass below. Below a vented box's tuning the cone is unloaded, so that high-pass is not optional. When the speaker cannot play the design level even between 300 Hz and 3 kHz, C2 shapes the bass for the highest level it reaches there, and says so; when no shape fits at all, it keeps the natural bass (and a vented box's protective high-pass). Above 3 kHz, where bass filters change nothing, the coil and the amplifier set the limit and C2 does not judge it.
 
 The target curve is flat from `f_low` to 20 kHz with that high-pass shape below, plus an optional tilt in dB per octave that defaults to 0.
 
@@ -707,7 +707,7 @@ A target is a set of thresholds in `targets/`. A design meets the target when it
 { "f6_hz_max": 50, "flatness_db_max": 1.5, "max_spl_db_min": 95, "budget_max": null }
 ```
 
-These numbers are placeholders chosen when this specification was written. They are not the owner's decision yet. Ask the owner before Level 2 optimizer work depends on them (`STATUS.md`).
+The owner confirmed these numbers on 2026-11-11.
 
 Among designs that meet the target, the cheaper one is better. Among designs that miss it, the one with the smaller shortfall is better:
 
@@ -725,6 +725,7 @@ shortfall = max(0, log2(f6_hz / f6_hz_max))
 - Method: for each combination of discrete choices, search the continuous variables with a derivative-free method on the `lumped` or `waveguide` model. Keep the best few. Verify the finalists with `fdtd` and report what changed.
 - Output: a ranked list and a cost-against-quality plot. Every result is a complete design file the user can open.
 - It runs in workers, shows first results within 30 s, can be canceled, and is repeatable from its seed.
+- As built at Level 2: the discrete choices are sealed or vented, and LR4 or LR2 crossovers for designs with more than one radiator; each combination runs in its own worker. Nelder-Mead searches net air volume (keeping the cabinet's proportions and build method), port tuning (the port's diameter is kept, or 0.35 of the cone's diameter; its length follows from the tuning), crossover frequency, and the levels of radiators after the first, 30 candidates per combination by default. Every candidate is corrected and scored with `lumped` and `baffle` radiation. A port that does not fit the cabinet's depth rules a candidate out. The top finalist is checked with `fdtd` at 10 mm, and the page reports how its bass limit, evenness, and clean level changed.
 
 ## 12. Build plan
 

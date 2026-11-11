@@ -45,6 +45,41 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-11 — Claude — Handoff and brief: Level 3 physics for the Claude Fable 5.2 session
+
+- **To:** next lead session (the owner plans to use Claude Fable 5.2, with only a few hours)
+- **Status:** handoff
+- **Context:** `main`. Level 2 complete (M1 to M4). Level 3 starts. No helper is active.
+
+**Start here (keep it short; the hours are limited)**
+
+1. Fetch every branch (standing rule 1); nothing waits for review. Run `tools/cloud-check.sh` in the background (about 6 minutes; last run on this commit: 106 engine tests, 20 browser tests, all passing) and start reading while it runs.
+2. Read README 3.3, 5.6, 5.9, 5.10, 13 (CHK-PLATE-1, CHK-ROOM-1). The pitfalls list in the previous handoff below still applies.
+3. Work in this order, the owner's choice. Commit and push after each item; each item stands alone.
+
+**Item 1: the `simple` room (README 5.10, CHK-ROOM-1).** Closed form, quick.
+- Contract today: `RoomModel::at_listener(&self, direct: &[Complex64])` in `engine/crates/seatlock-core/src/registry.rs`, member `free` registered in `seatlock-acoustics/src/lib.rs`, used per radiator in `simulate` (`room.at_listener(&pressure)` in `seatlock-sim/src/lib.rs`). It cannot see the speaker's position, its sound power, or the wall. Extend it (keep `free` working): the room needs, per radiator, the pressure toward the wall behind (mirror source at `2 * wall_behind_m` extra path) and the radiated sound power `W`. The design field already exists: `speaker.room` (`Option<KindPart>`).
+- Energy sum: direct and reflection add as complex pressures, diffuse adds as energy (README 5.10), so the summed in-room result is a magnitude, not a complex curve; keep the complex direct sum for listen mode and give the in-room level separately.
+- CHK-ROOM-1: A = 20.12 m^2, diffuse 113.12 dB, direct at 2.5 m 101.19 dB.
+
+**Item 2: `exterior` radiation by reciprocity (README 5.6).** The hard one.
+- Base: `seatlock_fdtd::grid::{Grid, run}` (masked grid, dense loops, spherical-wave absorbing faces) and the voxelizer pattern in `seatlock-sim/src/voxels.rs` (`Lattice`, per-axis shift, `OuterShape::contains_cabinet` for the outer body). Every shape implements `contains_cabinet`.
+- `run` today drives a resistive source patch and records the aperture; it needs a hard point source (or an incident plane wave) and recorded pressure on the cabinet's skin cells. A listener 1 m away inside the grid is about 8 million cells at 10 mm; consider a plane wave from the listener's direction (total-field/scattered-field) and the far-field 1/r, or a Kirchhoff surface, and record the choice in STATUS.
+- Contract: `RadiationModel::pressure` takes `sources: &[Vec<Complex64>]` with no positions; the `baffle` path in `simulate` builds positioned sources itself. Give `exterior` positioned surface sources (position, outward normal, area, volume velocity per frequency) and keep `point` and `baffle` working.
+- Validate before trusting (README: "nothing has validated it yet"): a flat-baffled source against CHK-RAD-2's closed form, low-frequency full-space level, and reciprocity (swap source and receiver). Valid up to `C0 / (10 dx)`; above it fall back to `baffle` and say so in the fidelity label.
+
+**Item 3: the DML panel (README 5.9, CHK-PLATE-1).** New radiator kind `dml_panel` in `seatlock-acoustics` (register beside `cone`), panel modes by finite differences (free edges have no closed form; CHK-PLATE-1 is the simply supported closed form: 42.36, 88.10, 123.68, 164.35, 169.43 Hz for `test-panel-a`), the exciter coupling of 5.9, surface sources per element (needs Item 2's positioned sources). Use `test-panel-a` and a synthetic `test-exciter-a`; do not spend Fable's hours sourcing catalog records (that is ordinary Level 3 track B work).
+
+**Item 4, if time remains:** losses in the 3D model (fill and wall), then the two 3D wave views (Level 3 track D). Otherwise leave them for a regular session.
+
+**State of Level 2 work worth knowing**
+
+- Scoring: `seatlock-sim/src/compare.rs` (`score`, `apply_correction`, `rebuild_to`, `build_methods`, `reference_build`); optimizer `seatlock-sim/src/optimize.rs`; page panel `web/src/CostQuality.tsx` on the generic `web/src/jobWorker.ts`; wasm methods `compare.reference`, `compare.methods`, `optimize.combos`, `optimize.combo`.
+- Owner questions: 1 answered (keep the quality target). 2 (playback hardware) asked on 2026-11-11; record the answer in STATUS and README 7 when it comes.
+- Open items, not for Fable: 10 mm full 3D preview of a 20 L ported cabinet takes 26 s in the browser (target 20 s); the vented self-check reads 5.1 %; the "Openings are not part of the sealed-box model yet" warning appears for every design with ducts; `waveguide` for several chambers; bent ports in print; the optimizer cannot reshape prisms or multi-chamber cabinets; the SAKRETE tube needs a wall before it can be a build method.
+
+**Next step:** Item 1.
+
 ### 2026-11-10 — Claude — Handoff: start here. Assignment 12 (Level 2 M4)
 
 - **To:** next lead session (any Claude model)
@@ -197,6 +232,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-11: Assignment 12 (Level 2 M4: cost beside score, reference build, build methods, optimizer, CHK-E2E-2) done on `main` by Claude; Level 2 complete.
 - 2026-11-10: Assignment 11 item 5 (full 3D for builder cabinets with ports, CHK-FDTD-4, the exterior-block rule) done on `main` by Claude; Level 2 M3 complete.
 - 2026-11-10: Assignment 11 items 1 to 4 (shapes, recesses and bolt holes, ports and chambers, print splitting) done on `main` by Claude; item 5 handed to the next lead session. Level 0 closed by the owner's laptop run.
 - 2026-11-10: Cursor went inactive; Claude built directly, finished Assignment 10, added `sheet_box`, and handed off to the next lead session.

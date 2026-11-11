@@ -27,8 +27,10 @@ test("reference build, build methods, and the optimizer show cost beside score",
   await expect(ranked.locator("tbody tr").first()).toBeVisible({ timeout: 120_000 });
   console.log("OPTIMIZER_FIRST_RESULT_S", ((Date.now() - started) / 1000).toFixed(1));
   await expect(page.getByTestId("cost-plot")).toBeVisible();
-  await expect(page.getByTestId("cost-quality-note")).toHaveText("The optimizer finished.", { timeout: 120_000 });
+  await expect(page.getByTestId("cost-quality-note")).toHaveText("The optimizer finished.", { timeout: 180_000 });
   console.log("OPTIMIZER_DONE_S", ((Date.now() - started) / 1000).toFixed(1));
+  await expect(page.getByTestId("optimizer-verified")).toContainText("Full 3D check of the top design");
+  console.log("OPTIMIZER_VERIFIED", await page.getByTestId("optimizer-verified").textContent());
 
   await ranked.getByRole("button", { name: "Open" }).first().click();
   await expect(page.getByTestId("scores")).toBeVisible();

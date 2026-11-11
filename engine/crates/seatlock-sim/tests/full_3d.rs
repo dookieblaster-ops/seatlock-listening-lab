@@ -167,3 +167,32 @@ fn two_way_vented_run_time() {
         );
     }
 }
+
+#[test]
+fn chk_e2e_2_three_enclosure_models_agree_below_200_hz() {
+    // README section 12, CHK-E2E-2: two-way-vented in lumped, waveguide, and fdtd.
+    let design = example("two-way-vented");
+    let request = |enclosure: &str| SimulateRequest {
+        enclosure: enclosure.to_string(),
+        frequencies_hz: Some(log_grid(10.0, 200.0, 48.0)),
+        fdtd_dx_m: Some(0.01),
+        ..SimulateRequest::default()
+    };
+    let lumped = simulate(&design, &request("lumped"), &builtin());
+    let wave = simulate(&design, &request("waveguide"), &builtin());
+    let full = simulate(&design, &request("fdtd"), &builtin());
+    assert_eq!(full.fidelity.enclosure, "fdtd");
+    let mut worst = 0.0_f64;
+    for index in 0..lumped.frequencies_hz.len() {
+        let levels = [
+            lumped.summed_spl_db[index],
+            wave.summed_spl_db[index],
+            full.summed_spl_db[index],
+        ];
+        let spread = levels.iter().cloned().fold(f64::MIN, f64::max)
+            - levels.iter().cloned().fold(f64::MAX, f64::min);
+        worst = worst.max(spread);
+    }
+    eprintln!("CHK-E2E-2 worst spread below 200 Hz {worst:.2} dB");
+    assert!(worst <= 1.5, "models differ by {worst} dB below 200 Hz");
+}

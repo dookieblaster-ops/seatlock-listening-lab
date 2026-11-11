@@ -95,6 +95,7 @@ export function CostQuality({
   const [methods, setMethods] = useState<MethodRow[] | null>(null);
   const [results, setResults] = useState<ComboResult[]>([]);
   const [progress, setProgress] = useState<Record<number, string>>({});
+  const [verified, setVerified] = useState("");
 
   const stop = () => {
     workers.current.forEach((worker) => worker.terminate());
@@ -174,6 +175,7 @@ export function CostQuality({
             stop();
             setResults([]);
             setProgress({});
+            setVerified("");
             setNote("Finding the cheapest design that meets the target…");
             void (async () => {
               const combosJson = await runJob("optimize.combos", { text }, () => {}, workers.current);
@@ -208,7 +210,39 @@ export function CostQuality({
                     .catch(() => {}),
                 ),
               );
-              setNote(finished.length > 0 ? "The optimizer finished." : "The optimizer gave no result.");
+              const top = finished
+                .flatMap((result) => result.best)
+                .sort((a, b) => rank(a.score) - rank(b.score))[0];
+              if (!top) {
+                setNote("The optimizer gave no result.");
+                return;
+              }
+              // README 11.3: verify the finalist with the full 3D model and report what changed.
+              setNote("Checking the top design in full 3D…");
+              try {
+                const json = await runJob(
+                  "simulate.full3d",
+                  { text: JSON.stringify(top.design), fdtd_dx_m: 0.01, radiation: "baffle" },
+                  () => {},
+                  workers.current,
+                );
+                const full = JSON.parse(json) as {
+                  f6_hz: number;
+                  flatness_db: number;
+                  max_spl_metric_db: number;
+                  error?: string;
+                };
+                if (full.error) {
+                  setVerified(`The full 3D check could not run: ${full.error}`);
+                } else {
+                  setVerified(
+                    `Full 3D check of the top design (10 mm cells): bass limit ${top.score.f6_hz.toFixed(0)} → ${full.f6_hz.toFixed(0)} Hz, evenness ${top.score.flatness_db.toFixed(1)} → ${full.flatness_db.toFixed(1)} dB, clean level ${top.score.max_spl_db.toFixed(0)} → ${full.max_spl_metric_db.toFixed(0)} dB.`,
+                  );
+                }
+              } catch (error) {
+                setVerified(`The full 3D check could not run: ${(error as Error).message}`);
+              }
+              setNote("The optimizer finished.");
             })();
           }}
         >
@@ -301,6 +335,7 @@ export function CostQuality({
               ))}
             </tbody>
           </table>
+          {verified ? <p data-testid="optimizer-verified">{verified}</p> : null}
           <CostPlot points={points} />
           {results.flatMap((result) => result.notes).length > 0 ? (
             <p>{[...new Set(results.flatMap((result) => result.notes))].join(" ")}</p>
