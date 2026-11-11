@@ -45,6 +45,57 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-10 — Claude — Handoff: start here. Assignment 11 item 5 (3D model with openings), then Assignment 12 (M4)
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 0 complete (owner ran `start.sh`). Level 2: M1 and M2 merged; M3 done except item 5; M4 not started. No helper is active.
+
+**First steps**
+
+1. Read README sections 1 to 4 and 12, plus 5.5 and 6. Then STATUS and this post.
+2. Fetch every branch (standing rule 1). Nothing is waiting for review.
+3. Run `tools/cloud-check.sh` (first run in a new workspace fetches std sources and runs `npm ci`; allow several minutes). Last run, 2026-11-10 on `main` at this post's commit: rustfmt, clippy, 96 engine tests (plus the one ignored known failure below), bindings, both wasm modules, type check, vitest, build, 16 of 16 browser tests.
+
+**Done this session (Assignment 11 items 1 to 4)**
+
+- Shapes: `rounded`, `chamfered` (convex hulls, `seatlock-geom/src/edged.rs`), `sloped` and `prism` (`seatlock-geom/src/prism.rs`, CSG op `prism`, plus op `hull`). Examples `rounded-box`, `chamfered-box`, `sloped-baffle`, `hex-prism`.
+- Recesses and bolt holes: `mount_features` in `seatlock-sim/src/lib.rs`.
+- Ports and ducts: `seatlock-sim/src/ports.rs` (straight only; tapered round, or slot). Chambers: `seatlock-sim/src/chambers.rs` (boxes; partitions = `air_tree` minus chambers) and `seatlock-acoustics/src/network.rs` (lumped network). Example `two-chamber`. `two-way-vented`'s port path fixed (STATUS decisions).
+- Print splitting: `seatlock-sim/src/split.rs` (cuts and pins), `buildPrint` in `web/src/printSolid.ts` (parts and 3MF with one object per part and pin), parts table in `App.tsx` (`data-testid="print-parts"`).
+- Contract additions on `OuterShape`: `air_tree`, `contains_solid` (default "not finished yet").
+
+**Assignment 11 item 5: full 3D (`fdtd`) for builder cabinets with openings** (README 5.5). Unchanged from the previous post, now unblocked:
+
+- Build the voxel mask from the shape's `contains_air` (and the chambers, via `chambers::Chamber::contains`). Today the page sends a rectangular inner size from `web/src/App.tsx`, and the button is disabled for every shape except `box`.
+- Put the source at the mount. Each duct to outside is an opening into an exterior air block with absorbing faces; `H_k` from the flow through it. Generalize `helmholtz_neck` in `engine/crates/seatlock-fdtd/src/lib.rs`. The printed port's geometry is in `ports::PrintedPort` (bore and opening).
+- Two-resolution uncertainty (10 mm and 5 mm), progress from the worker, cancel.
+- CHK-FDTD-4: 5 mm against `waveguide` for the CHK-BOX-3 cabinet as the builder makes it. Tuning within 3 %, SPL within 1.5 dB below 300 Hz.
+- Known failure, ignored on purpose: `exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_percent` in `engine/crates/seatlock-fdtd/tests/checks.rs`. Do not loosen it; validate a decay window against the closed form, or leave it to Level 3 losses, and record the choice in STATUS.
+- Record measured run times against the budgets in README 5.5.
+- If this stalls badly, the owner may choose to spend Claude Fable 5.2 on it instead; offer that, do not decide it.
+
+**Smaller follow-ups found this session** (do when convenient, not before item 5): `waveguide` for several chambers (tree networks, README 5.4); printing bent ports; showing in the 3D view where the print is cut.
+
+**Assignment 12: Level 2 M4** (`tasks/level-2.md` M4): the optimizer (README 11.3), cost beside every score, the cheap-against-reference comparison (README 9.2), the side-by-side build methods (README 6.2), and CHK-E2E-2 with `two-way-vented`. Before the optimizer depends on it, ask the owner STATUS question 1 (quality target). Question 2 (playback hardware) is also due during Level 2. One question at a time, with a recommendation.
+
+**Then Level 3, and Fable.** When Level 2 is complete, tell the owner it is time, and post a brief here for that session first: `exterior` radiation (README 5.6), the DML panel and exciter (5.9, CHK-PLATE-1), the `simple` room (5.10, CHK-ROOM-1), losses in the 3D model, and the two 3D wave views (Level 3 track D).
+
+**The owner and the laptop**
+
+- The owner is not a programmer (README 1.1). Report result first, in plain language, without file names.
+- The laptop is linked to the Claude app as `nathan-latitude-5521`, but these chats get file access only, no terminal. The owner runs commands when asked; `start.sh` works there.
+
+**Pitfalls in the cloud workspace**
+
+- Rust is the installed stable (1.97.0), not the pinned 1.99.1. Set `RUSTUP_TOOLCHAIN=stable` for direct `cargo` calls; run `cargo fmt --all` from `engine/`.
+- Use `tools/cloud-check.sh`, not `./check.sh`. To rerun one browser test: `cd web && PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/seatlock-cloud/pw npx playwright test e2e/<file> -g "<name>"`.
+- In browser tests, avoid one `expect()` per mesh element; Playwright's per-call overhead adds up to tens of seconds.
+- The engine must not call `Instant::now` in WebAssembly.
+- CHK-E2E-1's stored values are regression values only. Change them only with a reason in STATUS (last: $53.06, bolt holes).
+
+**Next step:** Assignment 11, item 5.
+
 ### 2026-11-10 — Claude — Handoff: start here. Assignment 11 (rest of Level 2 M3), then Assignment 12 (M4)
 
 - **To:** next lead session (any Claude model)
@@ -99,6 +150,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-10: Assignment 11 items 1 to 4 (shapes, recesses and bolt holes, ports and chambers, print splitting) done on `main` by Claude; item 5 handed to the next lead session. Level 0 closed by the owner's laptop run.
 - 2026-11-10: Cursor went inactive; Claude built directly, finished Assignment 10, added `sheet_box`, and handed off to the next lead session.
 - 2026-11-10: Assignment 10 item 1 (shelf fix) merged into `main` by Claude; Cursor went inactive, and Claude continues the rest directly.
 - 2026-11-10: Assignment 9 (review fixes and part of Level 2 M3) merged into `main` by Claude; the shape contract, the shelf fix, and the rest of M3 moved to Assignment 10.
