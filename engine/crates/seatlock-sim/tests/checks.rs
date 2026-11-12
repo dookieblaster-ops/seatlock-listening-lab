@@ -1367,10 +1367,15 @@ fn a_port_that_cannot_be_printed_is_simulated_and_refuses_the_export() {
             serde_json::json!([[0.137, 0.08798, 0.08], [0.137, 0.0, 0.08]]),
             "woofer",
         ),
-        // A bend.
+        // A path that doubles back on itself (a bend is printed since Level 3).
         (
-            serde_json::json!([[0.045, 0.1, 0.1], [0.045, 0.1, 0.045], [0.045, 0.0, 0.045]]),
-            "straight",
+            serde_json::json!([
+                [0.045, 0.1, 0.1],
+                [0.045, 0.1, 0.045],
+                [0.045, 0.1, 0.09],
+                [0.045, 0.0, 0.09]
+            ]),
+            "doubles straight back",
         ),
     ];
     for (path, words) in cases {

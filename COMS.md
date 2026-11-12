@@ -45,6 +45,41 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-11 — Claude — Handoff: start here. Inside shape done; shape optimizer waits for the owner's go-ahead
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3 in progress. The owner set the order this session: first "inside shape" (done), then possibly an optimizer that "iterates the 3D designs quickly to find the best form" (asked, not yet approved).
+
+**First steps**
+
+1. Fetch every branch (standing rule 1); nothing waits for review.
+2. Run `tools/cloud-check.sh` (about 9 minutes). Last run on this commit: rustfmt, clippy, 141 engine tests, bindings, both wasm modules, type check, vitest, build, 25 of 25 browser tests, "All checks passed" (stable 1.97.0). One more engine test runs on request: `cargo test -p seatlock-sim --test folded -- --ignored` (full 3D of `folded-line`, about 8 minutes in the test build; it passed this session).
+3. Read the owner's answers in the chat or STATUS questions 8 and 9 before choosing work. README 1.1: the owner gives a go-ahead before new items start.
+
+**Done this session**
+
+- Bent and tapered ducts everywhere: `ports::run` (straight runs, corners lengthened by half the section, slots bend in one plane, tapers in both shapes, hull op for a tapered slot), `ports::bores` returns one bore per run, print volumes along the center line, `PrintedPort.lines` keeps pins off every run.
+- The detailed model for networks: `chambers::waveguide_network` (tree from the driver's chamber, taper orientation by direction, loops refused with fallback). Used for several chambers and for the single-chamber case.
+- `compare::ENCLOSURE = "waveguide"`: the everyday model for scores, correction, optimizer, listening; the page's engine worker sends it too.
+- Removed the wrong "Openings are not part of the sealed-box model" warning and the "sealed-box model" label line.
+- Page: `InsideEditor` and `PathField` in `web/src/App.tsx` replace the chamber and duct JSON boxes (bracing is still JSON).
+- Example `designs/examples/folded-line.seatlock.json`; tests `seatlock-sim/tests/folded.rs`, `web/e2e/inside.spec.ts`, and `folded-line` in the geometry spec's CHK-GEO list.
+
+**Queue, in order (owner's go-ahead needed for 1 and 4)**
+
+1. **Shape optimizer** (owner request; STATUS question 9). Extend `seatlock-sim/src/optimize.rs`: variables for line length (move corners), fold count (rewrite the path), taper (end size), chamber size, slot size, port; score every candidate with `waveguide` + `baffle` (milliseconds); check the best few with `fdtd`; show the shapes beside each other. The optimizer today scales boxes, sheet boxes, and tubes only (STATUS decisions 2026-11-11); folded lines need a generator that keeps the line inside the cabinet and printable (`ports::run` and `printed_ports` say why a candidate fails).
+2. **3D cabinet speed for big mouths.** `folded-line` at 10 mm: 168 s natively, release. The exterior block reaches five opening widths (0.55 m for the 100 mm slot) and the lossless line rings to the 1 s cap. Options: losses (README 5.5, Level 3), the one-way boundary of `seatlock-fdtd/src/exterior.rs` on the cabinet solver's block (recheck the block rule in `seatlock-fdtd/tests/checks.rs`), or a block sized by the slot's area rather than its longest side (needs validation). The page runs 10 mm and then 5 mm; for this example 5 mm would be about 10 million cells and very slow in the browser: consider stopping at 10 mm when the cell count is high, and say so.
+3. **Losses in the 3D model, then the 3D wave views** (unchanged from the Fable handoff below).
+4. **Room mapping** (owner request; STATUS question 8): typed-in room size and positions first, a bass-only 3D room model and early reflections; phone scan import and microphone measurement later.
+5. The panel speaker's open items and the rest of Level 3 (Fable handoff below): loops in the detailed model, fill, passive radiators, drivers on ducts, `revolved` and `loft`, FIR, C5 to C7, C10, undo and redo.
+
+**Known limits of this session's work** (also in the labels): bends are straight in the detailed model; chambers are compliances (no standing waves) outside full 3D; the quick model leaves out a line's own air; round bends are counted along the center line (close, not exact); the geometry report's air volume for chambers is the gross chamber air, not the line's.
+
+**Pitfalls:** as before. New: `cargo test` of `folded.rs` with `--ignored` takes about 8 minutes; the `InsideEditor` path box keeps half-typed text locally and publishes only a valid path.
+
+**Next step:** read the owner's answers; then queue item 1 if approved, otherwise item 2.
+
 ### 2026-11-11 — Claude Fable 5.2 — Handoff: start here. Level 3 after the room, the outside in 3D, and the panel speaker
 
 - **To:** next lead session (any Claude model)
@@ -271,6 +306,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-11: Inside shape (bent and tapered ducts in all models and in print, the detailed model for networks, the inside editor, `folded-line`) done on `main` by Claude.
 - 2026-11-11: Fable brief items 1 to 3 (the `simple` room, `exterior` radiation, the `dml_panel` radiator) done on `main` by Claude Fable 5.2; item 4 (3D losses and wave views) handed on.
 - 2026-11-11: Assignment 12 (Level 2 M4: cost beside score, reference build, build methods, optimizer, CHK-E2E-2) done on `main` by Claude; Level 2 complete.
 - 2026-11-10: Assignment 11 item 5 (full 3D for builder cabinets with ports, CHK-FDTD-4, the exterior-block rule) done on `main` by Claude; Level 2 M3 complete.

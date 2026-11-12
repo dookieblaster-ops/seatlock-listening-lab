@@ -93,7 +93,7 @@ test("an MDF box prints nothing, lists its panels, and buys a whole sheet", asyn
   await expect(page.getByTestId("scores")).toBeVisible();
 });
 
-for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber"]) {
+for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber", "folded-line"]) {
   test(`${name}: print solid, voxels, and formula agree, and the STL is solid`, async ({ page }) => {
     await page.goto("/");
     const example = path.resolve(import.meta.dirname, `../../designs/examples/${name}.seatlock.json`);

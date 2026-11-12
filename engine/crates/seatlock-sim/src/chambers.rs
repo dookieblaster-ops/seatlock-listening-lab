@@ -405,3 +405,170 @@ fn build(
         notes,
     })
 }
+
+/// The `waveguide` model of the air network (README 5.4): from the driver's chamber, each
+/// duct is a transmission line along its center line (a bend counts as straight, a taper is
+/// sliced), ending in the radiation load of its mouth or in the chamber at its far end, and
+/// that chamber in turn in its own ducts. Chambers are compliances. A network with a loop
+/// is not a tree, and is refused with the reason.
+pub struct WaveguideNetwork {
+    pub root: seatlock_acoustics::AcousticNode,
+    /// For each opening the solved result lists, in its order, the index of that duct among
+    /// the ducts to the outside, in design order.
+    pub opening_order: Vec<usize>,
+    pub notes: Vec<String>,
+}
+
+/// `names` and `volumes_m3` are the chambers (one called `main` when the design lists none),
+/// `driver` the chamber the driver pushes into.
+pub fn waveguide_network(
+    design: &DesignFile,
+    names: &[String],
+    volumes_m3: &[f64],
+    driver: usize,
+) -> Result<WaveguideNetwork, String> {
+    use seatlock_acoustics::AcousticNode;
+    struct Edge {
+        a: Option<usize>,
+        b: Option<usize>,
+        section: Section,
+        length: f64,
+        outside_slot: Option<usize>,
+    }
+    let index_of = |name: &str| -> Result<Option<usize>, String> {
+        if name == "outside" {
+            return Ok(None);
+        }
+        names
+            .iter()
+            .position(|n| n == name)
+            .map(Some)
+            .ok_or(format!(
+                "a duct names {name}, which is not one of the chambers."
+            ))
+    };
+    let mut edges = Vec::new();
+    let mut outside_count = 0;
+    for raw in &design.speaker.enclosure.ducts {
+        let id = raw.get("id").and_then(Value::as_str).unwrap_or("duct");
+        let a = index_of(raw.get("from").and_then(Value::as_str).unwrap_or(""))?;
+        let b = index_of(raw.get("to").and_then(Value::as_str).unwrap_or(""))?;
+        if a.is_none() && b.is_none() {
+            return Err(format!("duct {id} runs from outside to outside."));
+        }
+        let section = Section::of(raw).map_err(|e| format!("duct {id}: {e}"))?;
+        let length = path_length(&path(raw));
+        if length <= 0.0 {
+            return Err(format!("duct {id} has no path."));
+        }
+        let outside_slot = if a.is_none() || b.is_none() {
+            outside_count += 1;
+            Some(outside_count - 1)
+        } else {
+            None
+        };
+        edges.push(Edge {
+            a,
+            b,
+            section,
+            length,
+            outside_slot,
+        });
+    }
+    let mut order = Vec::new();
+    let mut seen = vec![false; names.len()];
+    let mut used = vec![false; edges.len()];
+    fn chamber_node(
+        at: usize,
+        volumes: &[f64],
+        edges: &[Edge],
+        seen: &mut Vec<bool>,
+        used: &mut Vec<bool>,
+        order: &mut Vec<usize>,
+    ) -> Result<AcousticNode, String> {
+        seen[at] = true;
+        let mut branches = vec![AcousticNode::Compliance {
+            volume_m3: volumes[at],
+        }];
+        for (index, edge) in edges.iter().enumerate() {
+            if used[index] || (edge.a != Some(at) && edge.b != Some(at)) {
+                continue;
+            }
+            used[index] = true;
+            // Orient the duct from this chamber.
+            let forward = edge.a == Some(at);
+            let far = if forward { edge.b } else { edge.a };
+            let (s_near, s_far) = if forward { (0.0, 1.0) } else { (1.0, 0.0) };
+            let (a_near, a_far) = (
+                edge.section.area(s_near, 0.0),
+                edge.section.area(s_far, 0.0),
+            );
+            let r_near = (a_near / std::f64::consts::PI).sqrt();
+            let r_far = (a_far / std::f64::consts::PI).sqrt();
+            let (load, far_end) = match far {
+                None => {
+                    order.push(edge.outside_slot.unwrap_or(0));
+                    (
+                        AcousticNode::Radiation {
+                            area_m2: a_far,
+                            flush: false,
+                        },
+                        0.0,
+                    )
+                }
+                Some(other) => {
+                    if seen[other] {
+                        return Err(
+                            "its chambers and ducts form a loop, which the detailed model does \
+                             not solve yet."
+                                .into(),
+                        );
+                    }
+                    (
+                        chamber_node(other, volumes, edges, seen, used, order)?,
+                        0.849 * r_far,
+                    )
+                }
+            };
+            branches.push(AcousticNode::Duct {
+                length_m: edge.length,
+                area_in_m2: a_near,
+                area_out_m2: a_far,
+                added_length_m: 0.849 * r_near + far_end,
+                load: Box::new(load),
+            });
+        }
+        Ok(AcousticNode::Parallel(branches))
+    }
+    let root = chamber_node(driver, volumes_m3, &edges, &mut seen, &mut used, &mut order)?;
+    let mut notes = Vec::new();
+    if used.iter().any(|u| !u) {
+        notes.push(
+            "Some ducts do not connect to the driver's chamber, so the detailed model leaves \
+             them out."
+                .into(),
+        );
+    }
+    let bends: usize = design
+        .speaker
+        .enclosure
+        .ducts
+        .iter()
+        .map(|raw| path(raw).len().saturating_sub(2))
+        .sum();
+    if bends > 0 {
+        notes.push(format!(
+            "{bends} bend{} in the ducts treated as straight: each duct is its center line's \
+             length, and the air in a corner is not modeled.",
+            if bends == 1 { "" } else { "s" }
+        ));
+    }
+    notes.push(
+        "Chambers are single compliances, so standing waves inside them are not modeled.".into(),
+    );
+    Ok(WaveguideNetwork {
+        root,
+        opening_order: order,
+        notes,
+    })
+}

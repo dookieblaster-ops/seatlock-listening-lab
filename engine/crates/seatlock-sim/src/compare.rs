@@ -12,6 +12,9 @@ use crate::{correction_plan_with, simulate, SimulateRequest, SimulateResult};
 
 /// What the page asks for: `baffle` radiation (README section 14).
 pub const RADIATION: &str = "baffle";
+/// The everyday enclosure model: `waveguide`, as fast as `lumped` and the same for a box
+/// without ducts, but it knows lines, tapers, and pipe resonances (README 5.4).
+pub const ENCLOSURE: &str = "waveguide";
 pub const SPACE: &str = "half";
 
 /// One design's score and cost, after correction (README section 11).
@@ -108,6 +111,7 @@ pub fn apply_correction(design: &DesignFile, registry: &Registry) -> DesignFile 
 
 fn request() -> SimulateRequest {
     SimulateRequest {
+        enclosure: ENCLOSURE.to_string(),
         radiation: RADIATION.to_string(),
         space: SPACE.to_string(),
         ..SimulateRequest::default()

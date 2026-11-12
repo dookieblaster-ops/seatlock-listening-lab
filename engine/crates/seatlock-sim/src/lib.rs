@@ -5,7 +5,7 @@ use std::time::Instant;
 use num_complex::Complex64;
 use seatlock_acoustics::{
     baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3,
-    effective_port_length_m, solve, spl_db, vented_sample, AcousticNode, PortSpec,
+    effective_port_length_m, solve, spl_db, vented_sample, PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::{C0, P_REF, RHO0};
@@ -216,10 +216,16 @@ pub fn simulate_with_progress(
         issues.extend(checked.issues);
     }
 
-    let mut ignored = vec![
-        "no cone break-up".to_string(),
-        "the sealed-box model ignores cabinet shape and standing waves".to_string(),
-    ];
+    let mut ignored = vec!["no cone break-up".to_string()];
+    if base == "lumped" {
+        ignored.push("the quick model ignores cabinet shape and standing waves".to_string());
+    } else if base == "waveguide" && !full_3d && design.speaker.enclosure.ducts.is_empty() {
+        ignored.push(
+            "the detailed model treats a box without ducts as one compliance, so standing \
+             waves inside it are not modeled"
+                .to_string(),
+        );
+    }
     if request.radiation == "point" {
         ignored.push("source direction is ignored".to_string());
     }
@@ -232,14 +238,6 @@ pub fn simulate_with_progress(
                 request.space
             ),
             "request.space",
-        ));
-    }
-    if !design.speaker.enclosure.ducts.is_empty() {
-        ignored.push("ducts were left out of the sealed box".to_string());
-        issues.push(Issue::warning(
-            "unsupported_kind",
-            "Openings are not part of the sealed-box model yet, so they were left out.",
-            "speaker.enclosure.ducts",
         ));
     }
     let faces_listener = design
@@ -397,17 +395,47 @@ pub fn simulate_with_progress(
                 samples.push(sample);
             }
             fidelity.ignored.extend(net.notes.iter().cloned());
-            fidelity.ignored.push(
-                "Several chambers: each is one compliance and each duct one air mass, so \
-                 standing waves and pipe resonances are not modeled."
-                    .into(),
-            );
-            if base == "waveguide" {
-                fidelity.ignored.push(
-                    "The detailed model does not solve several chambers yet, so these curves \
-                     come from the quick model."
+            let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
+            let wave = if base == "waveguide" {
+                Some(chambers::waveguide_network(
+                    design,
+                    &names,
+                    &net.volumes_m3,
+                    net.driver,
+                ))
+            } else {
+                None
+            };
+            match wave {
+                Some(Ok(network)) => {
+                    for (bin, freq) in freqs.iter().enumerate() {
+                        let solved = solve(&network.root, *freq);
+                        let sample = &mut samples[bin];
+                        sample.z_ab = solved.z_in;
+                        sample.h_each = [Complex64::new(0.0, 0.0); 4];
+                        sample.h_sum = Complex64::new(0.0, 0.0);
+                        for (slot, h) in network.opening_order.iter().zip(&solved.openings) {
+                            if *slot < 4 {
+                                sample.h_each[*slot] = *h;
+                                sample.h_sum += *h;
+                            }
+                        }
+                        impedance[bin] = solved.z_in;
+                    }
+                    fidelity.ignored.extend(network.notes);
+                }
+                Some(Err(err)) => {
+                    fidelity.ignored.push(format!(
+                        "The detailed model cannot solve this cabinet ({err}), so these curves \
+                         come from the quick model. Several chambers: each is one compliance \
+                         and each duct one air mass."
+                    ));
+                }
+                None => fidelity.ignored.push(
+                    "Several chambers: each is one compliance and each duct one air mass, so \
+                     standing waves and pipe resonances are not modeled."
                         .into(),
-                );
+                ),
             }
             let total = net.volumes_m3.iter().sum::<f64>();
             let vented = if net.ports.is_empty() {
@@ -450,31 +478,48 @@ pub fn simulate_with_progress(
                 );
                 (impedance, Some(samples))
             };
-            let (z_ab, vented) = if base == "waveguide" && !ports.is_empty() {
-                let mut impedance = Vec::with_capacity(freqs.len());
-                let mut samples = Vec::with_capacity(freqs.len());
-                for freq in &freqs {
-                    let wave = waveguide_box(volume, &ports, *freq);
-                    let mut sample = seatlock_acoustics::VentedSample {
-                        z_ab: wave.z_in,
-                        h_sum: Complex64::new(0.0, 0.0),
-                        h_each: [Complex64::new(0.0, 0.0); 4],
-                        port_count: wave.openings.len().min(4),
-                    };
-                    for (index, opening) in wave.openings.iter().take(4).enumerate() {
-                        sample.h_each[index] = *opening;
-                        sample.h_sum += *opening;
-                    }
-                    impedance.push(sample.z_ab);
-                    samples.push(sample);
-                }
-                fidelity.ignored.push(
-                    "Bends are treated as straight tubes, and the chamber is a single compliance."
-                        .into(),
-                );
-                (impedance, Some(samples))
+            let wave = if base == "waveguide" && !ports.is_empty() {
+                Some(chambers::waveguide_network(
+                    design,
+                    &["main".to_string()],
+                    &[volume],
+                    0,
+                ))
             } else {
-                (z_ab, vented)
+                None
+            };
+            let (z_ab, vented) = match wave {
+                Some(Ok(network)) => {
+                    let mut impedance = Vec::with_capacity(freqs.len());
+                    let mut samples = Vec::with_capacity(freqs.len());
+                    for freq in &freqs {
+                        let wave = solve(&network.root, *freq);
+                        let mut sample = seatlock_acoustics::VentedSample {
+                            z_ab: wave.z_in,
+                            h_sum: Complex64::new(0.0, 0.0),
+                            h_each: [Complex64::new(0.0, 0.0); 4],
+                            port_count: ports.len().min(4),
+                        };
+                        for (slot, h) in network.opening_order.iter().zip(&wave.openings) {
+                            if *slot < 4 {
+                                sample.h_each[*slot] = *h;
+                                sample.h_sum += *h;
+                            }
+                        }
+                        impedance.push(sample.z_ab);
+                        samples.push(sample);
+                    }
+                    fidelity.ignored.extend(network.notes);
+                    (impedance, Some(samples))
+                }
+                Some(Err(err)) => {
+                    fidelity.ignored.push(format!(
+                        "The detailed model cannot solve this cabinet ({err}), so these curves \
+                         come from the quick model."
+                    ));
+                    (z_ab, vented)
+                }
+                None => (z_ab, vented),
             };
             (volume, ports, z_ab, vented)
         }
@@ -557,6 +602,9 @@ pub fn simulate_with_progress(
                         "Bends are treated",
                         "Several chambers: each is one compliance",
                         "does not solve several chambers",
+                        "in the ducts treated as straight",
+                        "Chambers are single compliances",
+                        "treats a box without ducts",
                     ]
                     .iter()
                     .any(|phrase| line.contains(phrase))
@@ -1253,8 +1301,8 @@ fn full_3d_enclosure(
     };
     let chamber_list = chambers::chambers(design)?;
     let mut bores = Vec::new();
-    for bore in ports::bores(design) {
-        bores.push(bore?);
+    for runs in ports::bores(design) {
+        bores.extend(runs?);
     }
     let built = voxels::cabinet_grid(
         outer,
@@ -1677,29 +1725,6 @@ pub fn geometric_delay_s(design: &DesignFile, index: usize) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn waveguide_box(
-    volume_m3: f64,
-    ports: &[PortSpec],
-    freq_hz: f64,
-) -> seatlock_acoustics::WaveguideResult {
-    let mut branches = vec![AcousticNode::Compliance { volume_m3 }];
-    for port in ports {
-        let radius = (port.area_m2 / std::f64::consts::PI).sqrt();
-        let physical = (port.length_eff_m - (0.849 + 0.613) * radius).max(1.0e-3);
-        branches.push(AcousticNode::Duct {
-            length_m: physical,
-            area_in_m2: port.area_m2,
-            area_out_m2: port.area_m2,
-            added_length_m: 0.849 * radius,
-            load: Box::new(AcousticNode::Radiation {
-                area_m2: port.area_m2,
-                flush: false,
-            }),
-        });
-    }
-    solve(&AcousticNode::Parallel(branches), freq_hz)
-}
-
 fn driver_loads_box(part: &seatlock_core::design::KindPart) -> bool {
     let Some(id) = part.fields.get("driver_id").and_then(Value::as_str) else {
         return true;
@@ -2088,11 +2113,8 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
             ports::printed_ports(design, shape.as_ref(), &chamber_list)
                 .into_iter()
                 .flatten()
-                .filter_map(|port| {
-                    let ends = port.shell.get("base_m").and_then(Value::as_array)?;
-                    let base = [ends[0].as_f64()?, ends[1].as_f64()?, ends[2].as_f64()?];
-                    Some((base, port.opening_m, port.half_width_m + 0.003))
-                })
+                .flat_map(|port| port.lines)
+                .map(|(a, b, reach)| (a, b, reach + 0.003))
                 .collect();
         let solid_at = |p: [f64; 3]| -> bool {
             let plastic = shape.contains_solid(p).unwrap_or(false)
@@ -2473,6 +2495,7 @@ fn correction_plan_for(
     let result = simulate(
         design,
         &SimulateRequest {
+            enclosure: compare::ENCLOSURE.to_string(),
             radiation: radiation.to_string(),
             space: space.to_string(),
             frequencies_hz: Some(freqs.clone()),
@@ -2918,6 +2941,7 @@ pub fn listen_package(
     let level = simulate(
         design,
         &SimulateRequest {
+            enclosure: compare::ENCLOSURE.to_string(),
             radiation: "baffle".to_string(),
             voltage_v: 2.83,
             ..SimulateRequest::default()
@@ -3096,6 +3120,7 @@ fn impulse_responses(
     let result = simulate(
         &acoustic,
         &SimulateRequest {
+            enclosure: compare::ENCLOSURE.to_string(),
             radiation: "baffle".to_string(),
             voltage_v: 1.0,
             frequencies_hz: Some(freqs),

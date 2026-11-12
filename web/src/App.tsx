@@ -470,14 +470,18 @@ export default function App() {
             }} />
             <NumberField label="Maximum correction filters" value={design.dsp.correction.max_filters} onChange={(value) => updateNumber("dsp.correction.max_filters", value)} />
           </div>
-          <label>
-            Chambers (JSON)
-            <textarea value={JSON.stringify(design.speaker.enclosure.chambers)} onChange={(event) => updateJson("speaker.enclosure.chambers", event.target.value)} />
-          </label>
-          <label>
-            Ducts (JSON)
-            <textarea value={JSON.stringify(design.speaker.enclosure.ducts)} onChange={(event) => updateJson("speaker.enclosure.ducts", event.target.value)} />
-          </label>
+          <InsideEditor
+            chambers={design.speaker.enclosure.chambers as Array<Record<string, unknown>>}
+            ducts={design.speaker.enclosure.ducts as Array<Record<string, unknown>>}
+            onChange={(change) => {
+              const next = structuredClone(design);
+              change(
+                next.speaker.enclosure.chambers as Array<Record<string, unknown>>,
+                next.speaker.enclosure.ducts as Array<Record<string, unknown>>,
+              );
+              void publish(next, designName);
+            }}
+          />
           <label>
             Bracing (JSON)
             <textarea value={JSON.stringify(design.speaker.enclosure.solids)} onChange={(event) => updateJson("speaker.enclosure.solids", event.target.value)} />
@@ -1195,6 +1199,195 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+type Rows = Array<Record<string, unknown>>;
+
+function numbers(value: unknown): number[] {
+  return Array.isArray(value) ? value.map((item) => Number(item)) : [];
+}
+
+/** Path points in mm, one "x, y, z" per line. Null while the text is not a valid path. */
+function parsePath(text: string): number[][] | null {
+  const lines = text.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+  if (lines.length < 2) {
+    return null;
+  }
+  const points: number[][] = [];
+  for (const line of lines) {
+    const parts = line.split(/[,\s]+/).filter((part) => part.length > 0).map(Number);
+    if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) {
+      return null;
+    }
+    points.push(parts.map((part) => part / 1000));
+  }
+  return points;
+}
+
+function pathText(path: unknown): string {
+  return (Array.isArray(path) ? path : [])
+    .map((point) => numbers(point).map((value) => String(Math.round(value * 10000) / 10)).join(", "))
+    .join("\n");
+}
+
+function PathField({ value, index, onChange }: { value: unknown; index: number; onChange: (path: number[][]) => void }) {
+  const [text, setText] = useState(pathText(value));
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    const current = parsePath(text);
+    if (!current || JSON.stringify(current) !== JSON.stringify(value)) {
+      setText(pathText(value));
+      setBad(false);
+    }
+    // Only an outside change of the path resets the text.
+  }, [JSON.stringify(value)]);
+  return (
+    <label title="The air path's center line, from its inside end, one corner per line: x, y, z in mm from the cabinet's outer front-bottom-left corner. Every corner is a bend.">
+      Path corners (mm, x, y, z per line)
+      <textarea
+        data-testid={`duct-path-${index}`}
+        rows={Math.max(3, text.split("\n").length)}
+        value={text}
+        onChange={(event) => {
+          setText(event.target.value);
+          const path = parsePath(event.target.value);
+          setBad(path === null);
+          if (path) {
+            onChange(path);
+          }
+        }}
+      />
+      {bad && <span className="warning">Each line needs three numbers, and a path needs two lines at least.</span>}
+    </label>
+  );
+}
+
+/**
+ * The inside of the cabinet (README 6.2): air spaces (chambers) and the air paths between
+ * them and to the outside (ducts, ports, folded and tapered lines).
+ */
+function InsideEditor({
+  chambers,
+  ducts,
+  onChange,
+}: {
+  chambers: Rows;
+  ducts: Rows;
+  onChange: (change: (chambers: Rows, ducts: Rows) => void) => void;
+}) {
+  const places = ["main", ...chambers.map((chamber) => String(chamber.id)), "outside"].filter(
+    (place, index, all) => all.indexOf(place) === index,
+  );
+  const corner = (row: Record<string, unknown>, key: string, axis: number) => mm(numbers(row[key])[axis] ?? 0);
+  return (
+    <div data-testid="inside-editor">
+      <h3 title="Boxes of air inside the cabinet. With none listed, the whole inside is one air space called main. Inside air that no chamber claims is printed solid, so chambers also make partitions.">
+        Inside air spaces (chambers)
+      </h3>
+      {chambers.length === 0 && <p>None listed: the whole inside is one air space, main.</p>}
+      {chambers.map((chamber, index) => (
+        <div className="grid" key={`chamber-${index}`} data-testid={`chamber-${index}`}>
+          <TextField label="Name" value={String(chamber.id ?? "")} onChange={(value) => onChange((rows) => {
+            rows[index].id = value;
+          })} />
+          {(["min_m", "max_m"] as const).map((key) =>
+            [0, 1, 2].map((axis) => (
+              <NumberField
+                key={`${key}-${axis}`}
+                label={`${key === "min_m" ? "From" : "To"} ${["x", "y", "z"][axis]} (mm)`}
+                value={corner(chamber, key, axis)}
+                onChange={(value) => onChange((rows) => {
+                  const point = numbers(rows[index][key]);
+                  point[axis] = value / 1000;
+                  rows[index][key] = point;
+                })}
+              />
+            )),
+          )}
+          <button type="button" onClick={() => onChange((rows) => {
+            rows.splice(index, 1);
+          })}>Remove this air space</button>
+        </div>
+      ))}
+      <button type="button" data-testid="add-chamber" onClick={() => onChange((rows) => {
+        rows.push({ id: `chamber-${rows.length + 1}`, min_m: [0.02, 0.02, 0.02], max_m: [0.1, 0.1, 0.1], fill: null });
+      })}>Add an air space</button>
+      <h3 title="Air paths: ports, tubes between air spaces, and folded or tapered lines. Each corner of a path is a bend. A slot that bends must stay in one plane.">
+        Air paths (ports, ducts, and lines)
+      </h3>
+      {ducts.map((duct, index) => {
+        const section = (duct.section ?? {}) as Record<string, unknown>;
+        const round = (section.shape ?? "round") === "round";
+        const start = numbers(section.start_m);
+        const end = numbers(section.end_m).length > 0 ? numbers(section.end_m) : start;
+        const setSize = (key: "start_m" | "end_m", slot: number, value: number) => onChange((_, rows) => {
+          const next = { ...((rows[index].section ?? {}) as Record<string, unknown>) };
+          const sizes = numbers(next[key]).length > 0 ? numbers(next[key]) : numbers(next.start_m);
+          sizes[slot] = value / 1000;
+          next[key] = sizes;
+          rows[index].section = next;
+        });
+        return (
+          <div key={`duct-${index}`} data-testid={`duct-${index}`}>
+            <div className="grid">
+              <TextField label="Name" value={String(duct.id ?? "")} onChange={(value) => onChange((_, rows) => {
+                rows[index].id = value;
+              })} />
+              {(["from", "to"] as const).map((key) => (
+                <label key={key}>
+                  {key === "from" ? "From" : "To"}
+                  <select value={String(duct[key] ?? "")} onChange={(event) => onChange((_, rows) => {
+                    rows[index][key] = event.target.value;
+                  })}>
+                    {places.map((place) => (
+                      <option key={place} value={place}>{place}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+              <label title="Round: a tube, sized by its diameter. Slot: a rectangle, width across the fold and height in the plane of its bends.">
+                Shape
+                <select data-testid={`duct-shape-${index}`} value={round ? "round" : "rect"} onChange={(event) => onChange((_, rows) => {
+                  const rect = event.target.value === "rect";
+                  const size = (values: number[]) => (rect ? [values[0] ?? 0.04, values[0] ?? 0.04] : [values[0] ?? 0.04]);
+                  rows[index].section = { shape: event.target.value, start_m: size(start), end_m: size(end) };
+                })}>
+                  <option value="round">round</option>
+                  <option value="rect">slot</option>
+                </select>
+              </label>
+              {(round ? [0] : [0, 1]).map((slot) =>
+                (["start_m", "end_m"] as const).map((key) => (
+                  <NumberField
+                    key={`${key}-${slot}`}
+                    testId={`duct-${key === "start_m" ? "start" : "end"}-${slot}-${index}`}
+                    label={`${round ? "Diameter" : slot === 0 ? "Width" : "Height"} at the ${key === "start_m" ? "start" : "end"} (mm)`}
+                    value={mm((key === "start_m" ? start : end)[slot] ?? 0)}
+                    onChange={(value) => setSize(key, slot, value)}
+                  />
+                )),
+              )}
+            </div>
+            <PathField value={duct.path_m} index={index} onChange={(path) => onChange((_, rows) => {
+              rows[index].path_m = path;
+            })} />
+            <button type="button" onClick={() => onChange((_, rows) => {
+              rows.splice(index, 1);
+            })}>Remove this air path</button>
+          </div>
+        );
+      })}
+      <button type="button" data-testid="add-duct" onClick={() => onChange((_, rows) => {
+        rows.push({
+          id: `path-${rows.length + 1}`,
+          from: places[0],
+          to: "outside",
+          path_m: [[0.05, 0.08, 0.05], [0.05, 0.0, 0.05]],
+          section: { shape: "round", start_m: [0.035], end_m: [0.035] },
+        });
+      })}>Add an air path</button>
+    </div>
   );
 }
 

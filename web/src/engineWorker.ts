@@ -104,6 +104,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         text: msg.text,
         revision: msg.revision,
         frequencies_hz: msg.frequencies,
+        // The detailed model: as fast as the quick one, and it knows lines and tapers.
+        enclosure: "waveguide",
         radiation: "baffle",
       });
       const json = eng.call("simulate", request);
