@@ -1,6 +1,6 @@
 # Seatlock Listening Lab
 
-Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a cabinet, both its outer form and its internal geometry, from stock materials, 3D-printed parts, or a mix, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them.
+Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a cabinet, both its outer form and its internal geometry, from stock materials, 3D-printed parts, or a mix, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them. The lab does not only check shapes the user draws: it generates novel and complex cabinets itself, inside and outside, with different components in different positions and facing different ways, and models what each does to the sound (section 2.6).
 
 The goal is hi-fi sound for the least money. Anyone can build a hi-fi system from expensive components; this lab is for doing it cheaply. Cheap off-the-shelf drivers and materials, digital processing, and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. Quality components and conventional materials stay in the catalog as a reference, so every cheap design can be compared with a conventional build of the same speaker. The simulator's job is to show which trades work before any money is spent.
 
@@ -95,6 +95,7 @@ A **radiator** is anything that turns one amplifier channel into sound. The firs
 6. Reads the results: frequency response, impedance, cone travel, port air speed, and maximum clean level, before and after correction, per radiator and summed.
 7. Listens to the simulated speaker and switches between designs.
 8. Sees what the design costs and how it scores, and asks the optimizer for the cheapest design that meets a target.
+9. Asks the lab to generate cabinets: whole designs it proposes, ranked, each one a design the user can open, change, print, and hear.
 
 ### 2.3 Why all parts are built together
 
@@ -113,6 +114,20 @@ The lab must also show the limits of these trades: what correction cannot fix, a
 ### 2.5 A playground stays open
 
 New ideas arrive after the code exists: a new outer shape, a new internal element, a new kind of radiator. Each must be addable as a module without rewriting what is already there. Section 3.3 makes that a rule.
+
+### 2.6 The lab generates
+
+The owner's statement of intent (2026-11-12): "the program should be able to generate novel and complex 3D models of the inside and outside of the speaker cabinet with different components and component orientation and model the effects on the sound quality."
+
+So generating is a goal of the product, beside checking what the user designs:
+
+- **Outside.** The lab proposes outer forms, including curved ones, not only boxes.
+- **Inside.** It proposes the inside: sealed, ported, folded and tapered lines, chambers, and plastic placed by the 3D model (section 5.5, "Shaping the inside").
+- **Components.** It chooses drivers and other sound sources from the catalog, where each sits, and which way it faces.
+- **Sound quality.** Every proposal is judged by the same simulation as a hand-made design (section 2.1), and the best are checked with the 3D models. A generator is only as good as the score it chases, so the score has to describe what is heard: off-axis and in-room sound as well as the level straight ahead, with the air's losses in the 3D model (sections 5.5 and 11).
+- Every generated cabinet is an ordinary design file. Nothing about it is special once it is open.
+
+Sections 11.4 and 12 say how this is built.
 
 ## 3. Architecture
 
@@ -579,7 +594,7 @@ This is an estimate for comparing designs. It is not a room simulation.
 
 ### 6.1 What it is
 
-A parametric model of the cabinet. The user edits numbers and drags handles, and the solid is regenerated. There is no free-form sculpting.
+A parametric model of the cabinet. The user edits numbers and drags handles, and the solid is regenerated. The lab also generates geometry itself: whole cabinets (section 11.4) and plastic placed inside by the 3D model (section 5.5). What it generates is written into the same design file, as the same kinds of parts. The user does not sculpt by hand.
 
 ### 6.2 Geometry data
 
@@ -812,6 +827,16 @@ shortfall = max(0, log2(f6_hz / f6_hz_max))
 - It runs in workers, shows first results within 30 s, can be canceled, and is repeatable from its seed.
 - As built at Level 2: the discrete choices are sealed or vented, and LR4 or LR2 crossovers for designs with more than one radiator; each combination runs in its own worker. Nelder-Mead searches net air volume (keeping the cabinet's proportions and build method), port tuning (the port's diameter is kept, or 0.35 of the cone's diameter; its length follows from the tuning), crossover frequency, and the levels of radiators after the first, 30 candidates per combination by default. Every candidate is corrected and scored with `lumped` and `baffle` radiation. A port that does not fit the cabinet's depth rules a candidate out. The top finalist is checked with `fdtd` at 10 mm, and the page reports how its bass limit, evenness, and clean level changed.
 
+### 11.4 Generator
+
+- It answers a wider question than the optimizer: which cabinets, of any form the lab can make, come closest to the target for the least money?
+- A candidate is a whole design: an outer form and its proportions, an inside layout, the drivers from the catalog, the face each sits on, and where on that face.
+- It only uses catalog parts it could really build with: sourced records with the mounting sizes a cut-out needs. Test parts are never proposed (section 9.1).
+- Method: candidates are grouped into families (one outer form, one inside layout, one set of drivers). Each family is searched with a seeded random search and local refinement on the everyday models, corrected and scored like any design. Candidates the builder cannot make or print are thrown out. The best are checked with the 3D models, and the page says what changed.
+- A candidate whose sound sources do not all face the listener is judged in a room (section 5.10), because its direct sound alone says little.
+- Output: a ranked list across all families and a cost-against-quality plot. Every result opens as a design.
+- It runs in workers, one per family, shows first results within 30 s, can be canceled, and repeats from its seed.
+
 ## 12. Build plan
 
 Tracks:
@@ -857,12 +882,12 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - A: undo and redo; design history.
 - B: exciters and panel materials; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
-- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
+- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a 3D grid that follows curved surfaces instead of stair-stepping them; the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.
 - H: audible limit behavior and the room estimate in the virtual speaker.
-- I: optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
+- I: the generator of section 11.4; optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
 - End to end, CHK-E2E-3: the example design `folded-line` runs in all three enclosure models, and the report lists what each model ignored. The example design `rear-panel`, a rear-facing DML panel on an outer shape that is not a box, runs with `exterior` radiation and the `simple` room, and its in-room response differs from its direct response.
 
 **Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, imported meshes as outer shapes, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.

@@ -235,6 +235,8 @@ One line per decision: date, decision, reason. Decisions that define the product
 - 2026-11-12: Solids are dispatched by `kind` in `seatlock-sim/src/solids.rs`, not through a registry family. Reason: no internal-element registry exists yet (chambers and ducts are also read directly); other kinds, the README's `brace` included, were silently ignored before and now get a warning. A registry for internal elements is in the handoff.
 - 2026-11-12: The OpenSCAD file is written on the page from the engine's print tree, with hulls as polyhedra whose faces come from manifold-3d. Reason: one recipe (README 6.3); OpenSCAD's own `hull()` of points needs a solid per point. It has the sizes as numbers, not as named settings: the tree does not carry which design field a number came from. Named settings were offered to the owner and are not built.
 
+- 2026-11-12: Owner's statement of intent: "the program should be able to generate novel and complex 3D models of the inside and outside of the speaker cabinet with different components and component orientation and model the effects on the sound quality." A review found the lab modeled sound for shapes the user designs but generated almost nothing. The owner approved four items ("Do 1 through 4 go"): rewrite the spec around generating (README 2.6, 6.1, 11.4, 12), build a whole-cabinet generator, add curved outer shapes with a grid that follows curves, and add air losses with a wider score. README 6.1's "no free-form sculpting" was replaced: the lab generates geometry; the user still does not sculpt by hand.
+
 ## Tool versions
 
 - Rust **1.99.1** pinned in `rust-toolchain.toml` (components `rustfmt` and `clippy`, target `wasm32-unknown-unknown`).
