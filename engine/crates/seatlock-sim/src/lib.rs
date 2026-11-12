@@ -671,6 +671,8 @@ pub fn simulate_with_progress(
         sources: Vec<Vec<Complex64>>,
         patches: Vec<SourcePatch>,
         port_speed_1v: Vec<f64>,
+        /// True for a radiator that gave its own grid of surface sources.
+        is_surface: bool,
     }
     let mut prepared: Vec<Prepared> = Vec::new();
     for (index, part) in design.speaker.radiators.iter().enumerate() {
@@ -685,7 +687,7 @@ pub fn simulate_with_progress(
                 continue;
             }
         };
-        let loads_box = driver_loads_box(part);
+        let loads_box = radiator.loads_box() && driver_loads_box(part);
         let mut eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
         issues.append(&mut eval.warnings);
         let chain = design.dsp.per_radiator.get(index);
@@ -744,21 +746,93 @@ pub fn simulate_with_progress(
         }
         // A source the shape cannot place has no direction, and every model then treats it
         // as a simple source at the middle of the front.
-        let placed = placed_sources(design, outer.as_ref(), part, sources.len());
-        let patches = (0..sources.len())
-            .map(|slot| match placed.get(slot) {
-                Some(place) => SourcePatch {
-                    position_m: place.position,
-                    outward: place.outward,
-                    area_m2: std::f64::consts::PI * place.radius_m * place.radius_m,
-                },
-                None => SourcePatch {
-                    position_m: reference,
-                    outward: [0.0; 3],
-                    area_m2: 0.0,
-                },
-            })
-            .collect();
+        let unplaced = SourcePatch {
+            position_m: reference,
+            outward: [0.0; 3],
+            area_m2: 0.0,
+        };
+        let surface = radiator.surface(&freqs);
+        let is_surface = surface.is_some();
+        let patches: Vec<SourcePatch> = if let Some(elements) = surface {
+            // A radiator that is a grid of sources: each sits on the mount's surface at its
+            // own surface coordinates (README sections 5.6 and 5.9).
+            let mount = part
+                .fields
+                .get("mount")
+                .and_then(Value::as_str)
+                .and_then(|id| {
+                    design
+                        .speaker
+                        .enclosure
+                        .mounts
+                        .iter()
+                        .find(|mount| mount.id == id)
+                });
+            let mut off_surface: Option<String> = None;
+            let mut patches = Vec::with_capacity(elements.len());
+            // The surface's own outline, when it is flat: a source beyond it is in thin air.
+            let outline = mount.and_then(|mount| outer.surface_outline(&mount.surface).ok());
+            sources.clear();
+            for element in elements {
+                let pose = mount
+                    .ok_or_else(|| "it names no mount.".to_string())
+                    .and_then(|mount| {
+                        outer.mount_pose(
+                            &mount.surface,
+                            [
+                                mount.at_m[0] + element.at_m[0],
+                                mount.at_m[1] + element.at_m[1],
+                            ],
+                        )
+                    });
+                let pose = pose.and_then(|pose| match &outline {
+                    Some(corners) if !inside_outline(pose.position_m, corners, pose.outward) => {
+                        Err("it reaches past the edge of that surface.".to_string())
+                    }
+                    _ => Ok(pose),
+                });
+                patches.push(match pose {
+                    Ok(pose) => SourcePatch {
+                        position_m: pose.position_m,
+                        outward: pose.outward,
+                        area_m2: element.area_m2,
+                    },
+                    Err(err) => {
+                        off_surface.get_or_insert(err);
+                        unplaced
+                    }
+                });
+                sources.push(element.volume_velocity);
+            }
+            if let Some(err) = off_surface {
+                issues.push(Issue::warning(
+                    "panel_off_surface",
+                    format!(
+                        "Part of sound source {index} is not on its mounting surface, so that \
+                         part is treated as a simple source: {err}"
+                    ),
+                    format!("speaker.radiators[{index}].mount"),
+                ));
+            }
+            patches
+        } else {
+            let placed = placed_sources(design, outer.as_ref(), part, sources.len());
+            (0..sources.len())
+                .map(|slot| match placed.get(slot) {
+                    Some(place) => SourcePatch {
+                        position_m: place.position,
+                        outward: place.outward,
+                        area_m2: std::f64::consts::PI * place.radius_m * place.radius_m,
+                    },
+                    None => unplaced,
+                })
+                .collect()
+        };
+        for note in radiator.notes() {
+            if !fidelity.ignored.contains(&note) {
+                fidelity.ignored.push(note);
+            }
+        }
         prepared.push(Prepared {
             index,
             part,
@@ -767,6 +841,7 @@ pub fn simulate_with_progress(
             sources,
             patches,
             port_speed_1v,
+            is_surface,
         });
     }
 
@@ -828,12 +903,16 @@ pub fn simulate_with_progress(
                     .sum()
             })
             .collect();
-        let measured = measured_curve(part);
-        any_measured |= !measured.is_empty();
-        let label =
-            blend_measured_curve(&mut pressure_1v, &freqs, piston_radius_m(part), &measured);
-        if !fidelity.ignored.iter().any(|line| line == &label) {
-            fidelity.ignored.push(label);
+        // A cone's published response curve replaces the piston model above its break-up; a
+        // radiator with its own grid of sources has no such curve.
+        if !item.is_surface {
+            let measured = measured_curve(part);
+            any_measured |= !measured.is_empty();
+            let label =
+                blend_measured_curve(&mut pressure_1v, &freqs, piston_radius_m(part), &measured);
+            if !fidelity.ignored.iter().any(|line| line == &label) {
+                fidelity.ignored.push(label);
+            }
         }
         let mut pressure = Vec::with_capacity(freqs.len());
         let mut spl = Vec::with_capacity(freqs.len());
@@ -1356,6 +1435,43 @@ struct PlacedSource {
     radius_m: f64,
 }
 
+/// True when `point`, on a flat surface with the normal `outward`, is inside the surface's
+/// outline `corners` (crossing count in the surface's own plane).
+fn inside_outline(point: [f64; 3], corners: &[[f64; 3]], outward: [f64; 3]) -> bool {
+    if corners.len() < 3 {
+        return true;
+    }
+    let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let mut along = sub(corners[1], corners[0]);
+    let length = dot(along, along).sqrt().max(1e-12);
+    along = [along[0] / length, along[1] / length, along[2] / length];
+    let across = [
+        outward[1] * along[2] - outward[2] * along[1],
+        outward[2] * along[0] - outward[0] * along[2],
+        outward[0] * along[1] - outward[1] * along[0],
+    ];
+    let flat = |p: [f64; 3]| {
+        let offset = sub(p, corners[0]);
+        (dot(offset, along), dot(offset, across))
+    };
+    let (x, y) = flat(point);
+    let mut inside = false;
+    let mut previous = flat(corners[corners.len() - 1]);
+    for corner in corners {
+        let current = flat(*corner);
+        if (current.1 > y) != (previous.1 > y) {
+            let crossing =
+                current.0 + (y - current.1) * (previous.0 - current.0) / (previous.1 - current.1);
+            if x < crossing {
+                inside = !inside;
+            }
+        }
+        previous = current;
+    }
+    inside
+}
+
 fn placed_sources(
     design: &DesignFile,
     shape: &dyn OuterShape,
@@ -1742,6 +1858,15 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
             .map_err(|err| format!("Mount {}: {}", mount.id, shape_message(kind, &err)))?;
         let cutout = match mount_cutout(design, &mount.id) {
             Some(value) if value > 0.0 => value,
+            _ if mount_holds_no_driver(design, &mount.id) => {
+                // A sound source that is not a driver (a panel, or a kind this build does not
+                // know) sits on the wall. The lab does not know a hole for it, so it cuts none.
+                warnings.push(format!(
+                    "The sound source on mount {} is not a driver, so nothing is cut for it: the wall behind it stays whole, and whatever holds it (a panel's frame and the shallow sealed space behind it) is not in the print file or the cost.",
+                    mount.id
+                ));
+                0.0
+            }
             _ => {
                 warnings.push(
                     "mounting size not published, so this mount is not cut into the print file."
@@ -2240,6 +2365,17 @@ fn mount_features(
         volume += pi * (hole / 2.0).powi(2) * (thickness_m - recess);
     }
     Ok((parts, volume))
+}
+
+/// Whether the sound source on `mount_id` names no driver: a panel, or another kind of
+/// radiator that brings no cut-out of its own.
+fn mount_holds_no_driver(design: &DesignFile, mount_id: &str) -> bool {
+    design
+        .speaker
+        .radiators
+        .iter()
+        .find(|radiator| radiator.fields.get("mount").and_then(Value::as_str) == Some(mount_id))
+        .is_some_and(|radiator| !radiator.fields.contains_key("driver_id"))
 }
 
 fn mount_cutout(design: &DesignFile, mount_id: &str) -> Option<f64> {

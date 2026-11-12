@@ -45,6 +45,45 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-11 — Claude Fable 5.2 — Handoff: start here. Level 3 after the room, the outside in 3D, and the panel speaker
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3 in progress. Fable brief items 1 to 3 done; item 4 not started. No helper is active.
+
+**First steps**
+
+1. Fetch every branch (standing rule 1); nothing waits for review.
+2. Run `tools/cloud-check.sh` (about 8 minutes). Last run on this commit: rustfmt, clippy, 137 engine tests, bindings, both wasm modules, type check, vitest, build, 23 of 23 browser tests, "All checks passed" (stable 1.97.0).
+3. Read README 5.5, 5.6 (the `exterior` "As built"), 5.9 (the panel "As built"), 5.10, and 12 (Level 3). Then this post's queue.
+
+**Done in this session**
+
+- Item 1, the `simple` room (README 5.10, CHK-ROOM-1): `seatlock-acoustics/src/room.rs`; room contract `images`, `needs_sound_power`, `in_room`, `notes` in `seatlock-core/src/registry.rs`; sound power and directivity index; a design with a room is scored on its in-room level; page: Room switch and "Loudness in the room" graph. Behind-the-surface sound under `baffle` (`baffle_shadow_pressure`).
+- Item 2, `exterior` radiation (README 5.6, CHK-RAD-3, CHK-RAD-4): `seatlock-fdtd/src/exterior.rs` (scattered field, analytic incident wave, one-way outer layer), `seatlock-sim/src/exterior.rs` (radiation member, skin cells, 14-direction sound power); radiation contract `transfer` and `sound_power` with positioned `SourcePatch`es; page: "Run the outside in 3D" (`OutsideThreeD` in `web/src/App.tsx`, `outside.spec.ts`).
+- Item 3, the `dml_panel` radiator (README 5.9, CHK-PLATE-1, CHK-E2E-3's `rear-panel` half): `seatlock-acoustics/src/plate.rs` (Rayleigh-Ritz modes), `dml.rs` (exciter, coil, cavity, surface elements, mode cache); radiator contract `surface`, `loads_box`, `notes`; `simulate` places elements with `mount_pose` and drops those off the outline; shared edge term for more than 32 sources on a surface under `baffle`; cost lines for exciter and panel; nothing cut for a source that names no driver; synthetic `catalog/exciters/test-exciter-a.json` and `catalog/panels/test-panel-material-a.json`; example `designs/examples/rear-panel.seatlock.json`; page: `PanelSource` fields, `panel.spec.ts`.
+
+**Work queue, in order**
+
+1. **Losses in the 3D model** (README 5.5, Level 3 track D): damping fill (flow resistance) and wall losses in `seatlock_fdtd::grid`. Afterwards resonance peak heights can be shown (today labeled as not modeled), and the ignored block-doubling test in `seatlock-fdtd/tests/checks.rs` may be revisited. Validate against a closed form (a lossy duct's `alpha` from README 5.4) before trusting.
+2. **The two 3D wave views** the owner asked for (README 12 Level 3 track D): pressure inside the cabinet as a slow-motion pulse and as a standing-wave pattern at a chosen frequency (record snapshots from `grid::run`; draw slices in the three.js view), and a bass-only 3D wave model of the room below about 300 Hz with coarse cells, beside the `simple` room.
+3. **Panel open items:** open backing (needs the panel as a thin body in the `exterior` grid, thinner than a cell); the air's load on the panel; a faster eigenvalue solver (Jacobi at degree 32 takes 1.4 s; a tridiagonal QR or Lanczos would allow a higher limit); the panel's frame in the print tree and cost; real exciters and panel materials with sources open (README 9.1).
+4. **Rest of Level 3** (README 12): folded and tapered lines, coupled chambers, fill, passive radiators, drivers on ducts, `waveguide` for tree networks of chambers; inside-geometry editor; `revolved` and `loft`; FIR and linear-phase crossovers; C5, C6, C7, C10 and the target's tilt (today correction fits the direct sound even for room designs); Level 3 optimizer; undo and redo; stale-price warnings and alternative vendors; CHK-E2E-3's `folded-line` half.
+
+**Smaller open items found this session**
+
+- Stair-steps on curved cabinets read high in deep shadow under `exterior` (up to 3.4 dB at 10 mm); cut cells that follow the surface would fix it. It is in the fidelity label.
+- `exterior` progress is per run, not over all runs; stale 3D results on the page are not grayed out (README 14).
+- Listen mode does not include the room (README 10, Level 3 track H) and does not play limit behavior yet.
+- The cabinet solver still uses the folded-admittance absorbing faces; the one-way layer of `exterior.rs` might let its exterior blocks shrink, which would help the 26 s preview time. Recheck the block rule if changed.
+- Older items still open: the 20 L ported preview time, the vented self-check at 5.1 %, the "Openings are not part of the sealed-box model yet" warning on every ducted design, bent ports in print, the SAKRETE tube's wall.
+
+**Owner questions:** 2 (playback hardware) and 6 (panel material, distance from the wall, in-room tilt) are open; 6 was put to the owner at the end of this session with a recommendation. Record answers in STATUS and the README.
+
+**Pitfalls:** as in the posts below (stable Rust in the cloud, `tools/cloud-check.sh`, no prettier, `npm run build` before rerunning one browser spec). New: the `exterior` tests and the panel tests take tens of seconds each in the test build; panel mode solves are cached per process, so a timing measured second is not a cold one.
+
+**Next step:** queue item 1.
+
 ### 2026-11-11 — Claude — Handoff and brief: Level 3 physics for the Claude Fable 5.2 session
 
 - **To:** next lead session (the owner plans to use Claude Fable 5.2, with only a few hours)
@@ -232,6 +271,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-11: Fable brief items 1 to 3 (the `simple` room, `exterior` radiation, the `dml_panel` radiator) done on `main` by Claude Fable 5.2; item 4 (3D losses and wave views) handed on.
 - 2026-11-11: Assignment 12 (Level 2 M4: cost beside score, reference build, build methods, optimizer, CHK-E2E-2) done on `main` by Claude; Level 2 complete.
 - 2026-11-10: Assignment 11 item 5 (full 3D for builder cabinets with ports, CHK-FDTD-4, the exterior-block rule) done on `main` by Claude; Level 2 M3 complete.
 - 2026-11-10: Assignment 11 items 1 to 4 (shapes, recesses and bolt holes, ports and chambers, print splitting) done on `main` by Claude; item 5 handed to the next lead session. Level 0 closed by the owner's laptop run.

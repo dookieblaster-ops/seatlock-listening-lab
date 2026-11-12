@@ -221,6 +221,51 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         }
     }
 
+    // Panel speakers: an exciter and a panel per radiator per speaker. A panel is priced per
+    // kilogram of its material (README section 9.2); a record without a price says so.
+    for radiator in &design.speaker.radiators {
+        if let Some(id) = radiator.fields.get("exciter_id").and_then(Value::as_str) {
+            match catalog::exciter(id) {
+                Some(record) => {
+                    let (amount, read_on, via) = price_of(&record);
+                    lines.push(line(name_of(&record, id), n, "each", amount, read_on, via));
+                }
+                None => problems.push(format!("Exciter {id} is not in the catalog.")),
+            }
+        }
+        let Some(panel) = radiator.fields.get("panel").and_then(Value::as_object) else {
+            continue;
+        };
+        let id = panel.get("material").and_then(Value::as_str).unwrap_or("");
+        let size = |key: &str| panel.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+        match catalog::panel_material(id) {
+            Some(record) => {
+                let density = record
+                    .get("density_kg_m3")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                let mass_kg =
+                    size("width_m") * size("height_m") * size("thickness_m") * density * n;
+                let per_kg = record.pointer("/price/per_kg").and_then(Value::as_f64);
+                let (_, read_on, via) = price_of(&record);
+                let name = record
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or(id)
+                    .to_string();
+                lines.push(line(
+                    format!("Panel, {name}"),
+                    mass_kg,
+                    "kg",
+                    per_kg,
+                    read_on,
+                    via,
+                ));
+            }
+            None => problems.push(format!("Panel material {id} is not in the catalog.")),
+        }
+    }
+
     // Printed parts.
     let material = catalog::material(&design.build.material);
     let density = material

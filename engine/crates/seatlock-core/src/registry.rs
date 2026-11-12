@@ -141,8 +141,34 @@ pub struct RadiatorEval {
     pub warnings: Vec<Issue>,
 }
 
+/// One piece of a radiator's moving surface (README section 5.6), for a radiator that is more
+/// than one piston: where it is on the mount's surface, measured from the mount point in that
+/// surface's own coordinates, its area, and its volume velocity per volt at each frequency.
+#[derive(Clone, Debug)]
+pub struct SurfaceElement {
+    pub at_m: [f64; 2],
+    pub area_m2: f64,
+    pub volume_velocity: Vec<Complex64>,
+}
+
 pub trait Radiator: Send + Sync {
     fn evaluate(&self, freqs_hz: &[f64], z_ab: &[Complex64]) -> RadiatorEval;
+
+    /// False for a radiator whose back does not open into the cabinet's air.
+    fn loads_box(&self) -> bool {
+        true
+    }
+
+    /// The radiator's surface sources per volt, when it is more than one piston at its mount
+    /// (a panel is a grid of them). `None` means one piston with `evaluate`'s volume velocity.
+    fn surface(&self, _freqs_hz: &[f64]) -> Option<Vec<SurfaceElement>> {
+        None
+    }
+
+    /// Plain-language lines for the fidelity label: what this radiator's model leaves out.
+    fn notes(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 pub trait EnclosureModel: Send + Sync {

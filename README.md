@@ -158,7 +158,7 @@ engine/            Rust workspace
     seatlock-wasm        C-ABI wrapper used by the workers
     seatlock-rt          C-ABI real-time kernel used by the AudioWorklet
 web/               TypeScript and React app
-catalog/           drivers/, electronics/, materials.json
+catalog/           drivers/, exciters/, panels/, electronics/, printers/, stock/, materials.json
 targets/           quality targets
 designs/examples/  example designs used by checks and demos
 docs/              archives: older COMS.md threads and STATUS.md history
@@ -192,7 +192,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | --- | --- | --- |
 | Outer shape | The print solid or stock parts; inside tests for its air and for the whole cabinet, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism`, `tube`, and `sheet_box` (2), `revolved` and `loft` (3), imported mesh (4) |
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
-| Radiator | Its electrical impedance; its surface sources per volt (section 5.6); its limits; what it needs from its mount; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
+| Radiator | Its electrical impedance; its surface sources per volt (section 5.6): one net volume velocity, or a list of surface elements, each a place on the mounting surface measured from the mount point, an area, and a volume velocity; its limits; whether it pushes on the cabinet's air; what it needs from its mount; its lines for the fidelity label; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
 | Radiation model | Pressure at any point per unit volume velocity of each surface source, and radiated sound power, from the sources' positions and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
 | Room model | The path from the speaker's radiation to the listening position (section 5.10): the mirror images of the listening position it needs the speaker's sound at, whether it needs the sound power, and what it adds as pressure and as energy. | `free` (1), `simple` (3) |
@@ -428,6 +428,8 @@ p = p_half_space * (1/(2N)) * sum over i of (r_0 / e_i) * e^(-j*k*(d_i + e_i - r
 
 At low frequency that is the full-space level, the same as in front; at high frequency the terms cancel and the surface shadows its back. This is the same simple model, so it still ignores the cabinet's depth, and the fidelity label says so.
 
+More than 32 sources on one surface (a panel's elements) share one edge term: the sum above is computed once, from the middle of those sources, and each source keeps its own distance and piston directivity. The fidelity label says so. Without this each of a panel's hundreds of elements needs its own sum over the outline at every frequency, which is far too slow for the page.
+
 Sound power under `baffle` is the far-field integral below, taken over 48 directions spread evenly over the sphere. With up to eight sources the geometry's part (how each pair of sources adds up over all directions) is computed on every sixth frequency and interpolated, then combined with the sources' volume velocities on the full grid.
 
 **`exterior`, Level 3.** The 3D solver of section 5.5 run on the air outside the cabinet. The outer shape is a rigid body inside a block of air with absorbing faces, and the surface sources are velocity boundaries on its skin. This is the model for novel outer shapes and for radiators that face sideways, upward, or backward. One reciprocity run, with a simple source at the listening position and the pressure recorded on the cabinet's skin, gives the transfer from every surface source to that position at once: `p(listener) / U(skin point) = p(skin point) / U(listener)`.
@@ -475,7 +477,7 @@ Every curve and number carries the models that produced it: the enclosure model 
 
 A distributed-mode loudspeaker is a stiff, light panel driven by an exciter. It radiates through many bending resonances at once, which spreads sound widely. A rear-facing panel reaches the listener mostly by way of the wall behind the speaker, so it can only be judged with the `exterior` radiation model and the room estimate of section 5.10.
 
-This section is an outline. Only its closed-form check (CHK-PLATE-1) has been computed. Validate each part as you build it and record what you find in `STATUS.md`.
+The sealed-back panel is built and validated ("As built" below). An open-backed panel is not built yet, and a design that asks for one is refused with that reason.
 
 The panel is a thin plate in bending, with deflection `w`:
 
@@ -486,7 +488,7 @@ D * del^4(w) + m * d2w/dt2 = pressure difference across the panel + exciter forc
 simply supported panel a by b, mode (i, j):   f_ij = (pi/2) * sqrt(D/m) * ((i/a)^2 + (j/b)^2)
 ```
 
-Loss enters as a complex stiffness `E*(1 + j*eta)`, with `eta` the material's loss factor. Each edge is free, simply supported, or clamped. Free edges are the usual DML case and have no closed form, so solve the plate numerically: find its modes by finite differences or finite elements, then sum them.
+Loss enters as a complex stiffness `E*(1 + j*eta)`, with `eta` the material's loss factor. Each edge is free, simply supported, or clamped. Free edges are the usual DML case and have no closed form, so the plate's modes are found numerically (the Rayleigh-Ritz method, below) and summed.
 
 The exciter is an inertial motor. Its coil is fixed to the panel and its magnet hangs on a suspension. With `v_p` the panel velocity at the exciter and `v_m` the magnet velocity:
 
@@ -500,14 +502,42 @@ The coil's mass is added to the panel at the exciter position.
 
 - **Backing.** `open`: both faces radiate. `sealed`: only the front face radiates, and the trapped air is a spring that puts a uniform pressure `-(RHO0*C0^2 / V_cavity) * integral of w over the panel` on the panel. A panel that opens into a cabinet chamber comes at Level 4.
 - **Radiation.** Each panel element is a surface source with velocity `j*omega*w`. An `open` panel also has a back-face source at each element with the opposite sign.
-- **Limits.** Panel deflection at the exciter against the exciter's travel, voice-coil heating, and amplifier voltage.
+- **Limits.** The coil's travel against the magnet (the gap an exciter's published travel describes) against the exciter's travel, voice-coil heating, and amplifier voltage.
 - **Data.** The exciter comes from the catalog (section 9). The panel's `E`, `rho`, `nu`, and loss factor come from a source or a measurement. Printed panels vary with infill and print direction, so the interface says the result depends on those numbers.
 
 ```jsonc
-{ "kind": "dml_panel", "exciter_id": "...", "mount": "m2", "backing": "open",
-  "panel": { "width_m": 0.30, "height_m": 0.20, "thickness_m": 0.003, "material": "...", "edges": "free" },
-  "exciter_at_m": [0.12, 0.09] }
+{ "kind": "dml_panel", "exciter_id": "...", "mount": "m2", "backing": "sealed", "cavity_depth_m": 0.02,
+  "panel": { "width_m": 0.30, "height_m": 0.20, "thickness_m": 0.003, "material": "...", "edges": "free" },   // edges: free | supported | clamped
+  "exciter_at_m": [0.12, 0.09] }   // from the panel's lower-left corner, as seen from outside
 ```
+
+The mount point is the middle of the panel, and the panel lies flat on the mount's surface with its width along the surface's `u`. `cavity_depth_m` is the depth of the air sealed behind a `sealed` panel; the cavity is as wide and as high as the panel. Nothing is cut into the cabinet for a panel: the wall behind it stays whole and is the back of that cavity. The panel's frame is not in the print file or the cost yet, and the geometry report says so.
+
+As built:
+
+- **Modes.** Rayleigh-Ritz on the square `[-1, 1]^2` with the basis `(1 - xi^2)^q * P_i(xi)` along each side: normalized Legendre polynomials times a factor that meets the edge condition, `q = 0` for free, 1 for simply supported, 2 for clamped. All four edges take the same condition. The strain energy is `(D/2) * integral of w_xx^2 + w_yy^2 + 2*nu*w_xx*w_yy + 2*(1 - nu)*w_xy^2`. The four symmetry classes (even or odd along each side) are solved apart, with Gauss-Legendre integration, a Cholesky reduction, and a Jacobi eigenvalue solver, all in the engine with no new dependency. The polynomial degree is 28 along the longer side.
+- **How far up it reaches.** A polynomial basis resolves only so many half-waves along a side: `0.6 * (count + q) - 1.2`, with `count` the functions of one parity. Modes above the lowest frequency at which either side runs out are dropped, the fidelity label gives that frequency ("The panel's N resonances up to F Hz are modeled; above that its response is not, and reads low"), and results above it should not be read. For the `rear-panel` example (0.30 x 0.20 m, 3 mm) that is 144 resonances up to 6.3 kHz. A solved panel is kept, so editing anything else does not solve it again.
+- **Exciter, coil, and cavity, in closed form.** With `G_n = 1 / (lambda_n*(1 + j*eta) - omega^2)` for each mode of unit modal mass, `phi_e` the mode's shape at the exciter and `s` its integral over the panel:
+  ```
+  g_ee = sum phi_e^2 * G     g_es = sum phi_e * s * G     g_ss = sum s^2 * G
+  alpha = g_ee - kappa * g_es^2 / (1 + kappa * g_ss)       deflection at the exciter per newton; kappa = RHO0*C0^2 / V_cavity
+  Y_p   = j*omega*alpha / (1 + j*omega*m_coil * j*omega*alpha)   the panel's mobility with the coil's mass on it
+  Y_t   = Y_p + 1 / (j*omega*m_magnet)                     coil against magnet
+  Zin   = Ze + bl^2 * Y_t / (1 + Zs*Y_t)
+  F     = bl*I / (1 + Zs*Y_t)                              force on the panel and coil
+  ```
+  These are the three equations above, solved. The cavity is the one air spring of **Backing**.
+- **Sources.** The panel is cut into elements no larger than 12.5 mm (at most 40 along a side), each a surface source with its own volume velocity. An element that falls outside the mounting surface is left out, with a warning.
+- **It does not push on the cabinet's air.** A sealed panel has its own cavity, so it takes no part in the cabinet's enclosure model.
+
+What validated it (CHK-PLATE-1 and the tests beside it):
+
+- Simply supported `test-panel-a`: every resolved resonance against the closed form, 96 of them up to 2.8 kHz at degree 24 and 183 up to 5.2 kHz at degree 32, worst error 0.13 %.
+- A free square plate, `nu = 0.3`: frequency parameters 13.468, 19.596, 24.270, 34.801, 61.093 against Leissa's tabulated 13.47, 19.60, 24.27, 34.80, 61.09. Clamped: 35.985, 73.394, 108.217 against 35.99, 73.41, 108.27.
+- The exciter on a large panel sees, on average over frequency, the mobility of an endless plate, `1 / (8*sqrt(D*m))`: the resistance the panel adds to the coil reads 0.187 ohm against 0.195 ohm.
+- A panel alone on a large flat surface radiates, from 700 Hz to 2.8 kHz, 0.15 dB below a point-driven endless plate, `W = RHO0 * F^2 / (2*pi*C0*m^2)`.
+
+Not modeled: the air's load on the panel (it moves as in a vacuum: the air's added mass and the damping from sending out sound are left out, so resonances read a little high in frequency and too sharp), an open back, different conditions on different edges, anything above the modal limit, the exciter's own footprint (it pushes at a point), and the frame.
 
 ### 5.10 Room estimate
 
@@ -667,7 +697,7 @@ Rules:
 
 Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing rules. An amplifier record holds channel count, power per channel at a rated load, and price. A DSP device record holds output channels, sample rates, filter capacity, and price. The synthetic amplifier `test-amp-a` has one channel of 50 W into 4 ohm.
 
-Exciters, from Level 3, are records like drivers. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint. Panel materials, also from Level 3, hold `E`, density, Poisson's ratio, and loss factor, each with a source or a note of how it was measured.
+Exciters, from Level 3, are records like drivers, in `catalog/exciters/`. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint (`published`: `re_ohm`, `le_h`, `bl_tm`, `coil_mass_kg`, `magnet_mass_kg`, `suspension_n_per_m`, `suspension_ns_per_m`, `xmax_m`, `pe_w`). Panel materials, also from Level 3, in `catalog/panels/`, hold `youngs_pa`, `density_kg_m3`, `poisson`, and `loss_factor`, each with a source or a note of how it was measured, and a price per kilogram. So far both folders hold only synthetic test records; real exciters and panel materials are still to be sourced.
 
 `catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from a seller's page. The owner prints with any filament, so the default material is the cheapest one sourced.
 
@@ -825,6 +855,8 @@ test-woofer-a   fs 50 Hz, Qes 0.45,   Qms 4.0, Vas 10 L, Re 6.0 ohm, Le 0.5 mH, 
 test-woofer-b   fs 40 Hz, Qes 0.4144, Qms 5.0, Vas 20 L, Re 6.0 ohm, Le 0,      Sd 130 cm^2, Xmax 6 mm, Pe 50 W
 test-amp-a      1 channel, 50 W into 4 ohm
 test-panel-a    0.40 x 0.30 m, 3 mm thick, E 3.5 GPa, 1240 kg/m^3, Poisson's ratio 0.35
+test-panel-material-a   the same material as a catalog record: E 3.5 GPa, 1240 kg/m^3, Poisson's ratio 0.35, loss factor 0.03
+test-exciter-a  Re 4.0 ohm, Le 0.05 mH, Bl 3.0 T*m, coil 1.5 g, magnet 60 g, suspension 3000 N/m and 1.0 N*s/m, travel 1 mm, Pe 10 W
 test-tweeter-a  fs 900 Hz, Qes 0.8, Qms 2.5, Vas 0.05 L, Re 4.8 ohm, Le 0.05 mH, Sd 8 cm^2, Xmax 0.3 mm, Pe 20 W, sealed back
 ```
 
@@ -883,7 +915,7 @@ Say so in the interface wherever it matters.
 
 - Cabinet wall vibration. Printed walls flex, and cheap stock materials such as cardboard and foam board flex more. Until this is modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
-- DML panels until Level 3. After that, a panel's result still depends on material numbers that printing makes uncertain.
+- For DML panels: the air's load on the panel, an open back, and anything above the frequency the label gives (section 5.9). A panel's result also depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
 - Voice-coil heating over time, and, until Level 3, distortion.
 - Passive crossovers are out of scope by design.

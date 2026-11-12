@@ -2,7 +2,9 @@
 
 mod baffle;
 mod cone;
+pub mod dml;
 pub mod network;
+pub mod plate;
 mod point;
 mod radiation;
 mod response;
@@ -39,6 +41,7 @@ use std::f64::consts::PI;
 
 pub fn register(registry: &mut Registry) {
     registry.register_radiator("cone", parse_cone);
+    registry.register_radiator("dml_panel", dml::parse_dml_panel);
     registry.register_enclosure("lumped", parse_lumped);
     registry.register_enclosure("waveguide", parse_waveguide);
     registry.register_radiation("point", radiation::parse_point);
@@ -111,6 +114,10 @@ impl Radiator for ConeRadiator {
             loads_box: self.loads_box,
             warnings,
         }
+    }
+
+    fn loads_box(&self) -> bool {
+        self.loads_box
     }
 }
 

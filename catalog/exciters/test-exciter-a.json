@@ -1,0 +1,21 @@
+{
+  "id": "test-exciter-a",
+  "status": "synthetic",
+  "maker": "Test",
+  "model": "Exciter A",
+  "kind": "exciter",
+  "published": {
+    "re_ohm": 4.0,
+    "le_h": 0.00005,
+    "bl_tm": 3.0,
+    "coil_mass_kg": 0.0015,
+    "magnet_mass_kg": 0.060,
+    "suspension_n_per_m": 3000.0,
+    "suspension_ns_per_m": 1.0,
+    "xmax_m": 0.001,
+    "pe_w": 10.0
+  },
+  "mounting": { "footprint_diameter_m": 0.040 },
+  "source": null,
+  "price": null
+}

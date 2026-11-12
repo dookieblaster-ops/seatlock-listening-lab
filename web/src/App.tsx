@@ -200,7 +200,11 @@ export default function App() {
   const chain = design?.dsp.per_radiator[0];
   const block = chain?.blocks[0];
   useEffect(() => {
-    const ids = design?.speaker.radiators.map((item) => String(item.driver_id ?? "")) ?? [];
+    const sources = design?.speaker.radiators ?? [];
+    const withDriver = sources
+      .map((item, index) => ({ index, id: item.driver_id }))
+      .filter((item): item is { index: number; id: string } => typeof item.id === "string");
+    const ids = withDriver.map((item) => item.id);
     if (ids.length === 0) {
       setDriverLines([]);
       return;
@@ -211,8 +215,9 @@ export default function App() {
         return;
       }
       setDriverLines(
-        records.map((record, index) => {
-          if ("error" in record || record.status === "synthetic" || String(ids[index]).startsWith("test-")) {
+        records.map((record, place) => {
+          const index = withDriver[place].index;
+          if ("error" in record || record.status === "synthetic" || String(ids[place]).startsWith("test-")) {
             return `Driver ${index + 1}: Test driver, not a real product`;
           }
           const readOn = record.price?.read_on;
@@ -225,7 +230,7 @@ export default function App() {
               : `${record.price?.vendor ?? "vendor"} $${price} as of ${readOn ?? "an unknown date"}`;
           const tier = record.tier ? `${record.tier} ` : "";
           const unconfirmed = record.price?.via || record.mounting?.via ? " unconfirmed" : "";
-          return `Driver ${index + 1}: ${tier}${record.maker ?? ""} ${record.model ?? ids[index]}. ${money}${unconfirmed}${stale ? ". This price is more than 90 days old." : ""}`;
+          return `Driver ${index + 1}: ${tier}${record.maker ?? ""} ${record.model ?? ids[place]}. ${money}${unconfirmed}${stale ? ". This price is more than 90 days old." : ""}`;
         }),
       );
     });
@@ -380,31 +385,41 @@ export default function App() {
               next.speaker.radiators[0].kind = value;
               void publish(next, designName);
             }} />
-            <TextField label="Driver" value={String(radiator.driver_id)} onChange={(value) => {
-              const next = structuredClone(design);
-              next.speaker.radiators[0].driver_id = value;
-              void publish(next, designName);
-            }} />
+            {typeof radiator.driver_id === "string" && (
+              <TextField label="Driver" value={radiator.driver_id} onChange={(value) => {
+                const next = structuredClone(design);
+                next.speaker.radiators[0].driver_id = value;
+                void publish(next, designName);
+              }} />
+            )}
             <TextField label="Opening used" value={String(radiator.mount)} onChange={(value) => {
               const next = structuredClone(design);
               next.speaker.radiators[0].mount = value;
               void publish(next, designName);
             }} />
           </div>
-          {design.speaker.radiators.map((item, index) => (
-            <label key={`driver-${index}`}>
-              Driver {index + 1} catalog id
-              <input
-                data-testid={`driver-id-${index}`}
-                value={String(item.driver_id ?? "")}
-                onChange={(event) => {
-                  const next = structuredClone(design);
-                  next.speaker.radiators[index].driver_id = event.target.value;
-                  void publish(next, designName);
-                }}
-              />
-            </label>
-          ))}
+          {design.speaker.radiators.map((item, index) =>
+            item.kind === "dml_panel" ? (
+              <PanelSource key={`panel-${index}`} item={item} index={index} onChange={(change) => {
+                const next = structuredClone(design);
+                change(next.speaker.radiators[index]);
+                void publish(next, designName);
+              }} />
+            ) : (
+              <label key={`driver-${index}`}>
+                Driver {index + 1} catalog id
+                <input
+                  data-testid={`driver-id-${index}`}
+                  value={String(item.driver_id ?? "")}
+                  onChange={(event) => {
+                    const next = structuredClone(design);
+                    next.speaker.radiators[index].driver_id = event.target.value;
+                    void publish(next, designName);
+                  }}
+                />
+              </label>
+            ),
+          )}
           {driverLines.map((line) => (
             <p key={line} data-testid="driver-note">{line}</p>
           ))}
@@ -1034,7 +1049,7 @@ export default function App() {
           );
           return (
             <span key={index} data-testid={`cone-limit-${index}`} className={hot ? "limit-light lit" : "limit-light"}>
-              Driver {index + 1}: {hot ? "Limit exceeded" : "Within limits"}
+              Sound source {index + 1}: {hot ? "Limit exceeded" : "Within limits"}
             </span>
           );
         })}
@@ -1180,6 +1195,59 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+/** A panel speaker (README 5.9, `dml_panel`): its exciter, its panel, and the air sealed behind it. */
+function PanelSource({
+  item,
+  index,
+  onChange,
+}: {
+  item: Record<string, unknown>;
+  index: number;
+  onChange: (change: (radiator: Record<string, unknown>) => void) => void;
+}) {
+  const panel = (item.panel ?? {}) as Record<string, unknown>;
+  const at = Array.isArray(item.exciter_at_m) ? (item.exciter_at_m as number[]) : [0, 0];
+  const setPanel = (field: string, value: unknown) =>
+    onChange((radiator) => {
+      radiator.panel = { ...((radiator.panel ?? {}) as Record<string, unknown>), [field]: value };
+    });
+  return (
+    <div data-testid={`panel-source-${index}`}>
+      <p data-testid={`panel-note-${index}`} title="A stiff, light panel made to vibrate by a small motor (an exciter). It sends sound out through many bending resonances at once.">
+        Sound source {index + 1}: panel speaker (DML panel), {mm(Number(panel.width_m)).toFixed(0)} x{" "}
+        {mm(Number(panel.height_m)).toFixed(0)} mm, {mm(Number(panel.thickness_m)).toFixed(1)} mm thick. Its result depends on the
+        panel material's stiffness and damping numbers.
+      </p>
+      <div className="grid">
+        <TextField label="Exciter catalog id" value={String(item.exciter_id ?? "")} onChange={(value) => onChange((radiator) => {
+          radiator.exciter_id = value;
+        })} />
+        <TextField label="Panel material" value={String(panel.material ?? "")} onChange={(value) => setPanel("material", value)} />
+        <NumberField label="Panel width (mm)" value={mm(Number(panel.width_m))} onChange={(value) => setPanel("width_m", value / 1000)} />
+        <NumberField label="Panel height (mm)" value={mm(Number(panel.height_m))} onChange={(value) => setPanel("height_m", value / 1000)} />
+        <NumberField label="Panel thickness (mm)" value={mm(Number(panel.thickness_m))} onChange={(value) => setPanel("thickness_m", value / 1000)} />
+        <label title="How the panel is held at its rim: free (resting on soft foam), supported (hinged), or clamped.">
+          Panel edges
+          <select value={String(panel.edges ?? "free")} onChange={(event) => setPanel("edges", event.target.value)}>
+            <option value="free">free</option>
+            <option value="supported">supported</option>
+            <option value="clamped">clamped</option>
+          </select>
+        </label>
+        <NumberField label="Exciter from the panel's left edge (mm)" value={mm(Number(at[0]))} onChange={(value) => onChange((radiator) => {
+          radiator.exciter_at_m = [value / 1000, Number(at[1])];
+        })} />
+        <NumberField label="Exciter from the panel's bottom edge (mm)" value={mm(Number(at[1]))} onChange={(value) => onChange((radiator) => {
+          radiator.exciter_at_m = [Number(at[0]), value / 1000];
+        })} />
+        <NumberField label="Air sealed behind the panel, depth (mm)" value={mm(Number(item.cavity_depth_m ?? 0))} onChange={(value) => onChange((radiator) => {
+          radiator.cavity_depth_m = value / 1000;
+        })} />
+      </div>
+    </div>
   );
 }
 

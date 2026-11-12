@@ -1,0 +1,11 @@
+{
+  "id": "test-panel-material-a",
+  "status": "synthetic",
+  "name": "Test panel material A",
+  "youngs_pa": 3.5e9,
+  "density_kg_m3": 1240.0,
+  "poisson": 0.35,
+  "loss_factor": 0.03,
+  "source": null,
+  "price": null
+}

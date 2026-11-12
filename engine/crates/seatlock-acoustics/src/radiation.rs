@@ -10,11 +10,15 @@ use serde_json::{Map, Value};
 use std::f64::consts::PI;
 
 use crate::baffle::{
-    baffle_shadow_pressure, baffle_source_pressure, outline_count_for_perimeter,
-    outline_perimeter_m, polygon_outline, EdgePoint,
+    baffle_shadow_pressure, baffle_source_pressure, diffraction_factor,
+    outline_count_for_perimeter, outline_perimeter_m, polygon_outline, EdgePoint,
 };
 use crate::point::{baffle_gain, pressure_from_volume_velocity};
 
+/// Above this many sources on one surface, their edge diffraction is taken from their middle.
+const MANY_SOURCES: usize = 32;
+pub const SHARED_EDGE_NOTE: &str = "A panel's many sources share one edge-diffraction estimate, \
+     taken from the panel's middle.";
 pub const POINT_FALLBACK_NOTE: &str =
     "A source on a surface without a flat outline is treated as a point source.";
 pub const EDGE_NOTE: &str = "Edge diffraction ignores cabinet depth and the shape of the edge.";
@@ -148,6 +152,8 @@ impl RadiationModel for BaffleRadiation {
         let mut outlines: Vec<(String, Vec<EdgePoint>)> = Vec::new();
         let mut notes: Vec<String> = Vec::new();
         let mut per_source = Vec::with_capacity(sources.len());
+        // First pass: the surface each source sits on.
+        let mut surface_of: Vec<Option<usize>> = Vec::with_capacity(sources.len());
         for source in sources {
             let placed = source.outward != [0.0; 3];
             let outline = placed
@@ -162,13 +168,91 @@ impl RadiationModel for BaffleRadiation {
                     outlines.push((surface, polygon_outline(&corners, count)));
                     Some(outlines.len() - 1)
                 });
-            let Some(outline) = outline else {
+            surface_of.push(outline);
+        }
+        // A surface that carries many sources (a panel's grid): its edge diffraction is taken
+        // once, from the middle of those sources, and each source keeps its own distance and
+        // direction. Otherwise every source would need its own sum over the edge.
+        let mut shared: Vec<Option<(bool, Vec<Complex64>)>> = vec![None; outlines.len()];
+        for (surface, (_, edge)) in outlines.iter().enumerate() {
+            let members: Vec<&SourcePatch> = sources
+                .iter()
+                .zip(&surface_of)
+                .filter(|(_, on)| **on == Some(surface))
+                .map(|(source, _)| source)
+                .collect();
+            if members.len() <= MANY_SOURCES {
+                continue;
+            }
+            let count = members.len() as f64;
+            let mut middle = [0.0; 3];
+            for member in &members {
+                for (sum, part) in middle.iter_mut().zip(member.position_m) {
+                    *sum += part / count;
+                }
+            }
+            let outward = members[0].outward;
+            let range = distance(point_m, middle).max(1e-6);
+            let in_front = (0..3)
+                .map(|axis| (point_m[axis] - middle[axis]) * outward[axis])
+                .sum::<f64>()
+                > 0.0;
+            let factor = freqs_hz
+                .iter()
+                .map(|freq| {
+                    if in_front {
+                        diffraction_factor(middle, point_m, edge, *freq)
+                    } else {
+                        let k = 2.0 * PI * freq / C0;
+                        let half = Complex64::new(0.0, k * C0 * RHO0)
+                            * Complex64::from_polar(2.0 / (4.0 * PI * range), -k * range);
+                        baffle_shadow_pressure(
+                            Complex64::new(1.0, 0.0),
+                            *freq,
+                            middle,
+                            point_m,
+                            edge,
+                        ) / half
+                    }
+                })
+                .collect();
+            shared[surface] = Some((in_front, factor));
+            if !notes.iter().any(|note| note == SHARED_EDGE_NOTE) {
+                notes.push(SHARED_EDGE_NOTE.into());
+            }
+            if !in_front && !notes.iter().any(|note| note == SHADOW_NOTE) {
+                notes.push(SHADOW_NOTE.into());
+            }
+        }
+        for (source, outline) in sources.iter().zip(&surface_of) {
+            let Some(outline) = *outline else {
                 if !notes.iter().any(|note| note == POINT_FALLBACK_NOTE) {
                     notes.push(POINT_FALLBACK_NOTE.into());
                 }
                 per_source.push(point_row(scene, freqs_hz, point_m));
                 continue;
             };
+            if let Some((in_front, factor)) = &shared[outline] {
+                let radius = if *in_front { source.radius_m() } else { 0.0 };
+                per_source.push(
+                    freqs_hz
+                        .iter()
+                        .zip(factor)
+                        .map(|(freq, factor)| {
+                            baffle_source_pressure(
+                                Complex64::new(1.0, 0.0),
+                                *freq,
+                                source.position_m,
+                                point_m,
+                                source.outward,
+                                radius,
+                                &[],
+                            ) * *factor
+                        })
+                        .collect(),
+                );
+                continue;
+            }
             let edge = &outlines[outline].1;
             let offset = [
                 point_m[0] - source.position_m[0],

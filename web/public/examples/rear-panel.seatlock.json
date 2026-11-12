@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "name": "rear-panel",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "sloped",
+        "width_m": 0.34,
+        "height_m": 0.26,
+        "depth_bottom_m": 0.22,
+        "depth_top_m": 0.16,
+        "wall_m": 0.008
+      },
+      "chambers": [],
+      "ducts": [],
+      "mounts": [
+        {
+          "id": "m1",
+          "surface": "front",
+          "at_m": [
+            0.17,
+            0.17
+          ],
+          "rear_into": "main",
+          "recess_m": 0.0
+        },
+        {
+          "id": "m2",
+          "surface": "back",
+          "at_m": [
+            0.17,
+            0.13
+          ],
+          "rear_into": "outside",
+          "recess_m": 0.0
+        }
+      ],
+      "solids": []
+    },
+    "radiators": [
+      {
+        "kind": "cone",
+        "driver_id": "dayton-tcp115-4",
+        "mount": "m1"
+      },
+      {
+        "kind": "dml_panel",
+        "exciter_id": "test-exciter-a",
+        "mount": "m2",
+        "backing": "sealed",
+        "cavity_depth_m": 0.02,
+        "panel": {
+          "width_m": 0.3,
+          "height_m": 0.2,
+          "thickness_m": 0.003,
+          "material": "test-panel-material-a",
+          "edges": "free"
+        },
+        "exciter_at_m": [
+          0.12,
+          0.09
+        ]
+      }
+    ],
+    "listening": {
+      "distance_m": 1.0
+    },
+    "room": {
+      "kind": "simple",
+      "wall_behind_m": 0.5,
+      "wall_reflection": 0.9,
+      "volume_m3": 50.0,
+      "rt60_s": 0.4
+    }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [
+      {
+        "blocks": [
+          {
+            "kind": "biquad",
+            "type": "highpass",
+            "f_hz": 35.0,
+            "q": 0.707
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      },
+      {
+        "blocks": [
+          {
+            "kind": "biquad",
+            "type": "highpass",
+            "f_hz": 150.0,
+            "q": 0.707
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      }
+    ],
+    "correction": {
+      "enabled": true,
+      "protected_band_hz": [
+        3000.0,
+        5000.0
+      ],
+      "max_filters": 10
+    }
+  },
+  "electronics": {
+    "amplifiers": [
+      "dayton-kabd-4100"
+    ],
+    "dsp_device": null
+  },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": true,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}

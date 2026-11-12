@@ -23,6 +23,16 @@ pub fn stock(id: &str) -> Option<Value> {
     json_with_id("catalog/stock/", id)
 }
 
+/// An exciter record: the motor that makes a panel vibrate (README section 5.9).
+pub fn exciter(id: &str) -> Option<Value> {
+    json_with_id("catalog/exciters/", id)
+}
+
+/// A panel material record: stiffness, density, Poisson's ratio, and loss factor.
+pub fn panel_material(id: &str) -> Option<Value> {
+    json_with_id("catalog/panels/", id)
+}
+
 /// The owner's printer: the record named by `id`, or the first one in `catalog/printers/`.
 pub fn printer(id: Option<&str>) -> Option<Value> {
     if let Some(id) = id {
