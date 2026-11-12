@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { CabinetView } from "./CabinetView";
 import { CostPanel } from "./CostPanel";
 import { CostQuality } from "./CostQuality";
+import { printToScad } from "./openscad";
+import { ShapeInside } from "./ShapeInside";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
 import {
   buildPrint,
+  hullsOf,
   meshTo3mf,
   meshToStl,
   type PrintPart,
@@ -632,6 +635,29 @@ export default function App() {
             </button>
             <button
               type="button"
+              data-testid="export-scad"
+              title="Save the cabinet as an OpenSCAD program: the lab's own recipe of simple solids, in millimeters. OpenSCAD and FreeCAD open it. Changes made there do not come back into the lab."
+              disabled={geom.can_export_print === false || !geom.print_tree}
+              onClick={() => {
+                if (geom.can_export_print === false || !geom.print_tree) {
+                  return;
+                }
+                const input = { print_tree: geom.print_tree, print_split: geom.print_split };
+                void hullsOf(input.print_tree).then((hulls) => {
+                  const text = printToScad(input, design?.name ?? "cabinet", (points) => hulls.get(JSON.stringify(points))!);
+                  const url = URL.createObjectURL(new Blob([text], { type: "application/x-openscad" }));
+                  const anchor = document.createElement("a");
+                  anchor.href = url;
+                  anchor.download = "cabinet.scad";
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                });
+              }}
+            >
+              Export OpenSCAD file
+            </button>
+            <button
+              type="button"
               disabled={!canonical}
               title="Solve the air inside the cabinet, and around its ports, in 3D: first with 10 mm cells, then 5 mm."
               onClick={() => {
@@ -765,6 +791,13 @@ export default function App() {
           {fdtdRuns.length > 0 && <FullThreeD runs={fdtdRuns} quick={sim} />}
         </section>
       )}
+
+      <ShapeInside
+        text={canonical ?? ""}
+        onOpen={(next, label) => {
+          void publish(next as Design, label);
+        }}
+      />
 
       <CostQuality
         text={canonical}

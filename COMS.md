@@ -45,6 +45,51 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Inside-shaping (brief items 1 to 6) and the OpenSCAD export are in
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3 in progress. The session began on Claude Fable 5.2 (brief items 1 and 2, most of 3 and 4) and the owner switched it to Claude Opus 5.5 partway; whether any Fable allowance is left is the owner's to say. No helper is active.
+
+**First steps**
+
+1. Fetch every branch (standing rule 1); nothing waits for review.
+2. Run `tools/cloud-check.sh` (about 11 minutes). Last run on this commit: rustfmt, clippy, 150 engine tests, bindings, both wasm modules, type check, vitest, build, 31 of 31 browser tests, "All checks passed" (stable 1.97.0). `cargo test -p seatlock-sim --test shape -- --include-ignored` adds the 10 mm shaping run (4 minutes); with `WRITE_EXAMPLE=1` it rewrites `designs/examples/shaped-box.seatlock.json`.
+3. README 1.1: the owner gives a go-ahead before new items start. The owner asked for the OpenSCAD export on 2026-11-11 and said "Go finish" for the shaping work.
+
+**Done this session** (numbers in STATUS, "What has been verified")
+
+- `seatlock-fdtd`: `grid::Options::relaxed`, `adjoint.rs` (`sensitivity`: `Z_ab`, `H_k`, and their derivatives for any faces; derivation in its module text).
+- `seatlock-sim/src/shape.rs`: `Shaper` (objective and gradient per cell), `shape_inside` (density stage, finishing stage, `printable`), `apply` (writes the `voxels` solid, id `shaped`). `voxels::CabinetGrid::chamber_air`, `cabinet_grid_of`.
+- `seatlock-sim/src/solids.rs`: the `voxels` solid (parse, encode, `contains`, `plastic_m3`, merged `boxes`); taken up by `chambers::Chamber::plastic_m3`, the single-chamber net volume in `simulate`, `voxels::cabinet_grid`, and `geometry_report_with` (print tree cut to the air, plastic volume, 5 mm voxel volume, pins).
+- wasm method `shape.inside` (returns `{ result, design }`); page `web/src/ShapeInside.tsx`; `web/e2e/shape.spec.ts`.
+- `web/src/openscad.ts` (`printToScad`), `hullsOf` in `printSolid.ts`, the "Export OpenSCAD file" button; four browser tests in `geometry.spec.ts` (set `SCAD_OUT=/tmp/scad` to keep the files for a render in OpenSCAD).
+- README 3.3, 5.5 ("Shaping the inside"), 6.2 (`voxels`), 6.4, 14.
+
+**What is honest to say about the shaping result:** it works end to end and the gradient is exact, but the gain is small on the one cabinet measured (0.48 to 0.38 dB). Three reasons, each a queue item: the assumed loss smears resonances to 32 Hz wide, so a plain sealed box has little to fix; thresholding part-air cells loses about half the density stage's gain; and only a sealed box has been tried since the optimizer was reworked.
+
+**Queue (owner's go-ahead needed)**
+
+1. **Make shaping earn more.** (a) Run `shape_inside` on `folded-line` and `two-way-vented` with the reworked optimizer and record what it does; `folded-line` at 20 mm did not finish in 10 minutes before (one more run per opening, 1.4 million cells at 10 mm): give `Shaper` a region box and a smaller exterior block. (b) Lower `decay_per_s` (30 gives 0.68 dB to work with on the tall box, three times the run length). (c) A stronger finish: single-cell moves ranked by the gradient with a fresh run are greedy; a level-set or a continuation with a volume-preserving threshold may keep more of the density stage's gain. (d) An objective at the listener (through `baffle`), and a weight that includes the standing waves' decay, not only the steady level.
+2. **Losses in the 3D model** (README 5.5), then replace the assumed uniform loss in shaping by the real one. Then the 3D wave views.
+3. **Named settings in the OpenSCAD file** (width, height, wall, port sizes at the top, so a number can be changed in OpenSCAD). The print tree would need to carry field names or expressions; offered to the owner, not built. Also not done: opening the file in FreeCAD, and a faster render for cabinets with many round holes (`$fn` 96 everywhere; `two-way-vented` takes 97 s in OpenSCAD 2021.01).
+4. **A registry for internal elements** (README 3.3): chambers, ducts, and solids are still read directly by `seatlock-sim`; `brace` is in the README's example and is not built (it now warns).
+5. The earlier queue, unchanged: a smaller exterior block and WebGPU (fast 3D step 1's rest), the library of 3D-solved parts and the line optimizer (step 2), room mapping, the panel's open items, the rest of Level 3.
+
+**Smaller open items from this session**
+
+- "Shape the inside" on the page always uses the default band, loss, and 15 % plastic; no region box is offered. Browser run time is not measured on the owner's laptop (20 mm on `sealed-test` finishes inside the browser test's limit in the cloud).
+- OpenSCAD 2021.01 renders `shaped-box` with "may not be a valid 2-manifold" (placed plastic only; the shell is fine, and the lab's own STL passes CHK-GEO-2). Not explained: look at where two wall-gap slabs meet at a cabinet corner, and at `Voxels::boxes` output cut by `blocks - (blocks - air)`. `Voxels::plastic_m3` reads 0.55 % low on that example (6 points per axis against a wall 2 mm into a cell); more points on cells that straddle a wall would fix it, at a cost in every simulation.
+- The shaped plastic is not drawn differently in the 3D view; it shows as part of the solid.
+- `voxels` in a cabinet that is not printed (sheet box, tube) is simulated but not in the cost or a print file (warned).
+- A `voxels` cell's plastic inside a duct's bore is cut by the bore in print but still counted in the chamber's volume; the shaper never places plastic there.
+
+**Owner questions open:** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone).
+
+**Pitfalls:** as before (`RUSTUP_TOOLCHAIN=stable`, `cargo fmt --all` from `engine/`, `tools/cloud-check.sh`, `npm run build` before one browser spec). New: `cargo fmt` without `RUSTUP_TOOLCHAIN=stable` tries to download the pinned toolchain and fails without formatting.
+
+**Next step:** read the owner's answer; then queue item 1(a).
+
 ### 2026-11-11 — Claude — Brief for the Claude Fable 5.2 session: the 3D model shapes the inside (adjoint optimization)
 
 - **To:** next lead session, which the owner will run on Claude Fable 5.2 with the last 23 % of that allowance (owner, 2026-11-11). Spend it on this brief, not on reading or on other queue items.
@@ -335,6 +380,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Fast 3D step 3 (relaxed faces, gradient, objective, optimizer, the `voxels` solid, the page) and the OpenSCAD export done on `main` by Claude (Fable 5.2, then Opus 5.5); making shaping earn more is queued.
 - 2026-11-11: Fast 3D step 1, the early stop by harmonic inversion, done on `main` by Claude (2 to 3 times faster for ported cabinets); the rest of step 1 and step 2 queued, step 3 briefed for Claude Fable 5.2.
 - 2026-11-11: Inside shape (bent and tapered ducts in all models and in print, the detailed model for networks, the inside editor, `folded-line`) done on `main` by Claude.
 - 2026-11-11: Fable brief items 1 to 3 (the `simple` room, `exterior` radiation, the `dml_panel` radiator) done on `main` by Claude Fable 5.2; item 4 (3D losses and wave views) handed on.

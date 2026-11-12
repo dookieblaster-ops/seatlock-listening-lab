@@ -1,7 +1,8 @@
 //! Shaping the inside with the 3D model's gradient (README 5.5, "Shaping the inside").
 
 use seatlock_sim::builtin;
-use seatlock_sim::shape::{shape_inside, ShapeRequest, Shaper};
+use seatlock_sim::shape::{apply, shape_inside, ShapeRequest, Shaper};
+use seatlock_sim::{geometry_report, simulate, SimulateRequest};
 
 fn example(name: &str) -> seatlock_core::DesignFile {
     let path = format!(
@@ -116,11 +117,81 @@ fn shaping_the_inside_of_a_tall_box_evens_out_its_standing_wave() {
         result.uneven_after_db,
         result.uneven_before_db
     );
+
+    // As a design: the plastic is a `voxels` solid. The 3D model of that design is the
+    // shaped cabinet (the same unevenness with nothing left to shape), the quick model has
+    // that much less air, and the print holds that much more plastic.
+    let plain = tall_box();
+    let shaped = apply(&plain, &result);
+    assert_eq!(shaped.speaker.enclosure.solids.len(), 1);
+    let again = apply(&shaped, &result);
+    assert_eq!(
+        again.speaker.enclosure.solids.len(),
+        1,
+        "shaping again replaces"
+    );
+    let request = ShapeRequest {
+        dx_m: 0.02,
+        band_hz: [150.0, 1200.0],
+        ..ShapeRequest::default()
+    };
+    let mut check = Shaper::new(&shaped, &request, &builtin()).unwrap();
+    let n = check.variables();
+    let rerun = check.evaluate(&vec![1.0; n], false).objective.sqrt();
+    assert!(
+        (rerun - result.uneven_after_db).abs() < 1e-6,
+        "{rerun} dB against {} dB",
+        result.uneven_after_db
+    );
+    let air = |design: &seatlock_core::DesignFile| {
+        simulate(design, &SimulateRequest::default(), &builtin())
+            .interior_volume_m3
+            .unwrap()
+    };
+    let lost = air(&plain) - air(&shaped);
+    eprintln!(
+        "air lost {:.4} L, plastic {:.4} L",
+        lost * 1e3,
+        result.plastic_m3 * 1e3
+    );
+    assert!((lost - result.plastic_m3).abs() < 0.08 * result.plastic_m3);
+    let before = geometry_report(&plain).unwrap();
+    let after = geometry_report(&shaped).unwrap();
+    assert!(after.can_export_print, "{:?}", after.warnings);
+    assert!((after.solid_volume_m3 - before.solid_volume_m3 - lost).abs() < 1e-9);
+    assert!((before.interior_volume_m3 - after.interior_volume_m3 - lost).abs() < 1e-9);
+    // The 5 mm cells of CHK-GEO-1 see the same air.
+    assert!(
+        (after.voxel_air_volume_m3 - after.interior_volume_m3).abs()
+            < 0.02 * after.interior_volume_m3
+    );
+}
+
+#[test]
+fn placed_plastic_is_written_and_read_back() {
+    use seatlock_sim::solids::{decode, encode};
+    let cells = [false, false, true, true, true, false, true];
+    assert_eq!(encode(&cells), "2 3 1 1");
+    assert_eq!(decode("2 3 1 1", 7).unwrap(), cells);
+    assert_eq!(encode(&[true, false]), "0 1 1");
+    assert_eq!(decode("0 1 1", 2).unwrap(), [true, false]);
+    assert!(decode("2 3", 7).is_err());
+    assert!(decode("9", 7).is_err());
 }
 
 #[test]
 #[ignore = "minutes: the same at 10 mm cells; last result in STATUS"]
 fn shaping_the_inside_at_10_mm() {
     let result = shape_and_report(0.01);
+    // WRITE_EXAMPLE=1 writes the result as the example design `shaped-box`.
+    if std::env::var("WRITE_EXAMPLE").is_ok() {
+        let mut design = apply(&tall_box(), &result);
+        design.name = "shaped-box".into();
+        let path = format!(
+            "{}/../../../designs/examples/shaped-box.seatlock.json",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::write(path, serde_json::to_string_pretty(&design).unwrap() + "\n").unwrap();
+    }
     assert!(result.uneven_after_db < 0.9 * result.uneven_before_db);
 }

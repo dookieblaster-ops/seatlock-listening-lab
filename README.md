@@ -192,7 +192,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | Family | A member must provide | First members (level) |
 | --- | --- | --- |
 | Outer shape | The print solid or stock parts; inside tests for its air and for the whole cabinet, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism`, `tube`, and `sheet_box` (2), `revolved` and `loft` (3), imported mesh (4) |
-| Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), fill, passive radiator (3) |
+| Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), placed plastic `voxels` (3), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6): one net volume velocity, or a list of surface elements, each a place on the mounting surface measured from the mount point, an area, and a volume velocity; its limits; whether it pushes on the cabinet's air; what it needs from its mount; its lines for the fidelity label; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
 | Radiation model | Pressure at any point per unit volume velocity of each surface source, and radiated sound power, from the sources' positions and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
@@ -200,7 +200,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | DSP block | Its frequency response, its sample process function, its parameters. | biquad, crossover, delay, gain, limiter (1 to 2), FIR, dynamic bass (3) |
 | Correction feature | Blocks with reasons, from responses, limits, and target, under the keep-only-if-it-helps rule. | C1 to C10 (section 8) |
 | Catalog kind | Record shape, sourcing rule, tier, price. | driver, amplifier, DSP device, print material, stock material (1 to 2), exciter, panel material (3) |
-| Exporter and importer | Files out and files in. | STL, filter text (1), 3MF (2), FIR WAV (3), measurements and hardware formats (4) |
+| Exporter and importer | Files out and files in. | STL, filter text (1), 3MF (2), OpenSCAD program, FIR WAV (3), measurements and hardware formats (4) |
 | Metric and target | A number computed from results, and its threshold. | section 11 |
 | Optimizer strategy | A search over a declared set of variables. | section 11.3 |
 
@@ -393,6 +393,15 @@ The rules below were found while validating this specification with a reference 
 - **Time budgets** on the reference machine with one worker: a 20-liter cabinet in under 20 s at 10 mm for a preview and under 5 min at 5 mm for a final result. These are targets. Record measured times in `STATUS.md`.
 
 This model knows the full shape of the internal air, within its grid. Through Level 2 the walls are rigid and the air is lossless. Fill and wall losses arrive at Level 3. It does not model wall vibration.
+
+**Shaping the inside** (as built, Level 3). The 3D model can work out where plastic inside the cabinet evens out the sound.
+
+- **Relaxed faces.** A face between two air cells takes an open fraction `a` from 0 (closed) to 1 (open) in the velocity update, `v -= kv * a * (p_ahead - p_behind)`. 0 and 1 reproduce the plain grid bit for bit.
+- **Gradient.** The scheme is linear, and its system matrix is symmetric, so it is its own adjoint: `dZ_ab/da` for every face comes from the forward run alone, from the Fourier sum of the pressure difference across the face, and `dH_k/da` from one more run of the same scheme per opening, driven at the opening's plane. The formulas are in `seatlock_fdtd::adjoint`. Against central finite differences: within 0.12 % at open fractions 0, 0.5, and 1.
+- **A uniform loss, not the early stop.** Air sealed behind a nearly closed face rings almost forever without losses, and the early stop's tail fit would be needed for every face's sum. Instead every signal is weighted by `e^(-s*t)`, which is exactly the same cabinet with a uniform loss in its air (every resonance widened by `s/pi` Hz; `s = 100 /s` by default, 32 Hz). A run of `ln(1/1e-5)/s` seconds then holds everything, whatever the shape. Real losses are not modeled yet, so the result says which loss it assumed.
+- **Objective.** The unevenness of the level across a band (150 Hz to 1.5 kHz by default, or the grid's limit): the RMS difference, in dB, from the band's mean, at frequencies no farther apart than a resonance is wide. The level is that of the summed volume velocity `U_d * (1 - sum of H_k)` through the driver's own model; the baffle and the room, which the inside does not change, are left out. Its gradient through the driver matches finite differences within 0.001 % of the largest value.
+- **Optimizer.** Each cell of chamber air (not within 30 mm of the cone, not at an opening) has a density from 0 (plastic) to 1 (air); a face is open by the product of the densities on its two sides. First a density stage: a smoothing filter of 1.5 cells, a projection that sharpens in steps, a cap on the plastic (15 % of the region), starting from an even haze of plastic, with backtracking steps. Then a finishing stage on the plastic-or-air shape itself: the gradient names the cells at the plastic's surface whose change should help most, a batch is changed, the shape is cleaned for printing (no plastic thinner than two cells, none that hangs in the air, no air sealed off from the driver, no blocks that touch along an edge or at a corner only), and the change is kept only if a fresh run is more even.
+- **Result.** A `voxels` solid in the design (section 6.2), which every model, the print file, and the cost take up. Measured on `sealed-test` made 0.5 m tall: 0.472 to 0.420 dB at 20 mm cells and 0.478 to 0.378 dB at 10 mm with 1.14 L of plastic. The gain is modest: a plain sealed box with this loss is already within half a dB, and turning part-air cells into plastic gives back about half of what the density stage finds (0.307 dB at 10 mm).
 
 ### 5.6 Radiation and summation
 
@@ -603,6 +612,15 @@ Printing is optional. A cabinet can be all stock, all printed, or a mix, and the
 "solids": [ { "id": "brace-1", "kind": "brace", "min_m": [0.008, 0.080, 0.120], "max_m": [0.152, 0.100, 0.130] } ]   // a bar across the chamber
 ```
 
+Placed plastic is a solid of kind `voxels`: plastic cell by cell, which is what "Shape the inside" writes (section 5.5).
+
+```jsonc
+{ "id": "shaped", "kind": "voxels", "min_m": [0.0, 0.03, 0.03], "dx_m": 0.01, "size": [16, 15, 24],
+  "cells": "12 3 40 5" }   // run lengths in the order (i*ny + j)*nz + k: air, plastic, air, ... starting with air
+```
+
+Only the part of a cell that lies in the cabinet's air counts, so cells may reach into a wall; that closes any gap between the plastic and the wall it hangs on. The plastic takes its volume from the air of the quick and detailed models (from its chamber, when chambers are listed), is solid in the 3D grid, and is printed as merged boxes cut to the air. Its volume is counted from 6 x 6 x 6 points per cell. A solid of any other kind, the `brace` above included, is not built yet: it is left out, with a warning that names it.
+
 The air region is chambers plus ducts minus solids. Chambers are the nodes and ducts are the edges of the air network that `lumped` and `waveguide` solve. From Level 3 a driver may mount directly on a duct, as in a transmission line.
 
 A chamber is a box of air inside the cabinet's inside air; chambers may not overlap. When chambers are listed, the inside air no chamber claims is printed solid: the gaps between chambers are the partition walls. Each mount's `rear_into` and each duct's `from` and `to` name a chamber (or `outside`), and a driver's hole must open into the chamber it names. A printed duct's path is straight runs joined at corners. Each run is lengthened past a corner by half the section in the plane of the turn, so the runs meet without a notch. A round duct bends any way; a slot (`rect`) bends only within one plane, with its width across the fold and its height in the plane of the bends. Either may taper. A port's last run leaves its face square and is bored through it, a duct between chambers is bored through the partition, and where a duct runs through chamber air it is printed as a tube (or a slot) with a 3 mm wall unless the duct gives `wall_m`. Where it runs through the solid that unclaimed inside air becomes, it is simply bored: that is how a folded line is printed. The tube's outside takes air from the chamber. Plastic and air are counted along the center line, which is exact for a slot's square corners and close for a round bend. Several chambers are solved by `lumped`, each chamber one compliance and each duct one air mass, and by `waveguide` as a tree (section 5.4).
@@ -623,6 +641,7 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 - Solids are watertight and manifold (CHK-GEO-2).
 - Driver cut-outs, recesses, and bolt holes come from the driver's mounting data.
 - From Level 2, split the cabinet into parts that fit the printer's build volume, add alignment features, and report part count, material mass, and print time. The engine picks the number of pieces along each axis for whichever way the cabinet can stand on the bed gives the fewest parts, cuts evenly, and places up to three alignment pin holes (4.2 mm, 8 mm deep each side) across every joint where there is plastic all around them, away from driver flanges and ports. The pins are printed (4 mm by 15 mm) and counted in the plastic. The page cuts the solid into the parts with manifold-3d and exports one 3MF object per part and per pin.
+- An OpenSCAD program (`cabinet.scad`), from Level 3: the engine's own recipe of solids written out in millimeters (cubes, cylinders, polyhedra for hulls, extruded outlines, unions and differences), with the print cuts as a `part` setting and the pin as a module. OpenSCAD opens it, and FreeCAD through its OpenSCAD workbench. It goes one way: a file changed there does not come back into the lab.
 - Enforce a minimum wall thickness and warn about thin features. Wall vibration is not simulated, and the interface says so.
 
 ## 7. Crossover and DSP chain
@@ -909,6 +928,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - Interface work never makes the audio glitch.
 - Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
 - The everyday enclosure model is `waveguide` ("Detailed"): as fast as `lumped`, the same for a box without ducts, and it knows lines, tapers, and pipe resonances. The page, correction, scores, the optimizer, and listen mode all use it.
+- "Shape the inside" runs section 5.5's shaping in a worker, at 20 mm or 10 mm blocks, with progress and a stop button. It shows the unevenness before and after, the plastic added, and the level from the inside's shape for both, and "Use this inside" puts the plastic into the design.
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.

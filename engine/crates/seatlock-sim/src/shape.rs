@@ -68,7 +68,8 @@ pub struct ShapeResult {
     /// `(i, j, k)` is at `(i * size[1] + j) * size[2] + k`.
     pub min_m: [f64; 3],
     pub size: [usize; 3],
-    /// True where the shaped inside is plastic.
+    /// True where the shaped inside is plastic, with the wall cells that plastic touches
+    /// (the `voxels` element counts only what lies in the air).
     pub solid: Vec<bool>,
     pub plastic_m3: f64,
     pub region_m3: f64,
@@ -474,23 +475,104 @@ impl Shaper {
         for (p, h) in plastic.iter_mut().zip(&held) {
             *p = *p && *h;
         }
-        // Air the driver cannot reach is filled.
-        let mut reached = vec![false; grid.air.len()];
-        let mut queue: Vec<usize> = grid.source.clone();
-        for &cell in &queue {
-            reached[cell] = true;
-        }
-        while let Some(cell) = queue.pop() {
-            for other in neighbors(cell) {
-                if !reached[other] && !solid(other, &plastic) {
-                    reached[other] = true;
-                    queue.push(other);
+        for _ in 0..20 {
+            let mut changed = false;
+            // Air the driver cannot reach is filled.
+            let mut reached = vec![false; grid.air.len()];
+            let mut queue: Vec<usize> = grid.source.clone();
+            for &cell in &queue {
+                reached[cell] = true;
+            }
+            while let Some(cell) = queue.pop() {
+                for other in neighbors(cell) {
+                    if !reached[other] && !solid(other, &plastic) {
+                        reached[other] = true;
+                        queue.push(other);
+                    }
                 }
             }
-        }
-        for (index, &cell) in self.cells.iter().enumerate() {
-            if !reached[cell] {
-                plastic[index] = true;
+            for (index, &cell) in self.cells.iter().enumerate() {
+                if !reached[cell] && !plastic[index] {
+                    plastic[index] = true;
+                    changed = true;
+                }
+            }
+            // Solid that meets other solid along an edge only cannot be printed as one
+            // piece: one of the two air cells at that edge is filled.
+            for i in 0..nx {
+                for j in 0..ny {
+                    for k in 0..nz {
+                        let c = [i, j, k];
+                        let base = (i * ny + j) * nz + k;
+                        for (a, b) in [(0, 1), (0, 2), (1, 2)] {
+                            if c[a] + 1 >= grid.n[a] || c[b] + 1 >= grid.n[b] {
+                                continue;
+                            }
+                            let quad = [
+                                base,
+                                base + stride[a],
+                                base + stride[b],
+                                base + stride[a] + stride[b],
+                            ];
+                            let is: [bool; 4] = std::array::from_fn(|q| solid(quad[q], &plastic));
+                            let fill = if is == [true, false, false, true] {
+                                [quad[1], quad[2]]
+                            } else if is == [false, true, true, false] {
+                                [quad[0], quad[3]]
+                            } else {
+                                continue;
+                            };
+                            if let Some(v) =
+                                fill.iter().map(|cell| var(*cell)).find(|v| *v != u32::MAX)
+                            {
+                                plastic[v as usize] = true;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            // The same for solid that meets other solid at a corner point only: a cell beside
+            // one of the two is filled (the edge it then shares is dealt with next round).
+            for i in 0..nx.saturating_sub(1) {
+                for j in 0..ny.saturating_sub(1) {
+                    for k in 0..nz.saturating_sub(1) {
+                        let base = (i * ny + j) * nz + k;
+                        let at = |corner: usize| {
+                            base + (corner & 1) * stride[2]
+                                + ((corner >> 1) & 1) * stride[1]
+                                + ((corner >> 2) & 1) * stride[0]
+                        };
+                        for corner in 0..4usize {
+                            let other = 7 - corner;
+                            if !solid(at(corner), &plastic) || !solid(at(other), &plastic) {
+                                continue;
+                            }
+                            // The six two-cell ways from one to the other through faces.
+                            let joined = (0..3).any(|first| {
+                                (0..3).filter(|second| *second != first).any(|second| {
+                                    let one = corner ^ (1 << first);
+                                    let two = one ^ (1 << second);
+                                    solid(at(one), &plastic) && solid(at(two), &plastic)
+                                })
+                            });
+                            if joined {
+                                continue;
+                            }
+                            let beside = (0..3)
+                                .flat_map(|bit| [corner ^ (1 << bit), other ^ (1 << bit)])
+                                .map(|c| var(at(c)))
+                                .find(|v| *v != u32::MAX && !plastic[*v as usize]);
+                            if let Some(v) = beside {
+                                plastic[v as usize] = true;
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            if !changed {
+                break;
             }
         }
         plastic
@@ -519,7 +601,8 @@ pub fn shape_inside(
     let stages = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0];
     let per_stage = request.iterations.div_ceil(stages.len()).max(1);
     let mut step_count = 0usize;
-    let total_steps = per_stage * stages.len();
+    let density_steps = per_stage * stages.len();
+    let total_steps = density_steps + request.iterations;
     let mut shaped = start.objective;
     let mut beta_now = stages[0];
     // Every candidate keeps within the plastic allowed: if it holds too much, every cell is
@@ -646,7 +729,7 @@ pub fn shape_inside(
             }
             _ => batch /= 2,
         }
-        if !progress(total_steps, total_steps) {
+        if !progress(density_steps + rounds, total_steps) {
             canceled = true;
         }
     }
@@ -655,23 +738,49 @@ pub fn shape_inside(
 
     let grid = &shaper.grid;
     let [_, ny, nz] = grid.n;
+    let stride = [ny * nz, nz, 1usize];
     let coords = |cell: usize| [cell / (ny * nz), (cell / nz) % ny, cell % nz];
-    let mut low = [usize::MAX; 3];
-    let mut high = [0usize; 3];
-    for &cell in &shaper.cells {
+    // The plastic's cells, and the wall cells they touch: the grid's cells need not end
+    // exactly at a wall, and the element counts only what lies in the air, so the extra
+    // layer closes any gap between the plastic and the wall it hangs on.
+    let mut marked: Vec<usize> = Vec::new();
+    for (index, &cell) in shaper.cells.iter().enumerate() {
+        if !plastic[index] {
+            continue;
+        }
+        marked.push(cell);
         let c = coords(cell);
         for axis in 0..3 {
-            low[axis] = low[axis].min(c[axis]);
-            high[axis] = high[axis].max(c[axis] + 1);
+            if c[axis] > 0 && !grid.air[cell - stride[axis]] {
+                marked.push(cell - stride[axis]);
+            }
+            if c[axis] + 1 < grid.n[axis] && !grid.air[cell + stride[axis]] {
+                marked.push(cell + stride[axis]);
+            }
+        }
+    }
+    let mut low = [0usize; 3];
+    let mut high = [1usize; 3];
+    for (count, &cell) in marked.iter().enumerate() {
+        let c = coords(cell);
+        for axis in 0..3 {
+            low[axis] = if count == 0 {
+                c[axis]
+            } else {
+                low[axis].min(c[axis])
+            };
+            high[axis] = if count == 0 {
+                c[axis] + 1
+            } else {
+                high[axis].max(c[axis] + 1)
+            };
         }
     }
     let size: [usize; 3] = std::array::from_fn(|axis| high[axis] - low[axis]);
     let mut solid = vec![false; size[0] * size[1] * size[2]];
-    for (index, &cell) in shaper.cells.iter().enumerate() {
-        if plastic[index] {
-            let c = coords(cell);
-            solid[((c[0] - low[0]) * size[1] + (c[1] - low[1])) * size[2] + (c[2] - low[2])] = true;
-        }
+    for &cell in &marked {
+        let c = coords(cell);
+        solid[((c[0] - low[0]) * size[1] + (c[1] - low[1])) * size[2] + (c[2] - low[2])] = true;
     }
     let cell_m3 = grid.dx.powi(3);
     Ok(ShapeResult {
@@ -693,4 +802,24 @@ pub fn shape_inside(
         canceled,
         notes: shaper.notes.clone(),
     })
+}
+
+/// The id of the element that shaping writes; shaping again replaces it.
+pub const SHAPED_ID: &str = "shaped";
+
+/// `design` with the shaped plastic as a `voxels` solid (README section 6.2).
+pub fn apply(design: &DesignFile, result: &ShapeResult) -> DesignFile {
+    let mut out = design.clone();
+    let solids = &mut out.speaker.enclosure.solids;
+    solids.retain(|solid| solid.get("id").and_then(serde_json::Value::as_str) != Some(SHAPED_ID));
+    if result.solid.iter().any(|cell| *cell) {
+        solids.push(crate::solids::element(
+            SHAPED_ID,
+            result.min_m,
+            result.dx_m,
+            result.size,
+            &result.solid,
+        ));
+    }
+    out
 }

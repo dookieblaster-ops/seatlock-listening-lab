@@ -16,10 +16,16 @@ pub struct Chamber {
     pub id: String,
     pub min_m: [f64; 3],
     pub max_m: [f64; 3],
+    /// Plastic placed in this chamber's air (the design's `voxels` solids), m^3.
+    pub plastic_m3: f64,
 }
 
 impl Chamber {
+    /// The chamber's air: its box less the plastic placed in it.
     pub fn volume_m3(&self) -> f64 {
+        self.box_m3() - self.plastic_m3
+    }
+    pub fn box_m3(&self) -> f64 {
         (0..3).map(|i| self.max_m[i] - self.min_m[i]).product()
     }
     pub fn contains(&self, p: [f64; 3]) -> bool {
@@ -53,7 +59,18 @@ pub fn chambers(design: &DesignFile) -> Result<Vec<Chamber>, String> {
         if out.iter().any(|other| other.id == id) || id == "outside" {
             return Err(format!("Two chambers are called {id}."));
         }
-        out.push(Chamber { id, min_m, max_m });
+        out.push(Chamber {
+            id,
+            min_m,
+            max_m,
+            plastic_m3: 0.0,
+        });
+    }
+    let (placed, _) = crate::solids::solids(design)?;
+    for chamber in &mut out {
+        let inside =
+            |p: [f64; 3]| (0..3).all(|i| p[i] > chamber.min_m[i] && p[i] < chamber.max_m[i]);
+        chamber.plastic_m3 = placed.iter().map(|solid| solid.plastic_m3(&inside)).sum();
     }
     Ok(out)
 }

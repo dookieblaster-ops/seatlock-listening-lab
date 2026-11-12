@@ -27,6 +27,7 @@ pub mod exterior;
 pub mod optimize;
 pub mod ports;
 pub mod shape;
+pub mod solids;
 pub mod split;
 pub mod voxels;
 pub use cost::{CabinetParts, CostLine, CostReport};
@@ -465,6 +466,14 @@ pub fn simulate_with_progress(
                 .flatten()
             {
                 displacement += port.displaced_m3;
+            }
+            // Plastic placed in the air takes its volume too.
+            if let Ok((placed, _)) = solids::solids(design) {
+                let in_air = |p: [f64; 3]| outer.contains_air(p).unwrap_or(false);
+                displacement += placed
+                    .iter()
+                    .map(|solid| solid.plastic_m3(&in_air))
+                    .sum::<f64>();
             }
             let volume = (gross - displacement).max(0.0);
             let ports = design_ports(design);
@@ -1343,10 +1352,12 @@ pub(crate) fn cabinet_grid_of(
     for runs in ports::bores(design) {
         bores.extend(runs?);
     }
+    let (placed, _) = solids::solids(design)?;
     voxels::cabinet_grid(
         outer,
         &chamber_list,
         &bores,
+        &placed,
         &voxels::DriverPlacement {
             pose,
             wall_m: wall,
@@ -2066,7 +2077,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
                         .iter()
                         .map(|chamber| seatlock_geom::csg_box(chamber.min_m, chamber.max_m)),
                 );
-                let claimed: f64 = chamber_list.iter().map(chambers::Chamber::volume_m3).sum();
+                let claimed: f64 = chamber_list.iter().map(chambers::Chamber::box_m3).sum();
                 if solid > 0.0 {
                     solid += shape.interior_volume_m3()? - claimed;
                 }
@@ -2140,6 +2151,71 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
         shells.push(port.shell);
         bores.push(port.bore);
     }
+    // Plastic placed in the air (`voxels` solids): the part of it that lies in the air.
+    let (placed, other_solids) = match solids::solids(design) {
+        Ok(found) => found,
+        Err(problem) => {
+            warnings.push(problem);
+            can_export = false;
+            (Vec::new(), Vec::new())
+        }
+    };
+    for (id, kind) in &other_solids {
+        warnings.push(format!(
+            "Solid {id} ({kind}) is of a kind this build does not make yet: it is left out of \
+             the results, the print file, and the cost."
+        ));
+    }
+    let in_air_at = |p: [f64; 3]| -> bool {
+        shape.contains_air(p).unwrap_or(false)
+            && (chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p)))
+    };
+    let placed_m3: f64 = placed.iter().map(|s| s.plastic_m3(&in_air_at)).sum();
+    if placed_m3 > 0.0 {
+        let air = if chamber_list.is_empty() {
+            shape.air_tree()
+        } else {
+            Ok(seatlock_geom::csg_union(
+                chamber_list
+                    .iter()
+                    .map(|c| seatlock_geom::csg_box(c.min_m, c.max_m))
+                    .collect(),
+            ))
+        };
+        match air {
+            Ok(air) if solid > 0.0 => {
+                let blocks = || {
+                    seatlock_geom::csg_union(
+                        placed
+                            .iter()
+                            .flat_map(solids::Voxels::boxes)
+                            .map(|(min, max)| seatlock_geom::csg_box(min, max))
+                            .collect(),
+                    )
+                };
+                // blocks within the air = blocks - (blocks - air).
+                let outside = seatlock_geom::csg_difference(vec![blocks(), air]);
+                print_tree = seatlock_geom::csg_union(vec![
+                    print_tree,
+                    seatlock_geom::csg_difference(vec![blocks(), outside]),
+                ]);
+                solid += placed_m3;
+            }
+            Ok(_) => warnings.push(
+                "Plastic placed inside a cabinet that is not printed is simulated, but it is \
+                 not in a print file or the cost."
+                    .into(),
+            ),
+            Err(_) => {
+                warnings.push(
+                    "Plastic placed inside is not printed for this kind of cabinet yet; the \
+                     print file is refused."
+                        .into(),
+                );
+                can_export = false;
+            }
+        }
+    }
     if !shells.is_empty() {
         let mut body = vec![print_tree];
         body.extend(shells);
@@ -2186,6 +2262,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
                 .collect();
         let solid_at = |p: [f64; 3]| -> bool {
             let plastic = shape.contains_solid(p).unwrap_or(false)
+                || (in_air_at(p) && placed.iter().any(|s| s.contains(p)))
                 || (!chamber_list.is_empty()
                     && shape.contains_air(p).unwrap_or(false)
                     && !chamber_list.iter().any(|c| c.contains(p)));
@@ -2256,14 +2333,15 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
         depth_m,
         wall_m: shape.panel_thickness_m("front").unwrap_or(0.0),
         interior_volume_m3: if chamber_list.is_empty() {
-            shape.interior_volume_m3()?
+            shape.interior_volume_m3()? - placed_m3
         } else {
             chamber_list.iter().map(chambers::Chamber::volume_m3).sum()
         },
         solid_volume_m3: solid,
         voxel_air_volume_m3: if voxels {
             seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
-                chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p))
+                (chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p)))
+                    && !placed.iter().any(|s| s.contains(p))
             })?
         } else {
             0.0

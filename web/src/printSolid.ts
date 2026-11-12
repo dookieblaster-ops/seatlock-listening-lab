@@ -322,3 +322,37 @@ export function meshToStl(positions: Float32Array, indices: Uint32Array): ArrayB
   }
   return buffer;
 }
+
+/** The corner points and outward triangles of the convex hull of `points_m`. */
+export async function hullMesh(points_m: number[][]): Promise<{ points_m: number[][]; triangles: number[][] }> {
+  const wasm = await manifold();
+  const solid = wasm.Manifold.hull(points_m.map((p) => [p[0], p[1], p[2]] as [number, number, number]));
+  const mesh = solid.getMesh();
+  const stride = mesh.numProp;
+  const points: number[][] = [];
+  for (let i = 0; i < mesh.vertProperties.length / stride; i += 1) {
+    points.push([mesh.vertProperties[i * stride], mesh.vertProperties[i * stride + 1], mesh.vertProperties[i * stride + 2]]);
+  }
+  const triangles: number[][] = [];
+  for (let i = 0; i < mesh.triVerts.length; i += 3) {
+    triangles.push([mesh.triVerts[i], mesh.triVerts[i + 1], mesh.triVerts[i + 2]]);
+  }
+  solid.delete();
+  return { points_m: points, triangles };
+}
+
+/** Every hull in a tree, built ahead of time, keyed by its points. */
+export async function hullsOf(tree: PrintTree): Promise<Map<string, { points_m: number[][]; triangles: number[][] }>> {
+  const found = new Map<string, { points_m: number[][]; triangles: number[][] }>();
+  const walk = async (node: PrintTree): Promise<void> => {
+    if (node.op === "hull") {
+      found.set(JSON.stringify(node.points_m), await hullMesh(node.points_m));
+    } else if (node.op === "union" || node.op === "difference") {
+      for (const child of node.of) {
+        await walk(child);
+      }
+    }
+  };
+  await walk(tree);
+  return found;
+}

@@ -162,6 +162,25 @@ fn compare_call(method: &str, request: &str) -> String {
             Ok(serde_json::Value::Array(rows))
         }
         "optimize.combos" => serde_json::to_value(optimize::combos(&design)),
+        "shape.inside" => {
+            let parsed: seatlock_sim::shape::ShapeRequest =
+                match serde_json::from_value(value.clone()) {
+                    Ok(parsed) => parsed,
+                    Err(err) => return error(err.to_string()),
+                };
+            match seatlock_sim::shape::shape_inside(
+                &design,
+                &parsed,
+                &registry,
+                &mut report_progress,
+            ) {
+                Ok(result) => {
+                    let shaped = seatlock_sim::shape::apply(&design, &result);
+                    Ok(serde_json::json!({ "result": result, "design": shaped }))
+                }
+                Err(problem) => return error(problem),
+            }
+        }
         _ => {
             let parsed: optimize::OptimizeRequest = match serde_json::from_value(value.clone()) {
                 Ok(parsed) => parsed,
@@ -312,9 +331,8 @@ fn dispatch(method: &str, request: &str) -> String {
             }
         }
         "simulate.full3d" => full_3d(request),
-        "compare.reference" | "compare.methods" | "optimize.combos" | "optimize.combo" => {
-            compare_call(method, request)
-        }
+        "compare.reference" | "compare.methods" | "optimize.combos" | "optimize.combo"
+        | "shape.inside" => compare_call(method, request),
         other => serde_json::to_string(&ErrorReply {
             error: format!("Unknown method: {other}"),
         })

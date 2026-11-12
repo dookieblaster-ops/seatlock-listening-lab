@@ -93,7 +93,7 @@ test("an MDF box prints nothing, lists its panels, and buys a whole sheet", asyn
   await expect(page.getByTestId("scores")).toBeVisible();
 });
 
-for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber", "folded-line"]) {
+for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber", "folded-line", "shaped-box"]) {
   test(`${name}: print solid, voxels, and formula agree, and the STL is solid`, async ({ page }) => {
     await page.goto("/");
     const example = path.resolve(import.meta.dirname, `../../designs/examples/${name}.seatlock.json`);
@@ -136,3 +136,31 @@ test("a cabinet too big for the printer is cut into parts that fit, with pins, i
   expect(text).toContain('name="part 1"');
   expect(text).toContain('name="pin 1"');
 });
+
+for (const [name, has] of [
+  ["rounded-box", "polyhedron("],
+  ["hex-prism", "linear_extrude("],
+  ["two-way-vented", "cylinder("],
+  ["shaped-box", "part = 0;"],
+]) {
+  test(`${name} is saved as an OpenSCAD program of the same solids`, async ({ page }) => {
+    await page.goto("/");
+    const example = path.resolve(import.meta.dirname, `../../designs/examples/${name}.seatlock.json`);
+    await page.getByTestId("open-design-input").setInputFiles(example);
+    await expect(page.getByTestId("formula-solid")).toBeVisible({ timeout: 20_000 });
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByTestId("export-scad").click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("cabinet.scad");
+    const text = fs.readFileSync((await download.path())!, "utf8");
+    expect(text).toContain("module cabinet()");
+    expect(text).toContain("difference()");
+    expect(text).toContain(has);
+    expect(text.split("{").length).toBe(text.split("}").length);
+    // For checking the file in OpenSCAD itself, outside this test.
+    if (process.env.SCAD_OUT) {
+      const solid = await page.getByTestId("formula-solid").innerText();
+      fs.writeFileSync(`${process.env.SCAD_OUT}-${name}.scad`, `// lab solid: ${solid}\n${text}`);
+    }
+  });
+}
