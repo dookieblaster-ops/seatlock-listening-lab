@@ -1382,6 +1382,7 @@ fn full_3d_enclosure(
             .filter(|(f, _)| **f <= valid)
             .map(|(_, z)| *z)
             .collect(),
+        relaxed: Vec::new(),
     };
     let response = seatlock_fdtd::grid::run(&grid, &options, progress);
     if response.canceled {

@@ -56,6 +56,11 @@ pub struct Options {
     /// (its own mechanical impedance seen from the air, `Z_m / S_d^2`). Changes in `Z_ab`
     /// are measured against `|Z_ab|` plus this. Empty: against `|Z_ab|` alone.
     pub z_scale: Vec<f64>,
+    /// Open fractions between 0 and 1 for faces between two air cells, `(axis, slot, a)`:
+    /// the face's velocity update is scaled by `a`, so 1 is open air, 0 a rigid wall, and
+    /// values between are air made heavier (module `adjoint`, for shaping the inside). A
+    /// face that is not between two air cells stays closed.
+    pub relaxed: Vec<(u8, usize, f32)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -120,6 +125,13 @@ pub fn run(
                         open[axis][c] = 1.0;
                     }
                 }
+            }
+        }
+    }
+    for &(axis, slot, a) in &options.relaxed {
+        if let Some(value) = open[axis as usize].get_mut(slot) {
+            if *value != 0.0 {
+                *value = a;
             }
         }
     }
