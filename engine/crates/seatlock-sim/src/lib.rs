@@ -26,6 +26,7 @@ pub mod cost;
 pub mod exterior;
 pub mod optimize;
 pub mod ports;
+pub mod shape;
 pub mod split;
 pub mod voxels;
 pub use cost::{CabinetParts, CostLine, CostReport};
@@ -1300,24 +1301,13 @@ fn driver_impedance_scale(
     Vec::new()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn full_3d_enclosure(
+/// The 3D grid of the cabinet as the builder makes it, driven by the first cone that opens
+/// into its air.
+pub(crate) fn cabinet_grid_of(
     design: &DesignFile,
     outer: &dyn OuterShape,
-    freqs: &[f64],
-    net_volume_m3: f64,
-    ports: &[PortSpec],
     dx: f64,
-    full_decay: bool,
-    z_scale: &[f64],
-    progress: &mut dyn FnMut(usize, usize) -> bool,
-) -> Result<Full3d, String> {
-    if !(0.002..=0.05).contains(&dx) {
-        return Err(format!(
-            "a cell of {:.1} mm is outside the 2 to 50 mm this solver takes.",
-            dx * 1000.0
-        ));
-    }
+) -> Result<voxels::CabinetGrid, String> {
     let part = design
         .speaker
         .radiators
@@ -1353,7 +1343,7 @@ fn full_3d_enclosure(
     for runs in ports::bores(design) {
         bores.extend(runs?);
     }
-    let built = voxels::cabinet_grid(
+    voxels::cabinet_grid(
         outer,
         &chamber_list,
         &bores,
@@ -1365,7 +1355,28 @@ fn full_3d_enclosure(
             body_length_m: body_length,
         },
         dx,
-    )?;
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn full_3d_enclosure(
+    design: &DesignFile,
+    outer: &dyn OuterShape,
+    freqs: &[f64],
+    net_volume_m3: f64,
+    ports: &[PortSpec],
+    dx: f64,
+    full_decay: bool,
+    z_scale: &[f64],
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<Full3d, String> {
+    if !(0.002..=0.05).contains(&dx) {
+        return Err(format!(
+            "a cell of {:.1} mm is outside the 2 to 50 mm this solver takes.",
+            dx * 1000.0
+        ));
+    }
+    let built = cabinet_grid_of(design, outer, dx)?;
     let mut grid = built.grid;
     grid.true_volume_m3 = net_volume_m3;
     let valid = C0 / (10.0 * dx);

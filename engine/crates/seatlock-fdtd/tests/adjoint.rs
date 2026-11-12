@@ -373,14 +373,12 @@ fn the_gradient_of_a_closed_box_matches_finite_differences() {
     // Without losses, where the run rings out by itself (half-open faces without losses are
     // in the test with an opening). A block of closed faces is left out here: the air sealed
     // in it, once a face opens a little, rings for millions of steps.
-    for state in [1.0] {
-        let worst = worst_gradient_error(&grid, &region, state, &picks, &freqs, 0.0);
-        eprintln!(
-            "lossless, open fraction {state}: worst error {:.3} %",
-            worst * 100.0
-        );
-        assert!(worst < 0.02, "lossless, open fraction {state}: {worst}");
-    }
+    let worst = worst_gradient_error(&grid, &region, 1.0, &picks, &freqs, 0.0);
+    eprintln!(
+        "lossless, open fraction 1: worst error {:.3} %",
+        worst * 100.0
+    );
+    assert!(worst < 0.02, "lossless, open fraction 1: {worst}");
     // With the decay weight, at every state.
     for state in [1.0, 0.0, 0.5] {
         let worst = worst_gradient_error(&grid, &region, state, &picks, &freqs, 40.0);

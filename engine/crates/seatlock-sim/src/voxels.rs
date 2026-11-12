@@ -37,6 +37,8 @@ pub struct CabinetGrid {
     pub inside_volume_m3: f64,
     /// Longest side of the cabinet's air, for the self-check's frequency limit.
     pub longest_m: f64,
+    /// True for the cells of chamber air: inside the cabinet and not in a duct's bore.
+    pub chamber_air: Vec<bool>,
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -582,5 +584,8 @@ pub fn cabinet_grid(
         notes,
         inside_volume_m3: inside as f64 * dx * dx * dx,
         longest_m: longest,
+        chamber_air: (0..cells)
+            .map(|cell| kind[cell] == INSIDE && duct_of[cell] == NO_DUCT)
+            .collect(),
     })
 }
