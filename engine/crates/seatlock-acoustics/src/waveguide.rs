@@ -35,10 +35,23 @@ pub struct WaveguideResult {
 pub fn solve(node: &AcousticNode, freq_hz: f64) -> WaveguideResult {
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let k = omega / C0;
-    solve_at(node, k, omega)
+    solve_at(node, k, omega, 0.0)
 }
 
-fn solve_at(node: &AcousticNode, k: f64, omega: f64) -> WaveguideResult {
+/// README section 5.4: a smooth round duct of radius `a` loses `alpha = WALL_LOSS * sqrt(f) / a`
+/// nepers per meter to the air's friction and heat flow at its wall.
+pub const WALL_LOSS: f64 = 2.99e-5;
+
+/// [`solve`] with every duct's wall loss: `k` becomes `k - j*alpha`, `alpha` taken for the
+/// round duct of each slice's area.
+pub fn solve_lossy(node: &AcousticNode, freq_hz: f64) -> WaveguideResult {
+    let omega = 2.0 * PI * freq_hz.max(1e-6);
+    let k = omega / C0;
+    solve_at(node, k, omega, WALL_LOSS * freq_hz.max(0.0).sqrt())
+}
+
+/// `loss` is `alpha * a`: the wall loss per meter times the duct's radius (0 for none).
+fn solve_at(node: &AcousticNode, k: f64, omega: f64, loss: f64) -> WaveguideResult {
     match node {
         AcousticNode::Rigid => WaveguideResult {
             z_in: Complex64::new(1.0e12, 0.0),
@@ -63,7 +76,8 @@ fn solve_at(node: &AcousticNode, k: f64, omega: f64) -> WaveguideResult {
             load,
         } => {
             let length = (*length_m + *added_length_m).max(1e-6);
-            if matches!(load.as_ref(), AcousticNode::Rigid)
+            if loss == 0.0
+                && matches!(load.as_ref(), AcousticNode::Rigid)
                 && (area_in_m2 - area_out_m2).abs() < 1e-9
             {
                 let z0 = RHO0 * C0 / area_in_m2.max(1e-12);
@@ -79,13 +93,13 @@ fn solve_at(node: &AcousticNode, k: f64, omega: f64) -> WaveguideResult {
                     openings: Vec::new(),
                 };
             }
-            let far = solve_at(load, k, omega);
-            duct_chain(length, *area_in_m2, *area_out_m2, far, k)
+            let far = solve_at(load, k, omega, loss);
+            duct_chain(length, *area_in_m2, *area_out_m2, far, k, loss)
         }
         AcousticNode::Parallel(branches) => {
             let solved: Vec<WaveguideResult> = branches
                 .iter()
-                .map(|branch| solve_at(branch, k, omega))
+                .map(|branch| solve_at(branch, k, omega, loss))
                 .collect();
             let mut admit = Complex64::new(0.0, 0.0);
             for branch in &solved {
@@ -110,6 +124,7 @@ fn duct_chain(
     area_out_m2: f64,
     far: WaveguideResult,
     k: f64,
+    loss: f64,
 ) -> WaveguideResult {
     let pieces = ((length_m / 0.010).ceil() as usize).max(1);
     let piece = length_m / pieces as f64;
@@ -120,12 +135,15 @@ fn duct_chain(
         let end = (index as f64 + 1.0) / pieces as f64;
         let area_here = area_in_m2 + (area_out_m2 - area_in_m2) * (start + end) * 0.5;
         let z0 = RHO0 * C0 / area_here.max(1e-12);
-        let kl = k * piece;
+        // k - j*alpha, with alpha for the round duct of this slice's area.
+        let alpha = loss / (area_here.max(1e-12) / PI).sqrt();
+        let kl = Complex64::new(k, -alpha) * piece;
         let cos = kl.cos();
         let sin = kl.sin();
-        let denom = Complex64::new(cos, 0.0) + Complex64::new(0.0, sin / z0) * z_load;
+        let j = Complex64::new(0.0, 1.0);
+        let denom = cos + j * sin / z0 * z_load;
         let u_ratio = 1.0 / denom;
-        let z_in = (z_load * cos + Complex64::new(0.0, z0 * sin)) / denom;
+        let z_in = (z_load * cos + j * z0 * sin) / denom;
         carry = carry.into_iter().map(|opening| opening * u_ratio).collect();
         z_load = z_in;
     }

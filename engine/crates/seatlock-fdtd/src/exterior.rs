@@ -33,7 +33,25 @@ pub struct Domain {
     pub air: Vec<bool>,
     /// Middle of the body. The outer faces absorb outgoing spherical waves centered here.
     pub center_m: [f64; 3],
+    /// Where the body's surface cuts through cells: how much of each cell and of each face is
+    /// air. `None`: every cell is all air or all body (stair-steps).
+    pub cut: Option<Cut>,
 }
+
+/// Air fractions of a grid that follows the body's surface (README section 5.6).
+#[derive(Clone, Debug)]
+pub struct Cut {
+    /// Air fraction of each cell's volume, never below what keeps the scheme stable.
+    pub fill: Vec<f32>,
+    /// Air fraction of each face's area, per axis, indexed by the cell on the face's high
+    /// side. Zero unless both cells beside the face are air cells.
+    pub open: [Vec<f32>; 3],
+}
+
+/// Points per side when measuring how much of a cell or a face is air.
+const CUT_SAMPLES: usize = 6;
+/// A cell with less air than this is taken as body.
+const CUT_MIN_FILL: f64 = 0.05;
 
 impl Domain {
     /// A block that reaches `margin_m` past the box `[low_m, high_m]` on every side, with a
@@ -63,6 +81,7 @@ impl Domain {
                 0.5 * (low_m[1] + high_m[1]),
                 0.5 * (low_m[2] + high_m[2]),
             ],
+            cut: None,
         };
         for i in margin..n[0] - margin {
             for j in margin..n[1] - margin {
@@ -73,6 +92,121 @@ impl Domain {
                     }
                 }
             }
+        }
+        domain
+    }
+
+    /// [`Domain::around`] with a grid that follows the body's surface: a cell the surface
+    /// cuts keeps its air, with the fraction of its volume and of each of its faces that is
+    /// air, instead of being all air or all body.
+    ///
+    /// The scheme is the plain one with three changes. A face's velocity update is scaled by
+    /// its air fraction (so the array holds the flow through the face's open part), a cell's
+    /// pressure update is divided by its air fraction, and the body's part of a face carries
+    /// the prescribed velocity. A cell's fraction is never taken below a sixth of the sum of
+    /// its faces' fractions, which keeps the time step of the plain grid stable.
+    pub fn around_smooth(
+        low_m: [f64; 3],
+        high_m: [f64; 3],
+        margin_m: f64,
+        dx: f64,
+        solid: &mut dyn FnMut([f64; 3]) -> bool,
+    ) -> Self {
+        let mut domain = Self::around(low_m, high_m, margin_m, dx, &mut |_| false);
+        let [nx, ny, nz] = domain.n;
+        let cells = nx * ny * nz;
+        let stride = domain.stride();
+        let n = CUT_SAMPLES;
+        let margin = (margin_m / dx).ceil().max(4.0) as usize;
+        // One layer more than the body's box, for cells its surface only grazes.
+        let span = |axis: usize| (margin - 1)..(domain.n[axis] - margin + 1);
+        let mut fill = vec![1.0_f32; cells];
+        for i in span(0) {
+            for j in span(1) {
+                for k in span(2) {
+                    let cell = domain.cell(i, j, k);
+                    let low = [
+                        domain.origin_m[0] + i as f64 * dx,
+                        domain.origin_m[1] + j as f64 * dx,
+                        domain.origin_m[2] + k as f64 * dx,
+                    ];
+                    let mut inside = 0usize;
+                    for a in 0..n {
+                        for b in 0..n {
+                            for c in 0..n {
+                                let p = [
+                                    low[0] + (a as f64 + 0.5) / n as f64 * dx,
+                                    low[1] + (b as f64 + 0.5) / n as f64 * dx,
+                                    low[2] + (c as f64 + 0.5) / n as f64 * dx,
+                                ];
+                                inside += solid(p) as usize;
+                            }
+                        }
+                    }
+                    let air = 1.0 - inside as f64 / (n * n * n) as f64;
+                    fill[cell] = air as f32;
+                    domain.air[cell] = air >= CUT_MIN_FILL;
+                }
+            }
+        }
+        let faces_len = cells + ny * nz;
+        let mut open = [
+            vec![0.0_f32; faces_len],
+            vec![0.0_f32; faces_len],
+            vec![0.0_f32; faces_len],
+        ];
+        for i in 0..nx {
+            for j in 0..ny {
+                for k in 0..nz {
+                    let cell = domain.cell(i, j, k);
+                    let coords = [i, j, k];
+                    for axis in 0..3 {
+                        if coords[axis] == 0 {
+                            continue;
+                        }
+                        let below = cell - stride[axis];
+                        if !domain.air[cell] || !domain.air[below] {
+                            continue;
+                        }
+                        if fill[cell] >= 1.0 && fill[below] >= 1.0 {
+                            open[axis][cell] = 1.0;
+                            continue;
+                        }
+                        // The face on this cell's low side, sampled on its own plane.
+                        let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
+                        let mut at = [
+                            domain.origin_m[0] + i as f64 * dx,
+                            domain.origin_m[1] + j as f64 * dx,
+                            domain.origin_m[2] + k as f64 * dx,
+                        ];
+                        let corner = at;
+                        let mut inside = 0usize;
+                        for a in 0..n {
+                            for b in 0..n {
+                                at[u] = corner[u] + (a as f64 + 0.5) / n as f64 * dx;
+                                at[v] = corner[v] + (b as f64 + 0.5) / n as f64 * dx;
+                                inside += solid(at) as usize;
+                            }
+                        }
+                        open[axis][cell] = 1.0 - inside as f32 / (n * n) as f32;
+                    }
+                }
+            }
+        }
+        // Keep the plain grid's time step stable in small cells.
+        let mut any = false;
+        for cell in 0..cells {
+            if !domain.air[cell] {
+                continue;
+            }
+            let sum: f32 = (0..3)
+                .map(|axis| open[axis][cell] + open[axis][cell + stride[axis]])
+                .sum();
+            fill[cell] = fill[cell].max(sum / 6.0).max(CUT_MIN_FILL as f32);
+            any |= fill[cell] < 1.0 || sum < 6.0 && sum > 0.0 && sum.fract() != 0.0;
+        }
+        if any {
+            domain.cut = Some(Cut { fill, open });
         }
         domain
     }
@@ -237,6 +371,10 @@ struct Driven {
     delay_s: f64,
     a: f32,
     b: f32,
+    /// 0 for a face between the body and the air, whose whole velocity is prescribed.
+    /// Otherwise the face lies between two air cells and this is the body's share of it:
+    /// that share carries the prescribed velocity, beside the flow through the open part.
+    share: f32,
 }
 
 struct Pulse {
@@ -343,7 +481,10 @@ fn run_driven(
                 let mut best: Option<(f64, usize)> = None;
                 for axis in 0..3 {
                     if coords[axis] > 0 && domain.air[c - stride[axis]] {
-                        open[axis][c] = 1.0;
+                        open[axis][c] = match &domain.cut {
+                            Some(cut) => cut.open[axis][c],
+                            None => 1.0,
+                        };
                     }
                     let low = coords[axis] == 0;
                     let high = coords[axis] + 1 == domain.n[axis];
@@ -383,6 +524,16 @@ fn run_driven(
     let max_steps = ((pulse_end + 8.0 * diagonal / C0) / dt).ceil() as usize;
     let quiet_needed = 200usize.max((0.001 / dt) as usize);
 
+    // With cut cells: the pressure update of each cell divided by its air fraction.
+    let kp_cell: Option<Vec<f32>> = domain.cut.as_ref().map(|cut| {
+        cut.fill
+            .iter()
+            .map(|fill| kp32 / fill.max(CUT_MIN_FILL as f32))
+            .collect()
+    });
+    let whole: Vec<&Driven> = driven.iter().filter(|face| face.share == 0.0).collect();
+    let shared: Vec<&Driven> = driven.iter().filter(|face| face.share > 0.0).collect();
+
     let mut pressure = vec![0.0_f32; cells];
     let mut v = [
         vec![0.0_f32; faces_len],
@@ -408,12 +559,12 @@ fn run_driven(
             }
         }
         if half < pulse_end {
-            for face in driven {
+            for face in &whole {
                 let (g, slope) = pulse.at(half - face.delay_s);
                 v[face.axis as usize][face.slot] = face.a * slope as f32 + face.b * g as f32;
             }
         } else {
-            for face in driven {
+            for face in &whole {
                 v[face.axis as usize][face.slot] = 0.0;
             }
         }
@@ -424,8 +575,29 @@ fn run_driven(
             outer.old_inward = pressure[outer.inward];
         }
         // Body cells have only closed or driven faces; their pressure is never read.
-        for (c, p) in pressure.iter_mut().enumerate() {
-            *p -= kp32 * net(c);
+        match &kp_cell {
+            None => {
+                for (c, p) in pressure.iter_mut().enumerate() {
+                    *p -= kp32 * net(c);
+                }
+            }
+            Some(kp_cell) => {
+                for (c, p) in pressure.iter_mut().enumerate() {
+                    *p -= kp_cell[c] * net(c);
+                }
+                // The body's share of a face between two air cells: its flow leaves the cell
+                // on the face's low side and enters the one on its high side.
+                if half < pulse_end {
+                    for face in &shared {
+                        let (g, slope) = pulse.at(half - face.delay_s);
+                        let flow = face.share * (face.a * slope as f32 + face.b * g as f32);
+                        let high = face.slot;
+                        let low = high - stride[face.axis as usize];
+                        pressure[high] += kp_cell[high] * flow;
+                        pressure[low] -= kp_cell[low] * flow;
+                    }
+                }
+            }
         }
         for outer in &outers {
             let (nu, beta) = (outer.nu, outer.beta);
@@ -498,8 +670,9 @@ pub fn skin_transfer(
     let started = crate::clock_start();
     let dx = domain.dx;
     let stride = domain.stride();
-    // Every face between the body and the air carries minus the incident wave's velocity.
-    let mut faces: Vec<(u8, usize, f64, [f64; 3])> = Vec::new();
+    // Every face between the body and the air carries minus the incident wave's velocity,
+    // and so does the body's share of a face that the surface cuts.
+    let mut faces: Vec<(u8, usize, f64, [f64; 3], f32)> = Vec::new();
     let mut nearest = f64::MAX;
     for cell in 0..domain.air.len() {
         if !domain.air[cell] {
@@ -515,8 +688,25 @@ pub fn skin_transfer(
             };
             let (travel, direction) = incident.path(at);
             nearest = nearest.min(travel);
-            faces.push((axis, slot, travel, direction));
+            faces.push((axis, slot, travel, direction, 0.0));
         });
+        if let Some(cut) = &domain.cut {
+            let coords = domain.coords(cell);
+            for axis in 0..3 {
+                if coords[axis] == 0 || !domain.air[cell - stride[axis]] {
+                    continue;
+                }
+                let share = 1.0 - cut.open[axis][cell];
+                if share <= 0.0 {
+                    continue;
+                }
+                let mut at = domain.center_of(cell);
+                at[axis] -= 0.5 * dx;
+                let (travel, direction) = incident.path(at);
+                nearest = nearest.min(travel);
+                faces.push((axis as u8, cell, travel, direction, share));
+            }
+        }
     }
     if faces.is_empty() {
         nearest = 0.0;
@@ -524,7 +714,7 @@ pub fn skin_transfer(
     let mut latest = 0.0_f64;
     let driven: Vec<Driven> = faces
         .iter()
-        .map(|&(axis, slot, travel, direction)| {
+        .map(|&(axis, slot, travel, direction, share)| {
             let spread = incident.spread(travel);
             let along = direction[axis as usize];
             let delay_s = (travel - nearest) / C0;
@@ -539,6 +729,7 @@ pub fn skin_transfer(
                 } else {
                     (-along / (4.0 * PI * spread * spread)) as f32
                 },
+                share,
             }
         })
         .collect();
@@ -611,6 +802,7 @@ pub fn radiate_from_face(
         delay_s: 0.0,
         a: 0.0,
         b: (sign / (domain.dx * domain.dx)) as f32,
+        share: 0.0,
     }];
     let raw = run_driven(
         domain,

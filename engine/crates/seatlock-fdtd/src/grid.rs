@@ -61,6 +61,11 @@ pub struct Options {
     /// values between are air made heavier (module `adjoint`, for shaping the inside). A
     /// face that is not between two air cells stays closed.
     pub relaxed: Vec<(u8, usize, f32)>,
+    /// A uniform loss in the air, as an amplitude decay rate in 1/s at each of
+    /// `frequencies_hz` (none when empty). Every signal's Fourier sum is weighted by
+    /// `e^(-s*t)`, which gives exactly the response of the same grid with that loss: each
+    /// resonance `s/pi` Hz wide.
+    pub loss_per_s: Vec<f64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -217,7 +222,12 @@ pub fn run(
     let mut previous: Option<Spectra> = None;
     let mut agreed = 0usize;
     let mut stopped_early: Option<Spectra> = None;
-    let mut running = crate::extrapolate::RunningSpectra::new(2 + grid.openings.len(), freqs, dt);
+    let mut running = crate::extrapolate::RunningSpectra::decaying(
+        2 + grid.openings.len(),
+        freqs,
+        &options.loss_per_s,
+        dt,
+    );
     let (sx, sy) = (stride[0], stride[1]);
 
     while steps < options.max_steps {
@@ -310,7 +320,7 @@ pub fn run(
             };
             let mut channels: Vec<&[f64]> = vec![&samples_p, &samples_u];
             channels.extend(samples_out.iter().map(|o| o.as_slice()));
-            let estimate = extrapolated(&channels, &running, &window, freqs);
+            let estimate = extrapolated(&channels, &running, &window, freqs, &options.loss_per_s);
             match (&estimate, &previous) {
                 (Some(now), Some(before)) if agrees(now, before, freqs, &options.z_scale) => {
                     agreed += 1;
@@ -332,7 +342,15 @@ pub fn run(
         }
     }
 
-    let spectrum = |samples: &[f64], freq: f64| -> (f64, f64) { dft(samples, freq, dt) };
+    let loss_at = |freq: f64| -> f64 {
+        freqs
+            .iter()
+            .position(|f| *f == freq)
+            .and_then(|bin| options.loss_per_s.get(bin).copied())
+            .unwrap_or(0.0)
+    };
+    let spectrum =
+        |samples: &[f64], freq: f64| -> (f64, f64) { dft(samples, freq, dt, loss_at(freq)) };
     if let Some(spectra) = stopped_early {
         let mut response = Response {
             frequencies_hz: freqs.clone(),
@@ -397,15 +415,17 @@ fn extrapolated(
     running: &crate::extrapolate::RunningSpectra,
     window: &crate::extrapolate::Window,
     freqs: &[f64],
+    loss: &[f64],
 ) -> Option<Spectra> {
     let fit = crate::extrapolate::Fit::new(channels, window)?;
     let solver = fit.shared()?;
     let full = |index: usize| {
-        fit.extended_with(
+        fit.extended_decaying(
             index,
             window.end,
             window.dt,
             freqs,
+            loss,
             &running.sums[index],
             &solver,
         )
@@ -470,9 +490,14 @@ fn worst_change(a: &Spectra, b: &Spectra, freqs: &[f64], z_scale: &[f64]) -> (f6
 }
 
 /// Discrete-time Fourier transform of `samples` at one frequency, `sum x[n] e^(-j w n dt)`.
-pub(crate) fn dft(samples: &[f64], freq: f64, dt: f64) -> (f64, f64) {
+pub(crate) fn dft(samples: &[f64], freq: f64, dt: f64, decay_per_s: f64) -> (f64, f64) {
     let step = -2.0 * PI * freq * dt;
-    let (step_re, step_im) = (step.cos(), step.sin());
+    let (step_re, step_im) = if decay_per_s == 0.0 {
+        (step.cos(), step.sin())
+    } else {
+        let shrink = (-decay_per_s * dt).exp();
+        (shrink * step.cos(), shrink * step.sin())
+    };
     let (mut w_re, mut w_im) = (1.0_f64, 0.0_f64);
     let (mut re, mut im) = (0.0, 0.0);
     for (index, &x) in samples.iter().enumerate() {
@@ -482,10 +507,16 @@ pub(crate) fn dft(samples: &[f64], freq: f64, dt: f64) -> (f64, f64) {
         w_im = w_re * step_im + w_im * step_re;
         w_re = next;
         if index % 1024 == 1023 {
-            // Renormalize the rotating phasor against drift.
+            // Renormalize the rotating phasor against drift: its size is known exactly.
             let norm = (w_re * w_re + w_im * w_im).sqrt();
-            w_re /= norm;
-            w_im /= norm;
+            if decay_per_s == 0.0 {
+                w_re /= norm;
+                w_im /= norm;
+            } else if norm > 0.0 {
+                let size = (-decay_per_s * dt * (index + 1) as f64).exp();
+                w_re *= size / norm;
+                w_im *= size / norm;
+            }
         }
     }
     (re, im)

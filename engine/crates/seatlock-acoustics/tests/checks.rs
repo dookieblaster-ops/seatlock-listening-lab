@@ -527,3 +527,40 @@ fn chk_box_2_published_driver_in_5l() {
         close_rel(excursion, excursion_m, 0.005);
     }
 }
+
+#[test]
+fn a_lossy_closed_duct_has_the_closed_form_impedance_at_its_quarter_wave() {
+    // README 5.4: k becomes k - j*alpha, alpha = 2.99e-5 * sqrt(f) / a. A duct closed at its
+    // far end has Z_in = -j*Z0*cot((k - j*alpha)*L); where k*L = pi/2 that is Z0*tanh(alpha*L),
+    // a pure resistance, where the lossless duct of CHK-WG-1 has zero.
+    use seatlock_acoustics::{solve_lossy, AcousticNode};
+    let (length, radius) = (0.5, 0.02);
+    let area = std::f64::consts::PI * radius * radius;
+    let freq = seatlock_core::constants::C0 / (4.0 * length);
+    let duct = AcousticNode::Duct {
+        length_m: length,
+        area_in_m2: area,
+        area_out_m2: area,
+        added_length_m: 0.0,
+        load: Box::new(AcousticNode::Rigid),
+    };
+    let z = solve_lossy(&duct, freq).z_in;
+    let z0 = seatlock_core::constants::RHO0 * seatlock_core::constants::C0 / area;
+    let alpha = 2.99e-5 * freq.sqrt() / radius;
+    let expected = z0 * (alpha * length).tanh();
+    assert!(
+        (z.re - expected).abs() < 1e-4 * expected,
+        "{} against {expected}",
+        z.re
+    );
+    assert!(z.im.abs() < 1e-4 * expected, "{}", z.im);
+    // And the wave that reaches the far end is smaller by e^(-alpha*L) each way: at the
+    // half wave the lossless duct's impedance is unbounded, the lossy one's is Z0/tanh.
+    let z = solve_lossy(&duct, 2.0 * freq).z_in;
+    let expected = z0 / (alpha * 2f64.sqrt() * length).tanh();
+    assert!(
+        (z.norm() - expected).abs() < 1e-3 * expected,
+        "{} against {expected}",
+        z.norm()
+    );
+}

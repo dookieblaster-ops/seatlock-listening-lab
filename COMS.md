@@ -45,6 +45,43 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. The lab generates cabinets; curved shape, wider score, losses
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3 in progress. The owner stated the product's intent on 2026-11-12 (README 2.6) and approved four items; all four were worked. No helper is active.
+
+**First steps**
+
+1. Fetch every branch (standing rule 1); nothing waits for review.
+2. Run `tools/cloud-check.sh` (about 17 minutes now: the generator's browser test alone takes 5). Last run on this commit: rustfmt, clippy, 166 engine tests, bindings, both wasm modules, type check, vitest, build, 34 of 34 browser tests, "All checks passed" (stable 1.97.0).
+3. README 1.1: the owner gives a go-ahead before new items start. STATUS question 10 was put to the owner at the end of this session.
+
+**Done this session** (numbers in STATUS, "What has been verified")
+
+- README 2.6, 6.1, 11.4, 12: generating is a goal.
+- Generator: `seatlock-sim/src/generate.rs` (`families`, `generate_family`, `build`), wasm `generate.families` and `generate.family`, page `web/src/Generate.tsx` (reuses `runJob`, `ScoreCells`, `CostPlot`, `rank` exported from `CostQuality.tsx`), tests `seatlock-sim/tests/generate.rs`, `web/e2e/generate.spec.ts`.
+- `revolved`: `seatlock-geom/src/revolved.rs`; CSG op `revolve` in `web/src/printSolid.ts` and `openscad.ts`; example `egg`.
+- Listening window: `SimulateRequest.listening_window`, results `listening_window_db`, `axis_flatness_db`, `window_flatness_db`; `flatness_db` is the worse. `seatlock-sim/tests/window.rs`.
+- Losses: `seatlock_acoustics::solve_lossy` and `WALL_LOSS`; `grid::Options::loss_per_s`, `RunningSpectra::decaying`, `Fit::extended_decaying`; `SimulateRequest.losses`; `WALL_DIFFUSE` and the wall count in `full_3d_enclosure`. Tests `seatlock-fdtd/tests/losses.rs`, `seatlock-sim/tests/losses.rs`, CHK-WG-4 in `seatlock-acoustics/tests/checks.rs`.
+- `Domain::around_smooth` and `Cut` in `seatlock-fdtd/src/exterior.rs`: a cut-cell grid, measured, not used by the simulator.
+
+**What is honest to say:** the generator works end to end, but nothing it proposes is close to the target; the curved shape is one family (`revolved`), not free forms; the 3D wall loss is an average; the curve-following grid did not pay off.
+
+**Queue (owner's go-ahead needed)**
+
+1. **Two-ways in the generator.** The three catalog tweeters print no `cutout_diameter_m` or `outer_diameter_m`, so `parts()` leaves them out. Open each maker's sheet (README 9.1) and add the sizes; then a second radiator on its own mount (a sealed-back tweeter needs no chamber), a crossover (`optimize.rs` has LR4 and LR2 and the frequency search), and families for it. A larger budget woofer with mounting sizes would also help reach 95 dB.
+2. **Generator speed.** 323 s in the cloud browser for 17 families of 16. Each scoring is correction plus simulation, about 1 s natively, more in wasm. Options: fewer frequencies while searching, score without correction first and correct only the best, drop families that cannot fit any driver early.
+3. **The page for cabinets that are not boxes.** The Speaker panel edits width, height, and depth only; a generated egg, prism, or leaning front opens and simulates, but its shape fields cannot be edited on the page. A generic editor from the outer shape's own fields is the fix.
+4. **Losses, further.** Damping fill (a flow-resistance term in the 3D grid's velocity update and in the detailed model; needs a material's flow resistivity from a source). A per-wall loss in the 3D grid in place of the average. Replace shaping's assumed uniform loss by `loss_per_s` (shaping runs in `adjoint.rs`, which has its own decay weight).
+5. **The shadow error on curved bodies.** `around_smooth` removed a quarter of it. Test the dispersion idea: the same sphere at 20 cells per wavelength with stair-steps, and the error against path length around the body. If it is dispersion, a fourth-order stencil or a corrected sound speed is the fix, not cut cells.
+6. **Shaping's fragility.** Its result changes with the last bit of a Fourier sum (STATUS). A robust optimizer would not; try several starts and keep the best, or smooth the finishing stage's accept rule.
+7. `loft`, a body turned about the vertical axis, and the earlier queue (post below).
+
+**Pitfalls:** as before. New: do not edit Rust files while `tools/cloud-check.sh` runs (its wasm build comes after the tests and would pick the edits up). `cargo fmt` needs `RUSTUP_TOOLCHAIN=stable`. `grid::dft` keeps separate arithmetic for zero decay on purpose (see queue item 6); do not "simplify" it. A design 4000 m wide runs the simulator out of memory.
+
+**Next step:** read the owner's answer to STATUS question 10; then queue item 1.
+
 ### 2026-11-12 — Claude — Handoff: start here. Inside-shaping (brief items 1 to 6) and the OpenSCAD export are in
 
 - **To:** next lead session (any Claude model)
@@ -380,6 +417,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: The owner's four items (spec around generating, the cabinet generator, a curved outer shape, a wider score with air losses) done on `main` by Claude; a curve-following 3D grid was tried and not adopted.
 - 2026-11-12: Fast 3D step 3 (relaxed faces, gradient, objective, optimizer, the `voxels` solid, the page) and the OpenSCAD export done on `main` by Claude (Fable 5.2, then Opus 5.5); making shaping earn more is queued.
 - 2026-11-11: Fast 3D step 1, the early stop by harmonic inversion, done on `main` by Claude (2 to 3 times faster for ported cabinets); the rest of step 1 and step 2 queued, step 3 briefed for Claude Fable 5.2.
 - 2026-11-11: Inside shape (bent and tapered ducts in all models and in print, the detailed model for networks, the inside editor, `folded-line`) done on `main` by Claude.

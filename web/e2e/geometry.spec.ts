@@ -93,7 +93,7 @@ test("an MDF box prints nothing, lists its panels, and buys a whole sheet", asyn
   await expect(page.getByTestId("scores")).toBeVisible();
 });
 
-for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber", "folded-line", "shaped-box"]) {
+for (const name of ["rounded-box", "chamfered-box", "sloped-baffle", "hex-prism", "two-way-vented", "two-chamber", "folded-line", "shaped-box", "egg"]) {
   test(`${name}: print solid, voxels, and formula agree, and the STL is solid`, async ({ page }) => {
     await page.goto("/");
     const example = path.resolve(import.meta.dirname, `../../designs/examples/${name}.seatlock.json`);
@@ -142,6 +142,7 @@ for (const [name, has] of [
   ["hex-prism", "linear_extrude("],
   ["two-way-vented", "cylinder("],
   ["shaped-box", "part = 0;"],
+  ["egg", "rotate_extrude("],
 ]) {
   test(`${name} is saved as an OpenSCAD program of the same solids`, async ({ page }) => {
     await page.goto("/");

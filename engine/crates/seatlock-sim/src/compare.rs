@@ -114,6 +114,8 @@ fn request() -> SimulateRequest {
         enclosure: ENCLOSURE.to_string(),
         radiation: RADIATION.to_string(),
         space: SPACE.to_string(),
+        listening_window: true,
+        losses: true,
         ..SimulateRequest::default()
     }
 }

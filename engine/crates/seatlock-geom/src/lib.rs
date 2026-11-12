@@ -2,6 +2,7 @@
 
 pub mod edged;
 pub mod prism;
+pub mod revolved;
 
 pub use seatlock_core::registry::MountPose;
 use seatlock_core::registry::{OuterShape, Registry};
@@ -316,6 +317,7 @@ pub fn register(registry: &mut Registry) {
     registry.register_outer("prism", parse_prism);
     registry.register_outer("tube", parse_tube);
     registry.register_outer("sheet_box", parse_sheet_box);
+    registry.register_outer("revolved", revolved::parse);
 }
 
 /// A box cut from sheet stock (README section 6.2): butt-jointed panels, nothing printed.

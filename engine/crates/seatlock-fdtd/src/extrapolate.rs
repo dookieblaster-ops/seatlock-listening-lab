@@ -264,13 +264,30 @@ impl Fit {
         head: &[Complex64],
         solver: &(DMatrix<Complex64>, DMatrix<Complex64>),
     ) -> Option<Vec<Complex64>> {
+        self.extended_decaying(index, end, dt, freqs, &[], head, solver)
+    }
+
+    /// [`Fit::extended_with`] for sums weighted by `e^(-s*t)`, with `s` per frequency in
+    /// `decay_per_s` (none when empty).
+    #[allow(clippy::too_many_arguments)]
+    pub fn extended_decaying(
+        &self,
+        index: usize,
+        end: usize,
+        dt: f64,
+        freqs: &[f64],
+        decay_per_s: &[f64],
+        head: &[Complex64],
+        solver: &(DMatrix<Complex64>, DMatrix<Complex64>),
+    ) -> Option<Vec<Complex64>> {
         let amplitudes = self.amplitudes(index, solver)?;
         let span = (end - self.first) as f64;
         let mut out = Vec::with_capacity(freqs.len());
         for (bin, freq) in freqs.iter().enumerate() {
             let w = 2.0 * PI * freq * dt;
-            let step = Complex64::from_polar(1.0, -w);
-            let at_end = Complex64::from_polar(1.0, -w * end as f64);
+            let s = decay_per_s.get(bin).copied().unwrap_or(0.0) * dt;
+            let step = Complex64::from_polar((-s).exp(), -w);
+            let at_end = Complex64::from_polar((-s * end as f64).exp(), -w * end as f64);
             let mut tail = Complex64::new(0.0, 0.0);
             for (i, z) in self.poles.iter().enumerate() {
                 tail +=
@@ -287,6 +304,8 @@ impl Fit {
 pub struct RunningSpectra {
     phasor: Vec<Complex64>,
     rotate: Vec<Complex64>,
+    /// `s*dt` per frequency: each sum is weighted by `e^(-s*t)`.
+    decay: Vec<f64>,
     /// `[channel][frequency]`.
     pub sums: Vec<Vec<Complex64>>,
     count: usize,
@@ -294,12 +313,28 @@ pub struct RunningSpectra {
 
 impl RunningSpectra {
     pub fn new(channels: usize, freqs: &[f64], dt: f64) -> RunningSpectra {
+        Self::decaying(channels, freqs, &[], dt)
+    }
+
+    /// Sums weighted by `e^(-s*t)`, with `s` per frequency in `decay_per_s` (none when
+    /// empty): the spectra of the same system with a uniform loss `s` in its air.
+    pub fn decaying(
+        channels: usize,
+        freqs: &[f64],
+        decay_per_s: &[f64],
+        dt: f64,
+    ) -> RunningSpectra {
+        let decay: Vec<f64> = (0..freqs.len())
+            .map(|bin| decay_per_s.get(bin).copied().unwrap_or(0.0) * dt)
+            .collect();
         RunningSpectra {
             phasor: vec![Complex64::new(1.0, 0.0); freqs.len()],
             rotate: freqs
                 .iter()
-                .map(|f| Complex64::from_polar(1.0, -2.0 * PI * f * dt))
+                .zip(&decay)
+                .map(|(f, s)| Complex64::from_polar((-s).exp(), -2.0 * PI * f * dt))
                 .collect(),
+            decay,
             sums: vec![vec![Complex64::new(0.0, 0.0); freqs.len()]; channels],
             count: 0,
         }
@@ -316,8 +351,12 @@ impl RunningSpectra {
         }
         self.count += 1;
         if self.count.is_multiple_of(1024) {
-            for phasor in &mut self.phasor {
-                *phasor /= phasor.norm();
+            // Against drift: the phasor's size is known exactly.
+            for (phasor, s) in self.phasor.iter_mut().zip(&self.decay) {
+                let size = phasor.norm();
+                if size > 0.0 {
+                    *phasor *= (-s * self.count as f64).exp() / size;
+                }
             }
         }
     }

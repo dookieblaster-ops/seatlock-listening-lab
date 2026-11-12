@@ -62,6 +62,15 @@ pub struct SimulateRequest {
     /// Also return sound power and the directivity index (a room asks for them itself).
     #[serde(default)]
     pub sound_power: bool,
+    /// Also compute the level a little off to the sides and above and below (the listening
+    /// window of README section 11.1), and score evenness on the worse of it and the level
+    /// straight ahead.
+    #[serde(default)]
+    pub listening_window: bool,
+    /// Include the air's losses at the walls (README sections 5.4 and 5.5): in the detailed
+    /// model's ducts, and in the 3D model as one average over the cabinet.
+    #[serde(default)]
+    pub losses: bool,
     /// Cell size of the air outside the cabinet when `radiation` is `exterior`; 10 mm by
     /// default.
     #[serde(default)]
@@ -96,6 +105,8 @@ impl Default for SimulateRequest {
             revision: 0,
             fdtd_dx_m: None,
             sound_power: false,
+            listening_window: false,
+            losses: false,
             exterior_dx_m: None,
             fdtd_full_decay: false,
         }
@@ -150,6 +161,15 @@ pub struct SimulateResult {
     pub fdtd: Option<FdtdReport>,
     /// Sound power level, dB re 1 pW, when the room or the request asked for it.
     pub sound_power_db: Option<Vec<f64>>,
+    /// The listening window's level (README section 11.1), when the request asked for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listening_window_db: Option<Vec<f64>>,
+    /// Evenness of the level straight ahead (in the room, when the design has one), and of
+    /// the listening window; `flatness_db` is the worse of the two.
+    #[serde(default)]
+    pub axis_flatness_db: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_flatness_db: Option<f64>,
     /// On-axis level against the mean over all directions, in dB.
     pub directivity_index_db: Option<Vec<f64>>,
     /// The in-room response, when the design has a room (README section 5.10). The score
@@ -294,6 +314,9 @@ pub fn simulate_with_progress(
         max_spl_metric_db: 0.0,
         fdtd: None,
         sound_power_db: None,
+        listening_window_db: None,
+        axis_flatness_db: 0.0,
+        window_flatness_db: None,
         directivity_index_db: None,
         in_room: None,
     };
@@ -417,7 +440,11 @@ pub fn simulate_with_progress(
             match wave {
                 Some(Ok(network)) => {
                     for (bin, freq) in freqs.iter().enumerate() {
-                        let solved = solve(&network.root, *freq);
+                        let solved = if request.losses {
+                            seatlock_acoustics::solve_lossy(&network.root, *freq)
+                        } else {
+                            solve(&network.root, *freq)
+                        };
                         let sample = &mut samples[bin];
                         sample.z_ab = solved.z_in;
                         sample.h_each = [Complex64::new(0.0, 0.0); 4];
@@ -509,7 +536,11 @@ pub fn simulate_with_progress(
                     let mut impedance = Vec::with_capacity(freqs.len());
                     let mut samples = Vec::with_capacity(freqs.len());
                     for freq in &freqs {
-                        let wave = solve(&network.root, *freq);
+                        let wave = if request.losses {
+                            seatlock_acoustics::solve_lossy(&network.root, *freq)
+                        } else {
+                            solve(&network.root, *freq)
+                        };
                         let mut sample = seatlock_acoustics::VentedSample {
                             z_ab: wave.z_in,
                             h_sum: Complex64::new(0.0, 0.0),
@@ -551,6 +582,7 @@ pub fn simulate_with_progress(
             &ports,
             request.fdtd_dx_m.unwrap_or(0.01),
             request.fdtd_full_decay,
+            request.losses,
             &driver_impedance_scale(design, registry, &freqs, &z_ab),
             progress,
         ) {
@@ -1238,7 +1270,92 @@ pub fn simulate_with_progress(
             })
             .collect()
     };
-    let (f6_hz, flatness_db, max_spl_metric_db) = metrics(&freqs, scored_spl_db, &max_spl_sum);
+    let (f6_hz, axis_flatness_db, max_spl_metric_db) = metrics(&freqs, scored_spl_db, &max_spl_sum);
+
+    if request.losses && !design.speaker.enclosure.ducts.is_empty() {
+        fidelity.ignored.push(
+            "Air paths lose sound at their walls as a smooth round duct of the same area would; \
+             a slot, a rough printed wall, or a bend loses more."
+                .into(),
+        );
+    }
+    // The listening window (README section 11.1): the direct sound averaged, as energy, over
+    // straight ahead, 10, 20, and 30 degrees to either side, and 10 degrees up and down.
+    let mut listening_window_db: Option<Vec<f64>> = None;
+    let mut window_flatness_db: Option<f64> = None;
+    if request.listening_window && !prepared.is_empty() {
+        if request.radiation == "exterior" {
+            fidelity.ignored.push(
+                "The listening window is not computed with the outside in 3D (one 3D run per \
+                 direction); evenness is the level straight ahead only."
+                    .into(),
+            );
+        } else {
+            let distance = design.speaker.listening.distance_m;
+            let mut energy = vec![0.0; freqs.len()];
+            let mut directions = 0.0;
+            let mut failed = false;
+            for (side_deg, up_deg) in [
+                (0.0f64, 0.0f64),
+                (10.0, 0.0),
+                (-10.0, 0.0),
+                (20.0, 0.0),
+                (-20.0, 0.0),
+                (30.0, 0.0),
+                (-30.0, 0.0),
+                (0.0, 10.0),
+                (0.0, -10.0),
+            ] {
+                let (side, up) = (side_deg.to_radians(), up_deg.to_radians());
+                let point = [
+                    reference[0] + distance * side.sin() * up.cos(),
+                    reference[1] - distance * side.cos() * up.cos(),
+                    reference[2] + distance * up.sin(),
+                ];
+                let pressure: Vec<Complex64> = if side_deg == 0.0 && up_deg == 0.0 {
+                    summed_pressure.clone()
+                } else {
+                    match radiation.transfer(&scene, &all_patches, &freqs, point, &mut *progress) {
+                        Ok(transfer) => {
+                            let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
+                            let mut row = 0;
+                            for (place, item) in prepared.iter().enumerate() {
+                                let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
+                                for source in &item.sources {
+                                    for bin in 0..freqs.len() {
+                                        total[bin] += source[bin]
+                                            * item.blocks_h[bin]
+                                            * (request.voltage_v * sign)
+                                            * transfer.per_source[row][bin];
+                                    }
+                                    row += 1;
+                                }
+                            }
+                            total
+                        }
+                        Err(_) => {
+                            failed = true;
+                            break;
+                        }
+                    }
+                };
+                for (sum, value) in energy.iter_mut().zip(&pressure) {
+                    *sum += value.norm_sqr();
+                }
+                directions += 1.0;
+            }
+            if !failed {
+                let window: Vec<f64> = energy
+                    .iter()
+                    .map(|sum| 10.0 * (sum / directions / (P_REF * P_REF)).max(1e-30).log10())
+                    .collect();
+                let (_, flat, _) = metrics(&freqs, &window, &max_spl_sum);
+                window_flatness_db = Some(flat);
+                listening_window_db = Some(window);
+            }
+        }
+    }
+    let flatness_db = window_flatness_db.map_or(axis_flatness_db, |w| w.max(axis_flatness_db));
 
     SimulateResult {
         revision: request.revision,
@@ -1257,10 +1374,18 @@ pub fn simulate_with_progress(
         max_spl_metric_db,
         fdtd: fdtd_report,
         sound_power_db,
+        listening_window_db,
+        axis_flatness_db,
+        window_flatness_db,
         directivity_index_db,
         in_room,
     }
 }
+
+/// README 5.5: of a wall's loss to sound grazing it, the share that sound arriving from all
+/// directions alike loses on average. Friction is 1/1.4737 of the grazing loss and counts
+/// with sin^2 of the angle (mean 2/3); heat flow is the rest and counts in full.
+const WALL_DIFFUSE: f64 = (2.0 / 3.0 + 0.4737) / 1.4737;
 
 struct Full3d {
     report: FdtdReport,
@@ -1379,6 +1504,7 @@ fn full_3d_enclosure(
     ports: &[PortSpec],
     dx: f64,
     full_decay: bool,
+    losses: bool,
     z_scale: &[f64],
     progress: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<Full3d, String> {
@@ -1394,6 +1520,44 @@ fn full_3d_enclosure(
     let valid = C0 / (10.0 * dx);
     let resolved: Vec<f64> = freqs.iter().copied().filter(|f| *f <= valid).collect();
     let dt = grid.time_step_s();
+    // The air's loss at the cabinet's walls (README 5.5), as one average: wall area over
+    // air volume, both counted on the grid.
+    let mut loss_notes: Vec<String> = Vec::new();
+    let loss_per_s: Vec<f64> = if losses {
+        let [nx, ny, nz] = grid.n;
+        let stride = [ny * nz, nz, 1usize];
+        let (mut faces, mut cells) = (0usize, 0usize);
+        for (cell, inside) in built.chamber_air.iter().enumerate() {
+            if !inside {
+                continue;
+            }
+            cells += 1;
+            let c = [cell / (ny * nz), (cell / nz) % ny, cell % nz];
+            for axis in 0..3 {
+                let n = [nx, ny, nz][axis];
+                if c[axis] == 0 || !grid.air[cell - stride[axis]] {
+                    faces += 1;
+                }
+                if c[axis] + 1 >= n || !grid.air[cell + stride[axis]] {
+                    faces += 1;
+                }
+            }
+        }
+        let per_m = faces as f64 / (cells.max(1) as f64 * dx);
+        loss_notes.push(format!(
+            "The air's loss at the walls is one average for the whole cabinet ({:.0} m^2 of \
+             wall per m^3 of air, counted on the grid; sound taken to travel in all directions \
+             alike). One resonance's own loss can differ from it by about half, and curved or \
+             slanted walls count a little large.",
+            per_m
+        ));
+        resolved
+            .iter()
+            .map(|f| C0 * WALL_DIFFUSE * seatlock_acoustics::WALL_LOSS * f.sqrt() * per_m)
+            .collect()
+    } else {
+        Vec::new()
+    };
     let options = seatlock_fdtd::grid::Options {
         max_steps: (1.0 / dt).ceil() as usize,
         frequencies_hz: resolved.clone(),
@@ -1406,6 +1570,7 @@ fn full_3d_enclosure(
             .map(|(_, z)| *z)
             .collect(),
         relaxed: Vec::new(),
+        loss_per_s,
     };
     let response = seatlock_fdtd::grid::run(&grid, &options, progress);
     if response.canceled {
@@ -1462,7 +1627,7 @@ fn full_3d_enclosure(
         report,
         z,
         h,
-        notes: built.notes,
+        notes: built.notes.into_iter().chain(loss_notes).collect(),
     })
 }
 

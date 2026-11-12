@@ -192,7 +192,8 @@ simulate(design, request) -> results
   request:  { enclosure: "lumped" | "waveguide" | "fdtd",
               radiation: "point" | "baffle" | "exterior", space: "full" | "half" | "step",
               frequency grid, which outputs (sound_power), cell sizes (fdtd_dx_m, exterior_dx_m),
-              fdtd_full_decay (run the 3D cabinet model to the end instead of stopping early) }
+              fdtd_full_decay (run the 3D cabinet model to the end instead of stopping early),
+              listening_window (section 11.1), losses (the air's wall losses, sections 5.4 and 5.5) }
   results:  per radiator and summed: complex pressure response, impedance, cone travel,
             opening air speed, limits, maximum level; score; cost; warnings;
             and for every curve the fidelity label of section 5.8
@@ -373,6 +374,8 @@ The cabinet's air is a network of ducts and chambers (section 6.2). A duct segme
 
 Solve the network for `Z_ab` at the driver and `H_k` at each opening. Tree-shaped networks are enough through Level 2. Loops come at Level 3.
 
+Losses as built (Level 3): a request with `losses` replaces `k` by `k - j*alpha` in every duct slice, with `alpha = 2.99e-5 * sqrt(f) / a` and `a` the radius of the round duct of that slice's area. A slot, a rough printed wall, and a bend lose more than that, and the fidelity label says so. Chambers stay lossless compliances, and damping fill is not built. The page, scores, the optimizer, and the generator ask for losses; the engine's default, which the numbered checks use, does not. CHK-WG-4.
+
 As built (Level 3): the network is a tree grown from the driver's chamber. Each duct is a line along its center line, whatever its bends, with its taper sliced; it ends in its mouth's free-end radiation load or in the chamber at its far end, which carries its own ducts in turn. Every end that opens into a chamber adds `0.849*a`. Chambers are compliances. A duct may be written in either direction; the line is the same. A network with a loop is refused by this model, and the quick model's curves are used with the reason in the fidelity label. The label also counts the bends treated as straight. Checked against the full 3D model on the `folded-line` example (a 1.02 m slot, folded three times, tapering from 80 to 60 mm): the bass roll-off within 4 %, the line's first deep dip within 2 %, and the level within 1 dB from 50 to 150 Hz.
 
 This model knows lengths, tapers, quarter-wave lines, and pipe resonances. It knows nothing across a duct: bends, sudden steps, and chamber standing waves in the other two directions are invisible to it.
@@ -407,7 +410,9 @@ The rules below were found while validating this specification with a reference 
 - **Self-check every run**: below `C0 / (50 * longest internal dimension)`, `Z_ab` must match `lumped` within 3 %, or the result carries a warning. In a cabinet with ports `Z_ab` there is the ports' air mass, so the difference also holds the end corrections that `lumped` only estimates (5.1 % for the CHK-FDTD-4 cabinet at 5 mm).
 - **Time budgets** on the reference machine with one worker: a 20-liter cabinet in under 20 s at 10 mm for a preview and under 5 min at 5 mm for a final result. These are targets. Record measured times in `STATUS.md`.
 
-This model knows the full shape of the internal air, within its grid. Through Level 2 the walls are rigid and the air is lossless. Fill and wall losses arrive at Level 3. It does not model wall vibration.
+- **Wall losses** (as built, Level 3). At a wall, sound loses a little to the air's friction and heat flow. For sound grazing the wall the loss is the duct's of section 5.4: a specific admittance whose real part is `B = 2.99e-5 * sqrt(f)`. Friction is `1/1.4737` of that and counts with `sin^2` of the angle from the wall's normal; heat flow is the rest and counts at every angle. Sound arriving from all directions alike loses on average `(2/3 + 0.4737)/1.4737 = 0.774` of the grazing value, which makes every resonance decay at `s(f) = 0.774 * C0 * B(f) * S/V` per second, with `S/V` the cabinet's wall area over its air volume, both counted on the grid. A request with `losses` applies it as a decay weight: each signal's Fourier sum at frequency `f` is weighted by `e^(-s(f)*t)`, which is exactly the response of the same grid with a uniform loss `s(f)` in its air, each resonance `s/pi` Hz wide. It costs nothing, works with the early stop (the fitted tail takes the same weight), and makes peak heights finite and independent of the run's length. It is one average: a single resonance's own loss differs from it by up to about half (0.65 of it for a wave grazing every wall, as in a duct), and stair-stepped walls count a little large. The label says so. Damping fill is not built. CHK-FDTD-5.
+
+This model knows the full shape of the internal air, within its grid. The walls are rigid; their loss is the average above when asked for, and otherwise none. It does not model wall vibration or damping fill.
 
 **Shaping the inside** (as built, Level 3). The 3D model can work out where plastic inside the cabinet evens out the sound.
 
@@ -473,10 +478,12 @@ As built:
 
 What validated it (CHK-RAD-3, CHK-RAD-4, and three more tests beside them):
 
-- A rigid sphere of radius 0.1 m against the closed-form series, from `k*a = 0.18` to 6: where the wave arrives and at the side, within 0.75 dB at both cell sizes. In the deep shadow behind the sphere the level reads high near the grid's limit, by up to 3.4 dB at 10 mm and 1.7 dB at 5 mm. The error halves with the cell: it comes from stair-stepped cells on a curved surface, where sound creeps around steps. A box has no stair-steps.
+- A rigid sphere of radius 0.1 m against the closed-form series, from `k*a = 0.18` to 6: where the wave arrives and at the side, within 0.75 dB at both cell sizes. In the deep shadow behind the sphere the level reads high near the grid's limit, by up to 3.4 dB at 10 mm and 1.7 dB at 5 mm. The error halves with the cell. It was first put down to stair-stepped cells on a curved surface; the trial of a grid that follows the surface (below) removed only a quarter of it at 10 mm, so most of it has another cause.
 - Reciprocity on a box: the reciprocity run against a plain radiation run (a skin face moving, pressure recorded at the far point), beside the box and behind it: within 7 % and 10 degrees from 50 Hz to 3 kHz. The plain run carries the grid's dispersion over the whole path, so it is the less exact of the two.
 - The CHK-RAD-2 arrangement in 3D (a source at the middle of a disc of radius 0.1 m, 10 mm thick): -6.02 dB at 10 Hz, +3.88 dB at 1716 Hz, -6.54 dB at 3432 Hz against half space, within 0.75 dB of the simple edge model at five frequencies. Two unrelated models agree.
 - A body far smaller than the wavelength changes nothing for a far listener (within 0.05 dB at 10 and 20 Hz). For a listener at 1 m the near face of a small box reads about 0.7 dB above a simple source, which is real: a source on a body acts from a point a little in front of it.
+
+A grid that follows the surface (tried, not in use). `Domain::around_smooth` keeps the cells a curved surface cuts, with the air fraction of each cell's volume and of each face's area: a face's velocity update is scaled by its fraction, a cell's pressure update is divided by its fraction (never below a sixth of the sum of its faces' fractions, which keeps the plain time step stable), and the body's share of a face carries the prescribed velocity. On the CHK-RAD-3 sphere it is stable, and the worst error in the shadow falls from 3.42 to 2.58 dB at 10 mm and from 1.67 to 1.55 dB at 5 mm, while the lit point goes from 0.67 to 1.02 dB and the side from 0.24 to 0.56 dB at 10 mm. That is not a clear gain, so the simulator still uses stair-steps. It also shows that most of the shadow error is not the stair-steps themselves; the grid's dispersion along the path around the body is the likely rest, which is not yet tested.
 
 Not modeled: wall vibration, openings as openings (a port's mouth is a patch of rigid skin that moves), and anything that needs smooth curved surfaces in deep shadow.
 
@@ -608,6 +615,15 @@ The Level 2 printed shapes, as they appear in a design file:
 { "kind": "sloped", "width_m": 0.16, "height_m": 0.26, "depth_bottom_m": 0.22, "depth_top_m": 0.16, "wall_m": 0.008 } // the front leans back; the back is vertical
 { "kind": "prism", "outline_m": [[0.0, 0.0], [0.16, 0.0], [0.08, 0.2]], "length_m": 0.2, "wall_m": 0.008 }       // the front's [x, z] corners, extruded back along y
 ```
+
+The Level 3 curved shape, `revolved`: a body of revolution about the front-to-back axis, with a flat round front for a driver and a flat round back.
+
+```jsonc
+{ "kind": "revolved", "diameter_m": 0.24, "length_m": 0.28, "front_diameter_m": 0.16, "back_diameter_m": 0.08,
+  "widest_at": 0.4, "wall_m": 0.008 }   // an egg; equal diameters make a cylinder, zero flats and widest_at 0.5 a spheroid
+```
+
+The outside radius runs from the front's rim to the widest point, `widest_at` of the way back, along a quarter ellipse, and from there to the back's rim along another. The inside is every point at least `wall_m` from the outer surface, found numerically as a profile of 96 steps; volumes are those of the stepped profiles, and the print solid revolves the same profiles in 96 segments. Its surfaces are `front` and `back`; `[u, v]` is measured from the lower-left corner of the square the body fits in, so the middle of a flat face is `[diameter/2, diameter/2]`, and a mount must sit on the flat. The everyday radiation model takes the flat front's rim as the baffle edge, though the skin curves away gently there, and the cabinet's notes say so. `loft` is not built.
 
 The wall follows the outside everywhere: the inside of a rounded box is rounded by `edge_radius_m - wall_m`, a chamfer's inside leg is `chamfer_m - wall_m * (2 - sqrt 2)`, and a prism's inside outline is every side moved inward by `wall_m`. Rounded and chamfered boxes keep the six box faces, and a mount must sit on the flat part of its face. A sloped box's faces are `front` (the slope), `back`, `top`, `bottom`, `left`, and `right`. A prism's faces are `front`, `back`, and `side-1`, `side-2`, ... for the sides from the first outline corner onward. On any face, `[u, v]` is measured from the lower-left corner as seen from outside, with `v` running up the face; the top and bottom keep the box's convention.
 
@@ -796,6 +812,8 @@ max_spl_db    minimum of max_spl(f) from f6_hz to 16 kHz: the loudest sine the s
 cost          section 9.2
 ```
 
+**The listening window** (as built, Level 3). A speaker is not heard only from straight ahead, so evenness is judged a little off axis too. A request with `listening_window` computes the direct sound at nine points at the listening distance: straight ahead, 10, 20, and 30 degrees to either side, and 10 degrees up and down, and averages them as energy. `flatness_db` is then the worse of two: the evenness of the level straight ahead (in the room, when the design has one) and the evenness of the listening window, each normalized and banded as above. The results give both. Correction still fits the level straight ahead. Under `exterior` radiation the window is left out (each direction would be a 3D run) and the label says so. The page, scores, the optimizer, and the generator ask for it; the engine's default does not. CHK-WIN-1.
+
 From Level 3 the results also include sound power, a directivity index, and, when the design has a room, the in-room response of section 5.10. A design with a room is scored on its in-room response, using the target's tilt. A design without one is scored on its direct response.
 
 ### 11.2 Targets
@@ -836,7 +854,7 @@ shortfall = max(0, log2(f6_hz / f6_hz_max))
 - A candidate whose sound sources do not all face the listener is judged in a room (section 5.10), because its direct sound alone says little.
 - Output: a ranked list across all families and a cost-against-quality plot. Every result opens as a design.
 - It runs in workers, one per family, shows first results within 30 s, can be canceled, and repeats from its seed.
-- As built: one driver per cabinet. The families are five printed outer forms (box, rounded box, chamfered box, leaning front, and a front that narrows toward the top), each sealed and ported; a box with a folded, tapered line; and a box, sealed and ported, with its driver facing up or facing back. Inside a family the search picks the driver, the air volume (1.5 to 40 L), the proportions, where the driver sits on its face, the port's tuning or the line's size and exit height, and how strongly the form is shaped. Three fifths of a family's candidates are random; the rest refine its best two. A candidate the cabinet report cannot print costs a try, not a scoring. The drivers are the sourced budget woofers and full-range units whose records print a cut-out and a flange size; tweeters in the catalog print neither, so no two-way is proposed yet. The page runs 16 candidates per family in up to six workers and checks the top cabinet with the 3D model of the air inside, or of the air outside when its driver does not face the listener.
+- As built: one driver per cabinet. The families are six printed outer forms (box, rounded box, chamfered box, leaning front, a front that narrows toward the top, and an egg, the `revolved` shape with its driver in the middle of the flat front and its port through the flat back), each sealed and ported; a box with a folded, tapered line; and a box, sealed and ported, with its driver facing up or facing back. Inside a family the search picks the driver, the air volume (1.5 to 40 L), the proportions, where the driver sits on its face, the port's tuning or the line's size and exit height, and how strongly the form is shaped. Three fifths of a family's candidates are random; the rest refine its best two. A candidate the cabinet report cannot print costs a try, not a scoring. The drivers are the sourced budget woofers and full-range units whose records print a cut-out and a flange size; tweeters in the catalog print neither, so no two-way is proposed yet. The page runs 16 candidates per family in up to six workers and checks the top cabinet with the 3D model of the air inside, or of the air outside when its driver does not face the listener.
 
 ## 12. Build plan
 
@@ -883,7 +901,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - A: undo and redo; design history.
 - B: exciters and panel materials; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
-- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a 3D grid that follows curved surfaces instead of stair-stepping them; the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
+- D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.
@@ -925,7 +943,9 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-FDTD-1 | Rigid box 0.30 x 0.20 x 0.15 m, dx = 10 mm, source patch of 4 x 4 cells near a corner of a 0.20 x 0.15 wall. | Peaks of `Z_ab` at 572.0, 858.0, 1031.2, 1144.0, 1279.0, and 1430.0 Hz, each within 0.5 %. |
 | CHK-FDTD-2 | Same box. | At 10 Hz, `Z_ab` is within 1 % of `1 / (omega*C_ab)` in magnitude and within 1° of -90° in phase. |
 | CHK-FDTD-3 | Cavity 0.20 m cube. Neck 40 x 40 mm, 100 mm long, centered on one wall, opening into an exterior block with absorbing outer faces. Source patch 60 x 60 mm centered on the opposite wall. dx = 10 mm. | The run is stable. The peak of `Z_ab` is within 2 % of 65.7 Hz. `H_port` is 1.024 at 10 Hz and 1.103 at 20 Hz, real part within 1 %, imaginary part under 0.05 in size. |
+| CHK-WG-4 | `waveguide` with losses, a round duct 0.5 m long of radius 20 mm, rigid far end. | At the quarter wave (171.6 Hz) the input impedance is the pure resistance `Z0 * tanh(alpha*L)` with `alpha = 2.99e-5 * sqrt(f) / a`, within 0.01 %. At the half wave its size is `Z0 / tanh(alpha*L)` within 0.1 %. |
 | CHK-FDTD-4 | `fdtd` at 5 mm against `waveguide` for the CHK-BOX-3 cabinet as the builder makes it. | Tuning frequency within 3 %. SPL within 1.5 dB below 300 Hz. |
+| CHK-FDTD-5 | The CHK-FDTD-1 box with a uniform loss `s` of 10 and 30 per second. | The first resonance's peak in `abs(Z_ab)^2` is wider at half height by `s/pi` Hz than without the loss, within 3 %. With the early stop the peak is at the same frequency within 0.11 Hz and as wide within 3 %. |
 | CHK-DSP-1 | 48 kHz. Lowpass at 1 kHz with Q 0.7071. Peaking at 1 kHz, +6 dB, Q 2. | -3.01 dB and +6.00 dB at 1 kHz, within 0.01 dB. |
 | CHK-DSP-2 | 48 kHz, crossovers at 2 kHz. | LR4: each side is -6.02 dB at 2 kHz, and low plus high is 0 dB within 0.001 dB at every frequency. LR2: the sum is 0 dB within 0.001 dB only with one side inverted, and has a deep null at 2 kHz in phase. |
 | CHK-DSP-3 | Any block, fed an impulse through its process function. | The FFT of the output equals the block's reported frequency response within 0.01 dB and 0.1°. Block sizes 1, 128, and 4096 give identical output. |
@@ -941,6 +961,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-RAD-2 | `baffle` radiation, a point source at the center of a circular baffle of radius 0.10 m, listener on axis at 100 m. | Relative to `half` space: -6.02 dB at 10 Hz, +3.52 dB at 1716 Hz (where `k*R = pi`), and -6.02 dB at 3432 Hz (where `k*R = 2*pi`). Within 0.05 dB. |
 | CHK-RAD-3 | `exterior` solver, a rigid sphere of radius 0.1 m in a plane wave, `k*a` from 0.18 to 6, at 10 mm and 5 mm cells. | Against the closed-form series `p = -j/(ka)^2 * sum (2m+1) j^m P_m(cos theta) / h_m'(ka)`: within 0.75 dB at the point facing the wave and at 90 degrees. At the shadowed point within 3.6 dB at 10 mm and 1.8 dB at 5 mm (stair-steps on a curved surface). |
 | CHK-RAD-4 | `exterior` solver, a box 0.2 x 0.16 x 0.24 m, 10 mm cells, one skin cell on its front, one point beside it and one behind it. | The reciprocity run and a plain radiation run the other way round agree within 7 % and 10 degrees at 50, 200, 500, 1000, 2000, and 3000 Hz. |
+| CHK-WIN-1 | `baffle` radiation with `listening_window`, test-woofer-a's piston at the middle of a 40 x 40 m surface, listener at 100 m, 41 frequencies from 3.0 to 3.6 kHz. | The window's level against the level straight ahead, averaged over the frequencies, equals the energy mean of the piston's directivity over the nine directions, within 0.05 dB. Under `point` radiation the window equals the level straight ahead within 0.02 dB. |
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
 | CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
@@ -954,6 +975,8 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - Interface work never makes the audio glitch.
 - Frequency axes are logarithmic, 20 Hz to 20 kHz by default.
 - The everyday enclosure model is `waveguide` ("Detailed"): as fast as `lumped`, the same for a box without ducts, and it knows lines, tapers, and pipe resonances. The page, correction, scores, the optimizer, and listen mode all use it.
+- "Generate cabinets" runs section 11.4's generator: progress per family, a ranked table with an Open button per cabinet, the 3D check of the top one, and the cost-against-quality plot.
+- Evenness is shown with its two parts: straight ahead, and a little off to the sides and up and down.
 - "Shape the inside" runs section 5.5's shaping in a worker, at 20 mm or 10 mm blocks, with progress and a stop button. It shows the unevenness before and after, the plastic added, and the level from the inside's shape for both, and "Use this inside" puts the plastic into the design.
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
@@ -969,7 +992,8 @@ Say so in the interface wherever it matters.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
 - For DML panels: the air's load on the panel, an open back, and anything above the frequency the label gives (section 5.9). A panel's result also depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
-- Voice-coil heating over time, and, until Level 3, distortion.
+- Damping fill, and each resonance's own wall loss (the 3D model applies one average, section 5.5).
+- Voice-coil heating over time, and distortion.
 - Passive crossovers are out of scope by design.
 
 ## 16. Glossary
@@ -982,11 +1006,12 @@ Say so in the interface wherever it matters.
 | Exciter | Inertial exciter | The small motor fixed to a panel that makes it vibrate. |
 | Sound power | `W` | All the sound a speaker sends out, in every direction. |
 | In-room response | Section 5.10 | The sound that reaches the listener directly and by way of the room. |
+| Listening window | Section 11.1 | The sound averaged over straight ahead and a little to the sides, above, and below: what a listener who is not exactly on axis hears. |
 | Directivity index | `DI` | How much louder the speaker is straight ahead than on average over all directions. |
 | Cone travel | Excursion, `x_peak`, limit `xmax_m` | How far the cone moves from rest. |
 | Port air speed | Port velocity | Peak speed of air in a port. Too fast and the port makes noise. |
 | Bass limit | `f6_hz` | The lowest frequency the speaker reproduces within 6 dB of its normal level. |
-| Evenness | `flatness_db` | How closely the response follows the target. |
+| Evenness | `flatness_db` | How closely the response follows the target: the worse of straight ahead and the listening window. |
 | Maximum clean level | `max_spl_db` | The loudest the speaker plays without exceeding a limit. |
 | Tuning | `f_b` | The frequency at which a port takes over from the cone. |
 | Crossover | Digital isolated crossover | The split of the signal between radiators, done digitally, one channel per radiator. |

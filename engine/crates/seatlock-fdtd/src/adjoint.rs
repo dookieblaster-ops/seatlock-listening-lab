@@ -356,7 +356,7 @@ fn march(problem: &Problem, drive: Drive, fixed_steps: Option<usize>) -> March {
         freqs
             .iter()
             .map(|f| {
-                let (re, im) = crate::grid::dft(samples, *f, dt);
+                let (re, im) = crate::grid::dft(samples, *f, dt, 0.0);
                 Complex64::new(re, im)
             })
             .collect()

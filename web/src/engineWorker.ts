@@ -107,6 +107,10 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         // The detailed model: as fast as the quick one, and it knows lines and tapers.
         enclosure: "waveguide",
         radiation: "baffle",
+        // Evenness is judged a little off to the sides too (README 11.1).
+        listening_window: true,
+        // The air's loss at duct walls (README 5.4).
+        losses: true,
       });
       const json = eng.call("simulate", request);
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);

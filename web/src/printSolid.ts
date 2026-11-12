@@ -42,6 +42,13 @@ export type PrintTree =
       w: number[];
       length_m: number;
     }
+  | {
+      /** A profile of `[radius, depth]` corners revolved about the y axis through `origin_m`. */
+      op: "revolve";
+      profile_m: number[][];
+      origin_m: number[];
+      segments?: number;
+    }
   | { op: "union" | "difference"; of: PrintTree[] };
 
 type Wasm = ManifoldToplevel;
@@ -90,6 +97,15 @@ function build(wasm: Wasm, node: PrintTree): Solid | null {
     const placed = blank.transform([u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, w[0], w[1], w[2], 0, o[0], o[1], o[2], 1]);
     blank.delete();
     return placed;
+  }
+  if (node.op === "revolve") {
+    // Manifold revolves about z; turn z onto y, then move the axis to its place.
+    const blank = Manifold.revolve([node.profile_m.map((p) => [p[0], p[1]] as [number, number])], node.segments ?? 96);
+    const turned = blank.rotate([-90, 0, 0]);
+    blank.delete();
+    const moved = turned.translate([node.origin_m[0], node.origin_m[1], node.origin_m[2]]);
+    turned.delete();
+    return moved;
   }
   const parts = node.of.map((child) => build(wasm, child)).filter((part): part is Solid => part !== null);
   if (parts.length === 0) {

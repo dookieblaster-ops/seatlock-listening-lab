@@ -238,6 +238,8 @@ fn full_3d(request: &str) -> String {
         revision: parsed.revision,
         fdtd_dx_m: parsed.fdtd_dx_m,
         sound_power: false,
+        listening_window: true,
+        losses: true,
         exterior_dx_m: parsed.exterior_dx_m,
         fdtd_full_decay: false,
     };

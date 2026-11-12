@@ -213,6 +213,8 @@ export type SimulateResult = {
   interior_volume_m3: number | null;
   f6_hz: number;
   flatness_db: number;
+  axis_flatness_db?: number;
+  window_flatness_db?: number;
   max_spl_metric_db: number;
   fdtd?: FdtdReport | null;
   /** Sound power level, dB re 1 pW, when a room or the request asked for it. */

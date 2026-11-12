@@ -69,12 +69,13 @@ pub struct FamilyResult {
     pub notes: Vec<String>,
 }
 
-const OUTERS: [(&str, &str); 5] = [
+const OUTERS: [(&str, &str); 6] = [
     ("box", "Box"),
     ("rounded", "Rounded box"),
     ("chamfered", "Chamfered box"),
     ("sloped", "Leaning front"),
     ("prism", "Tapered front"),
+    ("revolved", "Egg"),
 ];
 
 /// The families the generator searches.
@@ -156,6 +157,15 @@ fn lerp(low: f64, high: f64, x: f64) -> f64 {
 /// middle.
 fn outer_fields(kind: &str, w: f64, h: f64, d: f64, t: f64) -> (Value, [f64; 3]) {
     let (ow, oh, od) = (w + 2.0 * WALL_M, h + 2.0 * WALL_M, d + 2.0 * WALL_M);
+    if kind == "revolved" {
+        // As wide as it is high, widest two fifths of the way back, with a flat front for
+        // the driver and a smaller flat back.
+        let across = (w * h).sqrt() + 2.0 * WALL_M;
+        let fields = json!({ "kind": kind, "diameter_m": across, "length_m": od,
+            "front_diameter_m": lerp(0.55, 0.85, t) * across,
+            "back_diameter_m": 0.4 * across, "widest_at": 0.4, "wall_m": WALL_M });
+        return (fields, [across, across, od]);
+    }
     let fields = match kind {
         "rounded" => json!({ "kind": kind, "width_m": ow, "height_m": oh, "depth_m": od,
             "wall_m": WALL_M, "edge_radius_m": WALL_M + lerp(0.004, 0.2 * ow.min(od), t) }),
@@ -231,7 +241,16 @@ fn build(
         return Err("the face is shorter than the driver.".into());
     }
     let reach = part.outer_m / 2.0 + WALL_M + 0.006;
-    let v = (along * face_h).clamp(reach, face_h - reach);
+    let egg = family.outer == "revolved";
+    if egg && fields["front_diameter_m"].as_f64().unwrap_or(0.0) < part.outer_m + 0.012 {
+        return Err("the flat front is smaller than the driver.".into());
+    }
+    // On an egg the driver sits in the middle of the flat front.
+    let v = if egg {
+        face_h / 2.0
+    } else {
+        (along * face_h).clamp(reach, face_h - reach)
+    };
     let facing_depth = if family.face == "top" { oh } else { od };
     if facing_depth < part.depth_m + 2.0 * WALL_M + 0.01 {
         return Err("the cabinet is too shallow for the driver.".into());
@@ -260,7 +279,10 @@ fn build(
             let diameter = (0.35 * cone).clamp(0.025, 0.08);
             let length = port_length_m(diameter, tuning, volume);
             // The port leaves the front, or the back when the front leans.
-            let back = family.outer == "sloped";
+            let back = family.outer == "sloped" || egg;
+            if egg && fields["back_diameter_m"].as_f64().unwrap_or(0.0) < diameter + 0.02 {
+                return Err("the flat back is smaller than the port.".into());
+            }
             let port_depth = if back { od * 0.75 } else { od };
             if length < 0.01 || length > port_depth - 0.05 {
                 return Err("no port of this tuning fits the cabinet.".into());
@@ -273,7 +295,13 @@ fn build(
                 low
             };
             let px = ow / 2.0;
-            let path = if back {
+            let path = if egg {
+                // Through the middle of the flat back, clear of the driver's magnet.
+                if length > od - part.depth_m - 0.03 {
+                    return Err("no port of this tuning fits the cabinet.".into());
+                }
+                json!([[px, od - length, oh / 2.0], [px, od, oh / 2.0]])
+            } else if back {
                 let y = fields["depth_bottom_m"].as_f64().unwrap_or(od);
                 json!([[px, y - length, low], [px, y, low]])
             } else {

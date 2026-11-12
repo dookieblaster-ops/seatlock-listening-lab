@@ -824,6 +824,15 @@ export default function App() {
             Bass limit {sim.f6_hz.toFixed(0)} Hz. Evenness {sim.flatness_db.toFixed(1)} dB. Maximum
             clean level {sim.max_spl_metric_db.toFixed(0)} dB. Cost: {sim.cost.summary}
           </p>
+          {sim.window_flatness_db !== undefined && sim.axis_flatness_db !== undefined ? (
+            <p
+              data-testid="evenness-parts"
+              title="Evenness is the worse of two: the level straight ahead (in the room, when the design has one), and the level averaged over straight ahead, 10, 20 and 30 degrees to either side, and 10 degrees up and down (the listening window)."
+            >
+              Evenness straight ahead {sim.axis_flatness_db.toFixed(1)} dB; a little off to the sides and up and down{" "}
+              {sim.window_flatness_db.toFixed(1)} dB. The score takes the worse.
+            </p>
+          ) : null}
           <div className="row">
             <button type="button" onClick={() => compareInputRef.current?.click()}>
               Compare with another design

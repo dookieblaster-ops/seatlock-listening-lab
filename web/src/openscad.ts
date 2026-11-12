@@ -50,6 +50,12 @@ function node(tree: PrintTree, indent: string, hull: HullMesh): string[] {
       `${indent}multmatrix([${rows.join(", ")}, [0, 0, 0, 1]]) linear_extrude(height = ${mm(tree.length_m)}) polygon([${outline}]);`,
     ];
   }
+  if (tree.op === "revolve") {
+    const profile = tree.profile_m.map((p) => `[${mm(p[0])}, ${mm(p[1])}]`).join(", ");
+    return [
+      `${indent}translate(${vec(tree.origin_m)}) rotate([-90, 0, 0]) rotate_extrude($fn = ${tree.segments ?? 96}) polygon([${profile}]);`,
+    ];
+  }
   const children = tree.of.flatMap((child) => node(child, `${indent}  `, hull));
   if (children.length === 0) {
     return [];

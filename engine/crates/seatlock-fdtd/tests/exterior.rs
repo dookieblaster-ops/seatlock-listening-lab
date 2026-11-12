@@ -72,9 +72,18 @@ fn the_sphere_series_has_the_right_limits() {
 /// Levels on a rigid sphere of radius 0.1 m, in dB against the incident wave, at the points
 /// 0, 90, and 180 degrees from where a plane wave comes from.
 fn sphere_levels(dx: f64, freqs: &[f64]) -> Vec<[f64; 3]> {
+    sphere_levels_on(dx, freqs, false)
+}
+
+/// `smooth`: on a grid that follows the sphere's surface instead of stair-stepping it.
+fn sphere_levels_on(dx: f64, freqs: &[f64], smooth: bool) -> Vec<[f64; 3]> {
     let a = 0.1;
     let mut solid = |p: [f64; 3]| p[0] * p[0] + p[1] * p[1] + p[2] * p[2] < a * a;
-    let domain = Domain::around([-a; 3], [a; 3], 0.2, dx, &mut solid);
+    let domain = if smooth {
+        Domain::around_smooth([-a; 3], [a; 3], 0.2, dx, &mut solid)
+    } else {
+        Domain::around([-a; 3], [a; 3], 0.2, dx, &mut solid)
+    };
     let skin = domain.skin_cells();
     let poles = [[0.0, -a, 0.0], [a, 0.0, 0.0], [0.0, a, 0.0]];
     let mut record = Vec::new();
@@ -343,4 +352,34 @@ fn a_source_at_the_middle_of_a_thin_disc_follows_the_baffle_step() {
         );
     }
     assert!((level(0) + 6.02).abs() < 0.05, "{}", level(0));
+}
+
+#[test]
+fn a_grid_that_follows_the_sphere_is_stable_and_a_little_closer_in_its_shadow() {
+    let freqs = [100.0, 546.0, 1092.0, 1638.0, 2185.0, 2731.0, 3277.0];
+    for dx in [0.01, 0.005] {
+        let mut errors = [[0.0_f64; 3]; 2];
+        for (which, smooth) in [false, true].into_iter().enumerate() {
+            let got = sphere_levels_on(dx, &freqs, smooth);
+            for (freq, levels) in freqs.iter().zip(&got) {
+                let ka = 2.0 * PI * freq / C0 * 0.1;
+                for (slot, theta) in [0.0, PI / 2.0, PI].iter().enumerate() {
+                    let expected = 20.0 * sphere_surface_pressure(ka, *theta).norm().log10();
+                    let error = levels[slot] - expected;
+                    if smooth {
+                        println!("dx {dx} ka {ka:.2} point {slot}: {error:+.2} dB");
+                    }
+                    errors[which][slot] = errors[which][slot].max(error.abs());
+                }
+            }
+        }
+        println!(
+            "dx {dx}: worst error lit/side/shadow, stair-steps {:.2}/{:.2}/{:.2} dB, following the surface {:.2}/{:.2}/{:.2} dB",
+            errors[0][0], errors[0][1], errors[0][2], errors[1][0], errors[1][1], errors[1][2]
+        );
+        // What was measured (README 5.6): the shadow is a little closer, the lit point and
+        // the side a little farther, so the simulator does not use this grid yet.
+        assert!(errors[1][2] < errors[0][2]);
+        assert!(errors[1][0] < 1.1 && errors[1][1] < 0.75);
+    }
 }
