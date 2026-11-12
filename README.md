@@ -836,6 +836,7 @@ shortfall = max(0, log2(f6_hz / f6_hz_max))
 - A candidate whose sound sources do not all face the listener is judged in a room (section 5.10), because its direct sound alone says little.
 - Output: a ranked list across all families and a cost-against-quality plot. Every result opens as a design.
 - It runs in workers, one per family, shows first results within 30 s, can be canceled, and repeats from its seed.
+- As built: one driver per cabinet. The families are five printed outer forms (box, rounded box, chamfered box, leaning front, and a front that narrows toward the top), each sealed and ported; a box with a folded, tapered line; and a box, sealed and ported, with its driver facing up or facing back. Inside a family the search picks the driver, the air volume (1.5 to 40 L), the proportions, where the driver sits on its face, the port's tuning or the line's size and exit height, and how strongly the form is shaped. Three fifths of a family's candidates are random; the rest refine its best two. A candidate the cabinet report cannot print costs a try, not a scoring. The drivers are the sourced budget woofers and full-range units whose records print a cut-out and a flange size; tweeters in the catalog print neither, so no two-way is proposed yet. The page runs 16 candidates per family in up to six workers and checks the top cabinet with the 3D model of the air inside, or of the air outside when its driver does not face the listener.
 
 ## 12. Build plan
 

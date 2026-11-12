@@ -24,6 +24,7 @@ pub mod chambers;
 pub mod compare;
 pub mod cost;
 pub mod exterior;
+pub mod generate;
 pub mod optimize;
 pub mod ports;
 pub mod shape;

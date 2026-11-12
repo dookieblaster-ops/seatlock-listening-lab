@@ -224,7 +224,7 @@ fn crossover_hz(design: &DesignFile) -> Option<f64> {
 
 /// Port length for a tuning: `L = C0^2 S / ((2 pi f_b)^2 V)` less one flush and one free end
 /// correction (README section 5.3).
-fn port_length_m(diameter: f64, tuning_hz: f64, volume_m3: f64) -> f64 {
+pub(crate) fn port_length_m(diameter: f64, tuning_hz: f64, volume_m3: f64) -> f64 {
     let area = std::f64::consts::PI * diameter * diameter / 4.0;
     let omega = 2.0 * std::f64::consts::PI * tuning_hz;
     let l_eff = C0 * C0 * area / (omega * omega * volume_m3);
@@ -347,7 +347,7 @@ fn candidate_design(
 
 /// Ranks candidates (README section 11.2): meeting the target and cheaper first; then smaller
 /// shortfall.
-fn objective(score: &Score) -> f64 {
+pub(crate) fn objective(score: &Score) -> f64 {
     if !score.problems.is_empty() {
         return 1e12;
     }
@@ -359,10 +359,10 @@ fn objective(score: &Score) -> f64 {
 }
 
 /// A small, seeded random source, so a run repeats from its seed.
-struct SplitMix(u64);
+pub(crate) struct SplitMix(pub(crate) u64);
 
 impl SplitMix {
-    fn next(&mut self) -> f64 {
+    pub(crate) fn next(&mut self) -> f64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;
         z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);

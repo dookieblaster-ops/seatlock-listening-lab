@@ -28,7 +28,7 @@ type ComboResult = {
   notes: string[];
 };
 
-function runJob(
+export function runJob(
   method: string,
   request: Record<string, unknown>,
   onProgress: (done: number, total: number) => void,
@@ -57,7 +57,7 @@ function money(score: Score) {
   return `${score.cost_complete ? "" : "at least "}$${score.cost_usd.toFixed(2)}`;
 }
 
-function ScoreCells({ score }: { score: Score }) {
+export function ScoreCells({ score }: { score: Score }) {
   return (
     <>
       <td>{score.f6_hz.toFixed(0)} Hz</td>
@@ -69,7 +69,7 @@ function ScoreCells({ score }: { score: Score }) {
   );
 }
 
-const HEADER = (
+export const HEADER = (
   <tr>
     <th></th>
     <th title="Bass limit: the lowest frequency within 6 dB of the normal level.">Bass limit</th>
@@ -346,7 +346,7 @@ export function CostQuality({
   );
 }
 
-function rank(score: Score) {
+export function rank(score: Score) {
   if (score.problems.length > 0) {
     return 1e12;
   }
@@ -354,7 +354,10 @@ function rank(score: Score) {
 }
 
 /** Cost against quality: every scored candidate. Lower is better on both axes. */
-function CostPlot({ points }: { points: Array<{ cost_usd: number; shortfall: number; meets_target: boolean }> }) {
+export function CostPlot({ points, caption }: {
+  points: Array<{ cost_usd: number; shortfall: number; meets_target: boolean }>;
+  caption?: string;
+}) {
   const width = 520;
   const height = 240;
   const pad = 44;
@@ -369,7 +372,9 @@ function CostPlot({ points }: { points: Array<{ cost_usd: number; shortfall: num
   const y = (shortfall: number) => height - pad + 10 - (shortfall / maxShort) * (height - pad);
   return (
     <figure>
-      <figcaption>Cost against quality: every design the optimizer scored. Lower and further left is better.</figcaption>
+      <figcaption>
+        {caption ?? "Cost against quality: every design the optimizer scored. Lower and further left is better."}
+      </figcaption>
       <svg data-testid="cost-plot" width={width} height={height} role="img" aria-label="Cost against shortfall">
         <line x1={pad} y1={height - pad + 10} x2={width - 10} y2={height - pad + 10} stroke="currentColor" />
         <line x1={pad} y1={10} x2={pad} y2={height - pad + 10} stroke="currentColor" />

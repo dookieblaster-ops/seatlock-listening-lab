@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { CabinetView } from "./CabinetView";
 import { CostPanel } from "./CostPanel";
 import { CostQuality } from "./CostQuality";
+import { Generate } from "./Generate";
 import { printToScad } from "./openscad";
 import { ShapeInside } from "./ShapeInside";
 import type { Issue } from "./generated/Issue";
@@ -791,6 +792,13 @@ export default function App() {
           {fdtdRuns.length > 0 && <FullThreeD runs={fdtdRuns} quick={sim} />}
         </section>
       )}
+
+      <Generate
+        text={canonical ?? ""}
+        onOpen={(next, label) => {
+          void publish(next as Design, label);
+        }}
+      />
 
       <ShapeInside
         text={canonical ?? ""}

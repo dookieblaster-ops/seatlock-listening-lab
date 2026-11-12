@@ -162,6 +162,23 @@ fn compare_call(method: &str, request: &str) -> String {
             Ok(serde_json::Value::Array(rows))
         }
         "optimize.combos" => serde_json::to_value(optimize::combos(&design)),
+        "generate.families" => serde_json::to_value(seatlock_sim::generate::families()),
+        "generate.family" => {
+            let parsed: seatlock_sim::generate::GenerateRequest =
+                match serde_json::from_value(value.clone()) {
+                    Ok(parsed) => parsed,
+                    Err(err) => return error(err.to_string()),
+                };
+            match seatlock_sim::generate::generate_family(
+                &design,
+                &parsed,
+                &registry,
+                &mut report_progress,
+            ) {
+                Ok(result) => serde_json::to_value(result),
+                Err(problem) => return error(problem),
+            }
+        }
         "shape.inside" => {
             let parsed: seatlock_sim::shape::ShapeRequest =
                 match serde_json::from_value(value.clone()) {
@@ -332,7 +349,7 @@ fn dispatch(method: &str, request: &str) -> String {
         }
         "simulate.full3d" => full_3d(request),
         "compare.reference" | "compare.methods" | "optimize.combos" | "optimize.combo"
-        | "shape.inside" => compare_call(method, request),
+        | "shape.inside" | "generate.families" | "generate.family" => compare_call(method, request),
         other => serde_json::to_string(&ErrorReply {
             error: format!("Unknown method: {other}"),
         })
