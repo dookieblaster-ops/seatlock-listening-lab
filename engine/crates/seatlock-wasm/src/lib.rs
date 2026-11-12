@@ -203,6 +203,7 @@ fn full_3d(request: &str) -> String {
         fdtd_dx_m: parsed.fdtd_dx_m,
         sound_power: false,
         exterior_dx_m: parsed.exterior_dx_m,
+        fdtd_full_decay: false,
     };
     let result = simulate_with_progress(&design, &sim_request, &builtin(), &mut report_progress);
     serde_json::to_string(&result).unwrap_or_else(|error| {

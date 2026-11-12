@@ -17,6 +17,13 @@ rustfft = "6.4"
 [profile.dev.package.seatlock-fdtd]
 opt-level = 3
 
+# The 3D solver's echo fitting (harmonic inversion) uses these for its matrix algebra.
+[profile.dev.package.nalgebra]
+opt-level = 3
+
+[profile.dev.package.matrixmultiply]
+opt-level = 3
+
 # Scoring and the optimizer run many simulations; tests stay fast enough only when optimized.
 [profile.dev.package.seatlock-sim]
 opt-level = 2

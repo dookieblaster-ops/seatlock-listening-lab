@@ -1,6 +1,7 @@
 //! General masked grid: any air region, a resistive source patch, openings into exterior air
 //! blocks, and the flow through each opening (README section 5.5).
 
+use num_complex::Complex64;
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
 
@@ -49,6 +50,12 @@ pub struct Options {
     pub frequencies_hz: Vec<f64>,
     /// Steps between progress calls.
     pub progress_every: usize,
+    /// Stop early once the fitted free decay predicts the spectrum (module `extrapolate`).
+    pub extrapolate: bool,
+    /// For the early stop: at each frequency, the size of `Z_ab` that matters to the driver
+    /// (its own mechanical impedance seen from the air, `Z_m / S_d^2`). Changes in `Z_ab`
+    /// are measured against `|Z_ab|` plus this. Empty: against `|Z_ab|` alone.
+    pub z_scale: Vec<f64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -61,6 +68,8 @@ pub struct Response {
     pub h_imag: Vec<Vec<f64>>,
     pub steps: usize,
     pub decayed: bool,
+    /// True when the run stopped early and the rest of each signal was fitted.
+    pub extrapolated: bool,
     pub canceled: bool,
     pub elapsed_ms: f64,
 }
@@ -185,6 +194,18 @@ pub fn run(
     let mut canceled = false;
     let mut steps = 0usize;
     let quiet_needed = 300usize.max((0.002 / dt) as usize);
+    // Early stop: fit the free decay over the last 40 ms every 10 ms of simulated time, from
+    // 30 ms after the pulse, and stop when two fits in a row agree with the one before.
+    let freqs = &options.frequencies_hz;
+    let f_max = freqs.iter().cloned().fold(0.0, f64::max);
+    let quiet_from = ((t0 + 4.0 * sigma) / dt).ceil() as usize + 1;
+    let check_every = ((0.01 / dt) as usize).max(1);
+    let fit_span = (0.12 / dt) as usize;
+    let check_from = quiet_from + (0.03 / dt) as usize;
+    let mut previous: Option<Spectra> = None;
+    let mut agreed = 0usize;
+    let mut stopped_early: Option<Spectra> = None;
+    let mut running = crate::extrapolate::RunningSpectra::new(2 + grid.openings.len(), freqs, dt);
     let (sx, sy) = (stride[0], stride[1]);
 
     while steps < options.max_steps {
@@ -250,6 +271,11 @@ pub fn run(
         };
         samples_p.push(aperture_p);
         samples_u.push(u_sum);
+        if options.extrapolate {
+            let mut now = vec![aperture_p, u_sum];
+            now.extend(samples_out.iter().map(|o| *o.last().unwrap_or(&0.0)));
+            running.push(&now);
+        }
         peak = peak.max(aperture_p.abs());
         steps += 1;
         if time > t0 + 4.0 * sigma && peak > 0.0 {
@@ -263,6 +289,28 @@ pub fn run(
                 break;
             }
         }
+        if options.extrapolate && steps >= check_from && steps.is_multiple_of(check_every) {
+            let window = crate::extrapolate::Window {
+                start: steps.saturating_sub(fit_span).max(quiet_from),
+                end: steps,
+                dt,
+                f_max_hz: f_max,
+            };
+            let mut channels: Vec<&[f64]> = vec![&samples_p, &samples_u];
+            channels.extend(samples_out.iter().map(|o| o.as_slice()));
+            let estimate = extrapolated(&channels, &running, &window, freqs);
+            match (&estimate, &previous) {
+                (Some(now), Some(before)) if agrees(now, before, freqs, &options.z_scale) => {
+                    agreed += 1;
+                }
+                _ => agreed = 0,
+            }
+            previous = estimate;
+            if agreed >= 2 {
+                stopped_early = previous.take();
+                break;
+            }
+        }
         if options.progress_every > 0
             && steps.is_multiple_of(options.progress_every)
             && !progress(steps, options.max_steps)
@@ -273,6 +321,28 @@ pub fn run(
     }
 
     let spectrum = |samples: &[f64], freq: f64| -> (f64, f64) { dft(samples, freq, dt) };
+    if let Some(spectra) = stopped_early {
+        let mut response = Response {
+            frequencies_hz: freqs.clone(),
+            h_real: vec![Vec::new(); grid.openings.len()],
+            h_imag: vec![Vec::new(); grid.openings.len()],
+            steps,
+            decayed: true,
+            extrapolated: true,
+            canceled: false,
+            ..Response::default()
+        };
+        for (bin, z) in spectra.z.iter().enumerate() {
+            response.z_real.push(z.re);
+            response.z_imag.push(z.im);
+            for (index, h) in spectra.h.iter().enumerate() {
+                response.h_real[index].push(h[bin].re);
+                response.h_imag[index].push(h[bin].im);
+            }
+        }
+        response.elapsed_ms = crate::elapsed_ms(started);
+        return response;
+    }
     let mut response = Response {
         frequencies_hz: Vec::new(),
         z_real: Vec::new(),
@@ -281,6 +351,7 @@ pub fn run(
         h_imag: vec![Vec::new(); grid.openings.len()],
         steps,
         decayed,
+        extrapolated: false,
         canceled,
         elapsed_ms: 0.0,
     };
@@ -301,8 +372,93 @@ pub fn run(
     response
 }
 
+/// `Z_ab` and each opening's `H_k` at the requested frequencies.
+struct Spectra {
+    z: Vec<Complex64>,
+    h: Vec<Vec<Complex64>>,
+}
+
+/// The spectra with each signal's fitted free decay added past the last step. Channel 0 is
+/// the driver's pressure, 1 its flow, and the rest the openings' flows.
+fn extrapolated(
+    channels: &[&[f64]],
+    running: &crate::extrapolate::RunningSpectra,
+    window: &crate::extrapolate::Window,
+    freqs: &[f64],
+) -> Option<Spectra> {
+    let fit = crate::extrapolate::Fit::new(channels, window)?;
+    let solver = fit.shared()?;
+    let full = |index: usize| {
+        fit.extended_with(
+            index,
+            window.end,
+            window.dt,
+            freqs,
+            &running.sums[index],
+            &solver,
+        )
+    };
+    let p_hat = full(0)?;
+    let u_hat = full(1)?;
+    let z = p_hat.iter().zip(&u_hat).map(|(a, b)| a / b).collect();
+    let mut h = Vec::new();
+    for index in 2..channels.len() {
+        let o_hat = full(index)?;
+        h.push(o_hat.iter().zip(&u_hat).map(|(a, b)| a / b).collect());
+    }
+    Some(Spectra { z, h })
+}
+
+/// Two estimates agree when `Z_ab` and every `H_k`, power-averaged over a sixth of an octave
+/// around each frequency, differ by under 0.05 dB everywhere, each measured against what it
+/// adds to (see `worst_change`). The heights of single sharp resonances are left out on purpose: without losses they
+/// are set by the run's length, not the cabinet (README 5.5), and the labels say so.
+fn agrees(a: &Spectra, b: &Spectra, freqs: &[f64], z_scale: &[f64]) -> bool {
+    worst_change(a, b, freqs, z_scale).0 <= 0.05
+}
+
+/// Power average of `values` over a sixth of an octave around each frequency.
+fn smoothed(values: &[Complex64], freqs: &[f64]) -> Vec<f64> {
+    let ratio = 2f64.powf(1.0 / 12.0);
+    freqs
+        .iter()
+        .map(|f| {
+            let (mut sum, mut count) = (0.0_f64, 0.0_f64);
+            for (v, g) in values.iter().zip(freqs) {
+                if *g >= f / ratio && *g <= f * ratio {
+                    sum += v.norm_sqr();
+                    count += 1.0;
+                }
+            }
+            (sum / count.max(1.0)).sqrt()
+        })
+        .collect()
+}
+
+/// The largest change in dB between two estimates' smoothed sizes, and where. Each size has
+/// its floor added first: `z_scale` for `Z_ab` (none when empty), and 1 for each `H_k`, the
+/// cone's own output, since a port's flow adds to it (`U_total = U_d * (1 - sum of H_k)`).
+fn worst_change(a: &Spectra, b: &Spectra, freqs: &[f64], z_scale: &[f64]) -> (f64, usize) {
+    let mut worst = (0.0, 0);
+    let mut compare = |x: &[Complex64], y: &[Complex64], floor: &dyn Fn(usize) -> f64| {
+        let (sx, sy) = (smoothed(x, freqs), smoothed(y, freqs));
+        for (bin, (p, q)) in sx.iter().zip(&sy).enumerate() {
+            let f = floor(bin);
+            let d = (20.0 * ((p + f) / (q + f).max(1e-300)).log10()).abs();
+            if d > worst.0 {
+                worst = (d, bin);
+            }
+        }
+    };
+    compare(&a.z, &b.z, &|bin| z_scale.get(bin).copied().unwrap_or(0.0));
+    for (x, y) in a.h.iter().zip(&b.h) {
+        compare(x, y, &|_| 1.0);
+    }
+    worst
+}
+
 /// Discrete-time Fourier transform of `samples` at one frequency, `sum x[n] e^(-j w n dt)`.
-fn dft(samples: &[f64], freq: f64, dt: f64) -> (f64, f64) {
+pub(crate) fn dft(samples: &[f64], freq: f64, dt: f64) -> (f64, f64) {
     let step = -2.0 * PI * freq * dt;
     let (step_re, step_im) = (step.cos(), step.sin());
     let (mut w_re, mut w_im) = (1.0_f64, 0.0_f64);

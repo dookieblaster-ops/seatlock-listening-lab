@@ -103,8 +103,8 @@ fn chk_e2e_3_folded_line_quick_and_detailed_models_list_what_each_ignores() {
     );
 }
 
-/// The full 3D half of CHK-E2E-3 for `folded-line`. About 3 minutes in a release build and
-/// 8 in the test build, so it runs on request: `cargo test -p seatlock-sim --test folded --
+/// The full 3D half of CHK-E2E-3 for `folded-line`. About 1 minute in the test build with the
+/// early stop (8 before it), so it runs on request: `cargo test -p seatlock-sim --test folded --
 /// --ignored`. Last run and its numbers are in STATUS.md.
 #[test]
 #[ignore]

@@ -4,6 +4,7 @@ use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
 
 pub mod exterior;
+pub mod extrapolate;
 pub mod grid;
 pub use grid::Grid;
 
@@ -491,6 +492,8 @@ pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
         max_steps: 60_000,
         frequencies_hz: (8..=1600).map(|index| index as f64 * 0.25).collect(),
         progress_every: 0,
+        extrapolate: false,
+        z_scale: Vec::new(),
     };
     let response = grid::run(&grid, &options, &mut |_, _| true);
     OpeningCurve {

@@ -45,6 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-11 — Claude — Brief for the Claude Fable 5.2 session: the 3D model shapes the inside (adjoint optimization)
+
+- **To:** next lead session, which the owner will run on Claude Fable 5.2 with the last 23 % of that allowance (owner, 2026-11-11). Spend it on this brief, not on reading or on other queue items.
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner request: "iterate the 3D designs quickly to find the best form"; research found three steps, step 1 (faster runs) is in; this is step 3. No helper is active.
+
+**Start (15 minutes at most)**
+
+1. Fetch every branch (standing rule 1). Start `tools/cloud-check.sh` in the background (about 9 minutes; last run on this commit: rustfmt, clippy, 143 engine tests, bindings, both wasm modules, type check, vitest, build, 25 of 25 browser tests, "All checks passed", stable 1.97.0; the on-request `folded.rs` 3D check also passed, 72 s). Do not edit Rust files while it compiles.
+2. Read only: README 5.5 (all of it, including "Stop early by harmonic inversion"), 6.2 "Inside", 11.3; this post. Code: `engine/crates/seatlock-fdtd/src/grid.rs` (`Grid`, `run`: per-axis face masks `open` are already `f32` 0/1, `specials` for source and absorbing cells, running Fourier sums), `seatlock-fdtd/src/extrapolate.rs`, `seatlock-sim/src/voxels.rs` (`cabinet_grid` builds the `Grid` from a design), `full_3d_enclosure` and `driver_impedance_scale` in `seatlock-sim/src/lib.rs`.
+3. The owner is not a programmer: report in plain language, result first (README 1.1).
+
+**Goal.** One forward and one adjoint 3D run give the gradient of a sound objective with respect to every face of a design region inside the cabinet. An optimizer uses it to shape that region (air or plastic, cell by cell), and the result is a printable inside that measurably beats the plain cabinet in a fresh forward run. Reference: Bokhari, Berggren, Noreland, Wadbro, "Loudspeaker cabinet design by topology optimization", Scientific Reports 13:21248 (2023), doi 10.1038/s41598-023-46170-4 (frequency-domain FEM, adjoint gradients, MMA, density filter and projection). Ours is time-domain on the existing grid: the novel part.
+
+**Order. Commit and push after each item; each must stand alone.**
+
+1. **Relaxed faces.** In a design region (a box of cells given in `Options` or on `Grid`), each face's open fraction `a` in [0, 1] replaces the 0/1 mask in the velocity update (`v -= kv * a * (p_ahead - p_behind)`). Everything outside the region is unchanged, and `a` = 0 or 1 must reproduce today's results exactly (assert bit-identical on CHK-FDTD-1's box).
+2. **Adjoint gradient, validated before anything else.** Objective `J` from the frequency-domain outputs the run already makes (`Z_ab`, `H_k` at a few frequencies, at most about 16). Derive the discrete adjoint of the leapfrog update with the folded boundary admittance and the resistive source (README 5.5); the adjoint run is the same scheme driven at the aperture probe and the opening planes by `dJ/d(signal)`. Accumulate, over design faces only, Fourier sums of the forward pressure difference across each face and of the adjoint face velocity at the objective frequencies (memory: design faces times frequencies, complex). Then `dJ/da = Re sum over frequencies of (constants) * (forward) * (adjoint)`. **Check: on a small grid (20 mm cells, a box like CHK-FDTD-1, a design region of a few dozen faces), the gradient matches central finite differences of `J` within 2 % on at least ten faces, at `a` = 1, at `a` = 0, and at `a` = 0.5.** Record the derivation in STATUS. Run forward and adjoint to full decay for this check (`extrapolate: false`); decide and record whether the early stop is safe for gradients (the Fourier sums per face would need the same tail fit, or a full run).
+3. **Objective tied to what the owner hears.** In `seatlock-sim`: `J` from the summed level against a target band (for example the sixth-octave deviation from flat between 150 Hz and 1 kHz, where cabinet standing waves live), through the driver and radiation models. `dJ/dZ_ab` and `dJ/dH_k` by the chain rule; the radiator's response to `Z_ab` is `A / (B + C * Z_ab)` (see `driver_impedance_scale`), so two evaluations give it without opening the radiator. Check the full chain by finite differences on one face as in item 2.
+4. **Optimizer.** Density filter (radius about 1.5 cells), smoothed projection with increasing sharpness, a cap on the plastic added, and a simple, robust update (MMA, or projected gradient with a line search). Keep the plastic printable: no air pockets sealed off from the rest of the air, no features thinner than two cells. **Check: on `sealed-test` (or a taller box with a strong standing wave), the thresholded 0/1 design, run again forward from scratch, improves the objective by a stated amount, with the starting and final numbers in STATUS.**
+5. **As a design.** A new internal element kind for `solids`, for example `{ "kind": "voxels", "min_m": [...], "dx_m": ..., "size": [nx, ny, nz], "cells": "<run-length encoded>" }`, registered as a member (README 3.3): it takes air from the quick and detailed models (volume), is solid in `voxels::cabinet_grid`, and prints as a union of merged boxes. Check CHK-GEO-1 and CHK-GEO-2 in the browser on an example that uses it. Raise `schema_version` only if an existing field changes meaning (README 3.3).
+6. **On the page**, only if time remains: "Let the 3D model shape the inside" for a chosen chamber, in a worker with progress and cancel, showing before and after.
+
+If time runs short, stop after item 2 or 3 with everything committed, and write a handoff that lets an ordinary session do 4 to 6 without re-deriving anything.
+
+**Pitfalls.** Cloud workspace: `RUSTUP_TOOLCHAIN=stable`; `cargo fmt --all` from `engine/`; `tools/cloud-check.sh`, not `./check.sh`; no `Instant::now` in WebAssembly. The 3D runs take tens of seconds in test builds: keep gradient checks small, mark long ones `#[ignore]` with their last result in STATUS. Lossless resonances ring for a long time (README 5.5); losses are not built yet. Do not weaken any check (README 1.3).
+
+**Next step:** item 1.
+
 ### 2026-11-11 — Claude — Handoff: start here. Inside shape done; shape optimizer waits for the owner's go-ahead
 
 - **To:** next lead session (any Claude model)
@@ -306,6 +335,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-11: Fast 3D step 1, the early stop by harmonic inversion, done on `main` by Claude (2 to 3 times faster for ported cabinets); the rest of step 1 and step 2 queued, step 3 briefed for Claude Fable 5.2.
 - 2026-11-11: Inside shape (bent and tapered ducts in all models and in print, the detailed model for networks, the inside editor, `folded-line`) done on `main` by Claude.
 - 2026-11-11: Fable brief items 1 to 3 (the `simple` room, `exterior` radiation, the `dml_panel` radiator) done on `main` by Claude Fable 5.2; item 4 (3D losses and wave views) handed on.
 - 2026-11-11: Assignment 12 (Level 2 M4: cost beside score, reference build, build methods, optimizer, CHK-E2E-2) done on `main` by Claude; Level 2 complete.

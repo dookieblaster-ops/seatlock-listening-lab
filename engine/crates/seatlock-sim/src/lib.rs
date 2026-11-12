@@ -63,6 +63,10 @@ pub struct SimulateRequest {
     /// default.
     #[serde(default)]
     pub exterior_dx_m: Option<f64>,
+    /// Run the 3D cabinet model until its echoes die away instead of stopping early and
+    /// fitting the rest (README 5.5). For checks that compare the two.
+    #[serde(default)]
+    pub fdtd_full_decay: bool,
 }
 
 fn default_enclosure() -> String {
@@ -90,6 +94,7 @@ impl Default for SimulateRequest {
             fdtd_dx_m: None,
             sound_power: false,
             exterior_dx_m: None,
+            fdtd_full_decay: false,
         }
     }
 }
@@ -534,6 +539,8 @@ pub fn simulate_with_progress(
             volume,
             &ports,
             request.fdtd_dx_m.unwrap_or(0.01),
+            request.fdtd_full_decay,
+            &driver_impedance_scale(design, registry, &freqs, &z_ab),
             progress,
         ) {
             Ok(run) => {
@@ -1254,6 +1261,46 @@ struct Full3d {
 }
 
 /// Runs the full 3D model on the cabinet as the builder makes it (README section 5.5).
+/// The size of `Z_ab` that matters to the first driver that loads the cabinet, at each
+/// frequency: its own mechanical side seen from the air. A cone's volume velocity is
+/// `A / (B + C * Z_ab)`, so two evaluations (with no air load and with `z_ab`) give
+/// `B / C = Z_ab / (U(0) / U(z_ab) - 1)` without opening the radiator. Empty when no driver
+/// loads the cabinet.
+fn driver_impedance_scale(
+    design: &DesignFile,
+    registry: &Registry,
+    freqs: &[f64],
+    z_ab: &[Complex64],
+) -> Vec<f64> {
+    for part in &design.speaker.radiators {
+        let Ok(radiator) = registry.create_radiator(&part.kind, &part.fields) else {
+            continue;
+        };
+        if !radiator.loads_box() || !driver_loads_box(part) {
+            continue;
+        }
+        let free = radiator.evaluate(freqs, &vec![Complex64::new(0.0, 0.0); freqs.len()]);
+        let loaded = radiator.evaluate(freqs, z_ab);
+        return free
+            .volume_velocity
+            .iter()
+            .zip(&loaded.volume_velocity)
+            .zip(z_ab)
+            .map(|((u0, u1), z)| {
+                let ratio = u0 / u1 - Complex64::new(1.0, 0.0);
+                let scale = (z / ratio).norm();
+                if scale.is_finite() {
+                    scale
+                } else {
+                    1e30
+                }
+            })
+            .collect();
+    }
+    Vec::new()
+}
+
+#[allow(clippy::too_many_arguments)]
 fn full_3d_enclosure(
     design: &DesignFile,
     outer: &dyn OuterShape,
@@ -1261,6 +1308,8 @@ fn full_3d_enclosure(
     net_volume_m3: f64,
     ports: &[PortSpec],
     dx: f64,
+    full_decay: bool,
+    z_scale: &[f64],
     progress: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<Full3d, String> {
     if !(0.002..=0.05).contains(&dx) {
@@ -1326,6 +1375,13 @@ fn full_3d_enclosure(
         max_steps: (1.0 / dt).ceil() as usize,
         frequencies_hz: resolved.clone(),
         progress_every: 250,
+        extrapolate: !full_decay,
+        z_scale: freqs
+            .iter()
+            .zip(z_scale)
+            .filter(|(f, _)| **f <= valid)
+            .map(|(_, z)| *z)
+            .collect(),
     };
     let response = seatlock_fdtd::grid::run(&grid, &options, progress);
     if response.canceled {
