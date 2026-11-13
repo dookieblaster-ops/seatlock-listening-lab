@@ -27,7 +27,7 @@
     "depth_m": 0.059944,
     "via": "search_extract"
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-pc105-8.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-160--dayton-audio-pc105-8-specifications.pdf",
     "title": "Dayton Audio PC105-8 specification sheet. Vas on the sheet is 0.12 cubic feet.",

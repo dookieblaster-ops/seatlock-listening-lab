@@ -11,12 +11,12 @@
     "qes": 2.61,
     "qms": 3.87,
     "re_ohm": 3.2,
-    "le_h": 0.00003,
+    "le_h": 3e-05,
     "sd_m2": 0.00075,
     "pe_w": 20.0,
     "sens_db_2v83": 90.0
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-nd25fa-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/275-059--dayton-audio-ND25FA-4-specifications.pdf",
     "title": "Dayton Audio ND25FA-4 specification sheet",

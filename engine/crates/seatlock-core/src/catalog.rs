@@ -56,11 +56,15 @@ pub fn target(name: &str) -> Option<Value> {
     serde_json::from_str(text).ok()
 }
 
-/// Every record under a catalog folder such as `catalog/drivers/`, in file-name order.
+/// Every record directly in a catalog folder such as `catalog/drivers/`, in file-name order.
+/// Files in subfolders (a driver's measured curve in `catalog/drivers/responses/`) are not records.
 pub fn all(prefix: &str) -> Vec<Value> {
     let mut found: Vec<(&str, Value)> = EMBEDDED
         .iter()
-        .filter(|(path, _)| path.starts_with(prefix) && path.ends_with(".json"))
+        .filter(|(path, _)| {
+            path.strip_prefix(prefix)
+                .is_some_and(|rest| rest.ends_with(".json") && !rest.contains('/'))
+        })
         .filter_map(|(path, text)| Some((*path, serde_json::from_str::<Value>(text).ok()?)))
         .collect();
     found.sort_by(|a, b| a.0.cmp(b.0));

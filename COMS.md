@@ -45,6 +45,18 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Makers' measured curves are in; then the queue below
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-12): keep 2.1 mm for the DSA175-8; downloads from respected HiFi community and industry sources are approved.
+
+**Done:** `catalog/drivers/responses/<id>.json` for 11 Dayton drivers (on-axis FRD, every second point) and `response_file` in their records; `catalog::all` reads a folder's own files only; clearer curve label in `seatlock-acoustics/src/response.rs`; tests `seatlock-sim/tests/responses.rs`; README 5.6 and 9.1.
+
+**How the files were fetched:** the cloud browser finds the "Graphs/FRD/ZMA Data File" link on each Parts Express product page; the linked built-in browser, on a parts-express.com tab, can `fetch` `/pedocs/...` zips from JavaScript and unzip them in the page (product pages themselves return a bot page). WebFetch and the workspace shell cannot reach these sites.
+
+**Next, in order:** (1) the off-axis files (15, 30, 45 degrees, same packages) for the listening window and the CTA-2034 curves; the impedance files to check each driver's parameters; (2) more independent data (post below); (3) the queue of the post two below.
+
 ### 2026-11-12 — Claude — Handoff: start here. Independent driver measurements; then the queue below
 
 - **To:** next lead session (any Claude model)
@@ -451,6 +463,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Makers' measured on-axis curves for 11 drivers done on `main` by Claude.
 - 2026-11-12: Independent driver measurements (rule, engine, first driver DSA175-8 with Voice Coil Test Bench data) done on `main` by Claude.
 - 2026-11-12: Two-way cabinets in the generator and the industry research done on `main` by Claude; any number of sources, the CTA-2034 score, and a boundary-element model queued with the owner's go-ahead.
 - 2026-11-12: The owner's four items (spec around generating, the cabinet generator, a curved outer shape, a wider score with air losses) done on `main` by Claude; a curve-following 3D grid was tried and not adopted.

@@ -32,7 +32,7 @@ pub fn blend_measured_curve(
         })
         .map(|(index, _)| index)
     else {
-        return format!("measured above {blend_hz:.0} Hz");
+        return measured_label(blend_hz);
     };
     let anchor_hz = freqs_hz[anchor];
     let anchor_db = measured_at(measured_db, anchor_hz);
@@ -48,7 +48,14 @@ pub fn blend_measured_curve(
             pressure[index] *= target / magnitude;
         }
     }
-    format!("measured above {blend_hz:.0} Hz")
+    measured_label(blend_hz)
+}
+
+fn measured_label(blend_hz: f64) -> String {
+    format!(
+        "measured above {blend_hz:.0} Hz: straight ahead, the level follows the maker's measured curve, \
+         which includes the maker's own test baffle; off to the sides and in the room the piston model is used"
+    )
 }
 
 fn measured_at(points: &[(f64, f64)], freq_hz: f64) -> f64 {

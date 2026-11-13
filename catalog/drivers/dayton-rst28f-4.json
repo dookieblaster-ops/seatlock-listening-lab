@@ -11,12 +11,12 @@
     "qes": 1.46,
     "qms": 2.52,
     "re_ohm": 3.0,
-    "le_h": 0.00003,
+    "le_h": 3e-05,
     "sd_m2": 0.00066,
     "pe_w": 80.0,
     "sens_db_2v83": 93.5
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-rst28f-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/275-141--dayton-audio-rst28f-4-specification-sheet.pdf",
     "title": "Dayton Audio RST28F-4 specification sheet",

@@ -26,7 +26,7 @@
     "bolt_count": 6,
     "depth_m": 0.051054
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-rs100-8.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-352--dayton-audio-rs100-8-spec-sheet.pdf",
     "title": "Dayton Audio RS100-8 specification sheet",

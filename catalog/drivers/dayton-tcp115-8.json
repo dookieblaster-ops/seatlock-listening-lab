@@ -27,7 +27,7 @@
     "bolt_count": 4,
     "depth_m": 0.058928
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-tcp115-8.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-416--dayton-audio-tcp115-8-specification-sheet.pdf",
     "title": "Dayton Audio TCP115-8 specification sheet",

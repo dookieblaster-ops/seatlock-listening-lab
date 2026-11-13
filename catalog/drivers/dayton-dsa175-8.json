@@ -46,7 +46,7 @@
       "note": "Usable cone travel is the Klippel figure at 10 % distortion (compliance limits it: XC 2.1 mm; Bl allows 4.6 mm). At 20 % distortion the review gives 4.1 mm. On axis it measured within 2.7 dB from 300 Hz to 4.3 kHz."
     }
   ],
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-dsa175-8.json",
   "source": {
     "url": "https://www.parts-express.com/Dayton-Audio-DSA175-8-6-1-2-Designer-Series-Aluminum-Cone-Woofer-295-528",
     "title": "Parts Express product page, Dayton Audio DSA175-8 specifications",

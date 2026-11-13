@@ -27,7 +27,7 @@
     "depth_m": 0.06858,
     "via": "search_extract"
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-dsa135-8.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-526--dayton-audio-DSA135-8-specifications.pdf",
     "title": "Dayton Audio DSA135-8 specification sheet",

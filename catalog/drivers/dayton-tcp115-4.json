@@ -26,7 +26,7 @@
     "bolt_count": 4,
     "depth_m": 0.058928
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-tcp115-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-415--dayton-audio-tcp115-4-spec-sheet.pdf",
     "title": "Dayton Audio TCP115-4 specification sheet",

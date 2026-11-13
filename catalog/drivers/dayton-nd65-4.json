@@ -26,7 +26,7 @@
     "depth_m": 0.048006,
     "via": "search_extract"
   },
-  "response_file": null,
+  "response_file": "catalog/drivers/responses/dayton-nd65-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/290-204-dayton-audio-nd65-4-specifications.pdf",
     "title": "Dayton Audio ND65-4 specification sheet",
