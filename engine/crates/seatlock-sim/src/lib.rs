@@ -383,6 +383,14 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
     };
+    // Loads of chambers other than the first driver's, by chamber index, and for each
+    // radiator which load it sees: 0 for the first driver's chamber, n + 1 for chamber n.
+    let mut other_nodes: Vec<(
+        usize,
+        Vec<Complex64>,
+        Option<Vec<seatlock_acoustics::VentedSample>>,
+    )> = Vec::new();
+    let mut radiator_nodes: Vec<Option<usize>> = Vec::new();
     let network = chambers::air_network(
         design,
         outer.as_ref(),
@@ -405,75 +413,104 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
         Some(Ok(net)) => {
-            let mut impedance = Vec::with_capacity(freqs.len());
-            let mut samples = Vec::with_capacity(freqs.len());
-            for freq in &freqs {
-                let solved = seatlock_acoustics::network::lumped_network(
-                    &net.volumes_m3,
-                    &net.ducts,
-                    net.driver,
-                    *freq,
-                );
-                let mut sample = seatlock_acoustics::VentedSample {
-                    z_ab: solved.z_ab,
-                    h_sum: Complex64::new(0.0, 0.0),
-                    h_each: [Complex64::new(0.0, 0.0); 4],
-                    port_count: solved.h_out.len().min(4),
-                };
-                for (index, h) in solved.h_out.iter().take(4).enumerate() {
-                    sample.h_each[index] = *h;
-                    sample.h_sum += *h;
-                }
-                impedance.push(sample.z_ab);
-                samples.push(sample);
-            }
-            fidelity.ignored.extend(net.notes.iter().cloned());
-            let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
-            let wave = if base == "waveguide" {
-                Some(chambers::waveguide_network(
-                    design,
-                    &names,
-                    &net.volumes_m3,
-                    net.driver,
-                ))
-            } else {
-                None
-            };
-            match wave {
-                Some(Ok(network)) => {
-                    for (bin, freq) in freqs.iter().enumerate() {
-                        let solved = if request.losses {
-                            seatlock_acoustics::solve_lossy(&network.root, *freq)
-                        } else {
-                            solve(&network.root, *freq)
-                        };
-                        let sample = &mut samples[bin];
-                        sample.z_ab = solved.z_in;
-                        sample.h_each = [Complex64::new(0.0, 0.0); 4];
-                        sample.h_sum = Complex64::new(0.0, 0.0);
-                        for (slot, h) in network.opening_order.iter().zip(&solved.openings) {
-                            if *slot < 4 {
-                                sample.h_each[*slot] = *h;
-                                sample.h_sum += *h;
-                            }
-                        }
-                        impedance[bin] = solved.z_in;
+            // The load each chamber a driver pushes into presents: the first driver's first,
+            // then any other chamber a driver pushes into (README 5.2). Chambers that are not
+            // joined by a duct do not affect each other, so each is exact on its own.
+            let solve_from = |node: usize, fidelity: &mut Fidelity, notes: bool| {
+                let mut impedance = Vec::with_capacity(freqs.len());
+                let mut samples = Vec::with_capacity(freqs.len());
+                for freq in &freqs {
+                    let solved = seatlock_acoustics::network::lumped_network(
+                        &net.volumes_m3,
+                        &net.ducts,
+                        node,
+                        *freq,
+                    );
+                    let mut sample = seatlock_acoustics::VentedSample {
+                        z_ab: solved.z_ab,
+                        h_sum: Complex64::new(0.0, 0.0),
+                        h_each: [Complex64::new(0.0, 0.0); 4],
+                        port_count: solved.h_out.len().min(4),
+                    };
+                    for (index, h) in solved.h_out.iter().take(4).enumerate() {
+                        sample.h_each[index] = *h;
+                        sample.h_sum += *h;
                     }
-                    fidelity.ignored.extend(network.notes);
+                    impedance.push(sample.z_ab);
+                    samples.push(sample);
                 }
-                Some(Err(err)) => {
-                    fidelity.ignored.push(format!(
-                        "The detailed model cannot solve this cabinet ({err}), so these curves \
-                         come from the quick model. Several chambers: each is one compliance \
-                         and each duct one air mass."
-                    ));
+                let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
+                let wave = if base == "waveguide" {
+                    Some(chambers::waveguide_network(
+                        design,
+                        &names,
+                        &net.volumes_m3,
+                        node,
+                    ))
+                } else {
+                    None
+                };
+                match wave {
+                    Some(Ok(network)) => {
+                        for (bin, freq) in freqs.iter().enumerate() {
+                            let solved = if request.losses {
+                                seatlock_acoustics::solve_lossy(&network.root, *freq)
+                            } else {
+                                solve(&network.root, *freq)
+                            };
+                            let sample = &mut samples[bin];
+                            sample.z_ab = solved.z_in;
+                            sample.h_each = [Complex64::new(0.0, 0.0); 4];
+                            sample.h_sum = Complex64::new(0.0, 0.0);
+                            for (slot, h) in network.opening_order.iter().zip(&solved.openings) {
+                                if *slot < 4 {
+                                    sample.h_each[*slot] = *h;
+                                    sample.h_sum += *h;
+                                }
+                            }
+                            impedance[bin] = solved.z_in;
+                        }
+                        if notes {
+                            fidelity.ignored.extend(network.notes);
+                        }
+                    }
+                    Some(Err(err)) => {
+                        fidelity.ignored.push(format!(
+                            "The detailed model cannot solve this cabinet ({err}), so these \
+                             curves come from the quick model. Several chambers: each is one \
+                             compliance and each duct one air mass."
+                        ));
+                    }
+                    None if notes => fidelity.ignored.push(
+                        "Several chambers: each is one compliance and each duct one air mass, \
+                         so standing waves and pipe resonances are not modeled."
+                            .into(),
+                    ),
+                    None => {}
                 }
-                None => fidelity.ignored.push(
-                    "Several chambers: each is one compliance and each duct one air mass, so \
-                     standing waves and pipe resonances are not modeled."
-                        .into(),
-                ),
+                (impedance, samples)
+            };
+            fidelity.ignored.extend(net.notes.iter().cloned());
+            let (impedance, samples) = solve_from(net.driver, &mut fidelity, true);
+            for node in net.driver_nodes.iter().flatten() {
+                if *node != net.driver && !other_nodes.iter().any(|(n, _, _)| n == node) {
+                    let (z, s) = solve_from(*node, &mut fidelity, false);
+                    other_nodes.push((*node, z, if net.ports.is_empty() { None } else { Some(s) }));
+                }
             }
+            if !other_nodes.is_empty() {
+                fidelity.ignored.push(
+                    "Drivers push into different chambers; each sees the load of its own \
+                     chamber, and chambers joined by a duct are each solved as if the other's \
+                     driver were still."
+                        .into(),
+                );
+            }
+            radiator_nodes = net
+                .driver_nodes
+                .iter()
+                .map(|node| node.map(|n| if n == net.driver { 0 } else { n + 1 }))
+                .collect();
             let total = net.volumes_m3.iter().sum::<f64>();
             let vented = if net.ports.is_empty() {
                 None
@@ -774,6 +811,53 @@ pub fn simulate_with_progress(
         /// True for a radiator that gave its own grid of surface sources.
         is_surface: bool,
     }
+    // Drivers that push into the same chamber share its air: driven alike, each sees the
+    // chamber's load times their number (README 5.2).
+    let mut sharing_counts: std::collections::HashMap<usize, usize> = Default::default();
+    let mut sharing_chains: std::collections::HashMap<usize, Vec<String>> = Default::default();
+    for (index, part) in design.speaker.radiators.iter().enumerate() {
+        let loads = registry
+            .create_radiator(&part.kind, &part.fields)
+            .map(|r| r.loads_box())
+            .unwrap_or(false)
+            && driver_loads_box(part);
+        if !loads {
+            continue;
+        }
+        let node = radiator_nodes.get(index).copied().flatten().unwrap_or(0);
+        *sharing_counts.entry(node).or_insert(0) += 1;
+        let chain = design
+            .dsp
+            .per_radiator
+            .get(index)
+            .map(|c| {
+                serde_json::to_string(&(&c.blocks, c.gain_db, c.delay_s, c.invert))
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+        sharing_chains.entry(node).or_default().push(format!(
+            "{}|{chain}",
+            part.fields
+                .get("driver_id")
+                .map(|v| v.to_string())
+                .unwrap_or_default()
+        ));
+    }
+    if sharing_counts.values().any(|count| *count > 1) {
+        let alike = sharing_chains
+            .values()
+            .all(|list| list.iter().all(|item| item == &list[0]));
+        fidelity.ignored.push(if alike {
+            "Drivers that share a chamber are the same model with the same processing, so each \
+             sees the chamber's load times their number."
+                .to_string()
+        } else {
+            "Drivers that share a chamber are taken to move alike, each seeing the chamber's \
+             load times their number; they differ in model or processing, so this is an \
+             approximation where their outputs differ."
+                .to_string()
+        });
+    }
     let mut prepared: Vec<Prepared> = Vec::new();
     for (index, part) in design.speaker.radiators.iter().enumerate() {
         let radiator = match registry.create_radiator(&part.kind, &part.fields) {
@@ -788,7 +872,22 @@ pub fn simulate_with_progress(
             }
         };
         let loads_box = radiator.loads_box() && driver_loads_box(part);
-        let mut eval = radiator.evaluate(&freqs, if loads_box { &z_ab } else { &silent });
+        // The load of the chamber this driver pushes into, shared with the other drivers that
+        // push into it (README 5.2).
+        let node = radiator_nodes.get(index).copied().flatten().unwrap_or(0);
+        let (node_z, node_vented) = match other_nodes.iter().find(|(n, _, _)| n + 1 == node) {
+            Some((_, z, v)) => (z, v.as_ref()),
+            None => (&z_ab, vented.as_ref()),
+        };
+        let sharing = sharing_counts.get(&node).copied().unwrap_or(1).max(1);
+        let shared_z: Vec<Complex64>;
+        let node_z = if sharing > 1 && loads_box {
+            shared_z = node_z.iter().map(|z| z * sharing as f64).collect();
+            &shared_z
+        } else {
+            node_z
+        };
+        let mut eval = radiator.evaluate(&freqs, if loads_box { node_z } else { &silent });
         issues.append(&mut eval.warnings);
         let chain = design.dsp.per_radiator.get(index);
         let mut blocks_h = whole.clone();
@@ -826,7 +925,7 @@ pub fn simulate_with_progress(
         let mut sources = vec![eval.volume_velocity.clone()];
         let mut port_speed_1v: Vec<f64> = vec![0.0; freqs.len()];
         if loads_box {
-            if let Some(samples) = &vented {
+            if let Some(samples) = node_vented {
                 for (port_index, port) in ports.iter().enumerate() {
                     let mut velocity = Vec::with_capacity(freqs.len());
                     for (bin, sample) in samples.iter().enumerate() {

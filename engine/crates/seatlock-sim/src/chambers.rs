@@ -233,6 +233,9 @@ pub struct AirNetwork {
     pub ports: Vec<PortSpec>,
     /// The chamber the first driver that loads the cabinet pushes into.
     pub driver: usize,
+    /// For each radiator in design order, the chamber it pushes into, when it loads the
+    /// cabinet.
+    pub driver_nodes: Vec<Option<usize>>,
     pub notes: Vec<String>,
 }
 
@@ -296,12 +299,14 @@ fn build(
     }
     let index_of = |id: &str| chambers.iter().position(|chamber| chamber.id == id);
     let mut volumes: Vec<f64> = chambers.iter().map(Chamber::volume_m3).collect();
-    let mut notes = Vec::new();
+    let notes = Vec::new();
 
     // Drivers: each takes its own air from the chamber behind it, and each that loads the
     // cabinet must name that chamber.
     let mut driver = None;
+    let mut driver_nodes = Vec::new();
     for part in &design.speaker.radiators {
+        driver_nodes.push(None);
         let mount_id = part
             .fields
             .get("mount")
@@ -327,13 +332,11 @@ fn build(
             "Mount {} opens into {}, which is not one of the chambers.",
             mount.id, mount.rear_into
         ))?;
-        match driver {
-            None => driver = Some(node),
-            Some(first) if first != node => notes.push(
-                "Drivers in different chambers are each solved as if the other were still."
-                    .to_string(),
-            ),
-            _ => {}
+        if let Some(slot) = driver_nodes.last_mut() {
+            *slot = Some(node);
+        }
+        if driver.is_none() {
+            driver = Some(node);
         }
     }
     let driver = driver.ok_or("No driver opens into a chamber.")?;
@@ -419,6 +422,7 @@ fn build(
         ducts,
         ports,
         driver,
+        driver_nodes,
         notes,
     })
 }

@@ -49,17 +49,53 @@ fn every_family_proposes_cabinets_that_can_be_built_and_scored() {
         assert_eq!(top.design.speaker.room.is_some(), family.face != "front");
         // As many sound sources as the family says, each with its own channel and, for a
         // two-way, a crossover; the tweeter is a real part on the front.
-        assert_eq!(top.design.speaker.radiators.len(), family.ways as usize);
-        assert_eq!(top.design.dsp.per_radiator.len(), family.ways as usize);
-        if family.ways == 2 {
-            let tweeter = top.design.speaker.radiators[1].fields["driver_id"]
+        let sources = (family.ways + family.woofers - 1) as usize;
+        assert_eq!(
+            top.design.speaker.radiators.len(),
+            sources,
+            "{}",
+            family.label
+        );
+        assert_eq!(top.design.dsp.per_radiator.len(), sources);
+        if family.ways >= 2 {
+            let tweeter = top.design.speaker.radiators[sources - 1].fields["driver_id"]
                 .as_str()
                 .unwrap();
             assert!(!tweeter.starts_with("test-"));
-            assert_eq!(top.design.speaker.enclosure.mounts[1].surface, "front");
+            assert!(top.design.speaker.enclosure.mounts[1..]
+                .iter()
+                .all(|mount| mount.surface == "front"));
             for chain in &top.design.dsp.per_radiator {
                 assert!(chain.blocks.iter().any(|block| block.kind == "crossover"));
             }
+        }
+        if family.ways == 3 {
+            // The midrange sits in its own chamber and gets a band: a high-pass and a low-pass.
+            assert_eq!(top.design.speaker.enclosure.chambers.len(), 2);
+            let mid = &top.design.dsp.per_radiator[1];
+            // (Correction may add its own filters after them.)
+            assert_eq!(
+                mid.blocks.iter().filter(|b| b.kind == "crossover").count(),
+                2
+            );
+            let mid_mount = top.design.speaker.radiators[1].fields["mount"]
+                .as_str()
+                .unwrap();
+            let mount = top
+                .design
+                .speaker
+                .enclosure
+                .mounts
+                .iter()
+                .find(|m| m.id == mid_mount)
+                .unwrap();
+            assert_eq!(mount.rear_into, "mid");
+        }
+        if family.woofers == 2 {
+            assert_eq!(
+                top.design.speaker.radiators[0].fields["driver_id"],
+                top.design.speaker.radiators[1].fields["driver_id"]
+            );
         }
         // Best first.
         for pair in result.best.windows(2) {

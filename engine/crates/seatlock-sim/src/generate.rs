@@ -45,9 +45,14 @@ pub struct Family {
     pub layout: String,
     /// The face the driver sits on.
     pub face: String,
-    /// Sound sources: 1 is one driver, 2 adds a tweeter on the front with a crossover.
+    /// Frequency bands: 1 is one driver, 2 adds a tweeter on the front with a crossover, 3
+    /// adds a midrange between them in its own sealed chamber.
     #[serde(default = "one")]
     pub ways: u32,
+    /// Bass drivers: 2 puts a second one above the tweeter, in the same chamber and on the
+    /// same channel settings (a woofer, tweeter, woofer column).
+    #[serde(default = "one")]
+    pub woofers: u32,
 }
 
 fn one() -> u32 {
@@ -88,15 +93,20 @@ const OUTERS: [(&str, &str); 6] = [
 /// The families the generator searches.
 pub fn families() -> Vec<Family> {
     let mut out: Vec<Family> = Vec::new();
+    let mut push_full =
+        |label: String, outer: &str, layout: &str, face: &str, ways: u32, woofers: u32| {
+            out.push(Family {
+                index: out.len(),
+                label,
+                outer: outer.into(),
+                layout: layout.into(),
+                face: face.into(),
+                ways,
+                woofers,
+            });
+        };
     let mut push_ways = |label: String, outer: &str, layout: &str, face: &str, ways: u32| {
-        out.push(Family {
-            index: out.len(),
-            label,
-            outer: outer.into(),
-            layout: layout.into(),
-            face: face.into(),
-            ways,
-        });
+        push_full(label, outer, layout, face, ways, 1)
     };
     let mut push = |label: String, outer: &str, layout: &str, face: &str| {
         push_ways(label, outer, layout, face, 1)
@@ -147,6 +157,17 @@ pub fn families() -> Vec<Family> {
         ),
     ] {
         push_ways(label.into(), outer, layout, face, 2);
+    }
+    // More sound sources (README 2.6, "any configuration"): two woofers around a tweeter,
+    // and three-ways with a midrange in its own sealed chamber. Added last, so earlier
+    // families keep their numbers.
+    for (label, layout, ways, woofers) in [
+        ("Box, sealed, two woofers around a tweeter", "sealed", 2, 2),
+        ("Box, ported, two woofers around a tweeter", "vented", 2, 2),
+        ("Box, sealed, three-way", "sealed", 3, 1),
+        ("Box, ported, three-way", "vented", 3, 1),
+    ] {
+        push_full(label.into(), "box", layout, "front", ways, woofers);
     }
     out
 }
@@ -203,8 +224,11 @@ fn parts_of(kinds: &[&str]) -> Vec<Part> {
 
 const WALL_M: f64 = 0.008;
 /// Search variables per candidate: driver, volume, two proportions, driver place, tuning or
-/// line size, shape, line taper, line exit, then tweeter, crossover frequency, tweeter level.
-const VARIABLES: usize = 12;
+/// line size, shape, line taper, line exit, then tweeter, crossover frequency, tweeter level,
+/// then midrange, the lower crossover frequency, and the midrange's level.
+const VARIABLES: usize = 15;
+/// The search variables that pick a part from a list: moved by jumps, not small steps.
+const CHOICES: [usize; 3] = [0, 9, 12];
 /// The room a candidate is judged in when its driver does not face the listener and the
 /// starting design has no room of its own: the example of README section 5.10.
 fn default_room() -> Value {
@@ -265,6 +289,7 @@ fn build(
     family: &Family,
     parts: &[Part],
     tweeters: &[Part],
+    mids: &[Part],
     x: &[f64; VARIABLES],
     registry: &Registry,
 ) -> Result<Built, String> {
@@ -285,9 +310,26 @@ fn build(
                 .ok_or("the catalog has no sourced budget tweeter with mounting sizes.")?,
         ),
     };
-    // Room on the front for the tweeter above (or apart from) the bass driver.
+    let mid = match family.ways {
+        3 => Some(
+            mids.get(((x[12] * mids.len() as f64) as usize).min(mids.len().max(1) - 1))
+                .ok_or("the catalog has no sourced budget midrange with mounting sizes.")?,
+        ),
+        _ => None,
+    };
+    if mid.is_some_and(|m| m.id == part.id) {
+        return Err("the midrange would be the woofer itself.".into());
+    }
+    // Room on the front for the tweeter above (or apart from) the bass driver, a midrange
+    // between them, and a second woofer above the tweeter.
     let gap = 0.012;
     let tweeter_room = tweeter.map_or(0.0, |t| t.outer_m + gap);
+    let mid_room = mid.map_or(0.0, |m| m.outer_m + gap);
+    let second_room = if family.woofers > 1 {
+        part.outer_m + gap
+    } else {
+        0.0
+    };
 
     // Inner air w x h x d of the asked volume and proportions, then the true shape scaled
     // until its own air matches.
@@ -317,9 +359,21 @@ fn build(
             return Err("the cabinet is too shallow for the tweeter.".into());
         }
     }
+    if let Some(m) = mid {
+        if ow < m.outer_m + 2.0 * WALL_M + 0.012 {
+            return Err("the cabinet is narrower than the midrange.".into());
+        }
+        if od < m.depth_m + 2.0 * WALL_M + 0.02 {
+            return Err("the cabinet is too shallow for the midrange.".into());
+        }
+    }
     let front = family.face == "front";
     // Both on the front: the tweeter sits right above the bass driver.
-    let stacked = if front { tweeter_room } else { 0.0 };
+    let stacked = if front {
+        tweeter_room + mid_room + second_room
+    } else {
+        0.0
+    };
     let (face_w, face_h) = match family.face.as_str() {
         "top" => (ow, od),
         _ => (ow, oh),
@@ -363,11 +417,32 @@ fn build(
 
     let mut chambers: Vec<Value> = Vec::new();
     let mut ducts: Vec<Value> = Vec::new();
+    // A three-way: a partition just above the woofer; above it the midrange's own sealed
+    // chamber, which the tweeter (sealed at the back) also sits in front of.
+    let mut bass_volume = volume;
+    let mut mid_z = 0.0;
+    if let Some(m) = mid {
+        let partition_low = v + part.outer_m / 2.0 + 0.002;
+        let split = partition_low + WALL_M;
+        mid_z = split + 0.002 + m.outer_m / 2.0;
+        let across = (ow - 2.0 * WALL_M) * (od - 2.0 * WALL_M);
+        bass_volume = across * (partition_low - WALL_M);
+        let mid_volume = across * (oh - WALL_M - split);
+        if bass_volume < 0.002 || mid_volume < 0.0003 {
+            return Err("the chambers for the woofer and the midrange are too small.".into());
+        }
+        chambers.push(json!({ "id": "main", "min_m": [WALL_M, WALL_M, WALL_M],
+            "max_m": [ow - WALL_M, od - WALL_M, partition_low], "fill": null }));
+        chambers.push(json!({ "id": "mid", "min_m": [WALL_M, WALL_M, split],
+            "max_m": [ow - WALL_M, od - WALL_M, oh - WALL_M], "fill": null }));
+        named.push(("woofer air L".into(), bass_volume * 1000.0));
+        named.push(("midrange air L".into(), mid_volume * 1000.0));
+    }
     match family.layout.as_str() {
         "vented" => {
             let tuning = part.fs_hz * lerp(0.65, 1.35, x[5]);
             let diameter = (0.35 * cone).clamp(0.025, 0.08);
-            let length = port_length_m(diameter, tuning, volume);
+            let length = port_length_m(diameter, tuning, bass_volume);
             // The port leaves the front, or the back when the front leans.
             let back = family.outer == "sloped" || egg;
             if egg && fields["back_diameter_m"].as_f64().unwrap_or(0.0) < diameter + 0.02 {
@@ -464,36 +539,84 @@ fn build(
     };
     let mut chains = vec![chain(json!([]), 0.0)];
     if let Some(t) = tweeter {
-        let z = if front {
-            at[1] + part.outer_m / 2.0 + gap + t.outer_m / 2.0
-        } else {
-            // The bass driver is on another face: the tweeter goes high on the front.
-            lerp(oh / 2.0, oh - t.outer_m / 2.0 - WALL_M - 0.006, along)
-                .max(t.outer_m / 2.0 + WALL_M + 0.006)
+        let split = |band: &str, f: f64| {
+            json!({ "kind": "crossover", "family": "linkwitz-riley", "order": 4, "f_hz": f,
+                    "band": band })
         };
-        mounts.push(
-            json!({ "id": "m2", "surface": "front", "at_m": [ow / 2.0, z],
-            "rear_into": "main", "recess_m": 0.0 }),
-        );
-        radiators.push(json!({ "kind": "cone", "driver_id": t.id, "mount": "m2" }));
-        // Crossover between two octaves above the tweeter's resonance at the least (it must
-        // not be asked for bass) and 4.5 kHz.
-        // and, where an independent test found the woofer's cone break up, an octave below
-        // that.
-        let lowest = (2.0 * t.fs_hz).max(1500.0);
-        let highest = part.breakup_hz.map_or(4500.0, |f| (f / 2.0).min(4500.0));
+        // Where the bass driver hands over: to the tweeter, or in a three-way to the
+        // midrange. The handover sits two octaves above the next driver's resonance at the
+        // least (it must not be asked for bass), and, where an independent test found the
+        // lower driver's cone break up, an octave below that.
+        let (low_f, mid_band) = match mid {
+            Some(m) => {
+                let lowest = (2.0 * m.fs_hz).max(250.0);
+                let highest = part.breakup_hz.map_or(900.0, |f| (f / 2.0).min(900.0));
+                if highest < lowest {
+                    return Err("the midrange cannot reach down to where the woofer stops.".into());
+                }
+                let f1 = lowest * (highest / lowest).powf(x[13]);
+                (f1, Some((m, f1)))
+            }
+            None => (0.0, None),
+        };
+        let lowest = (2.0 * t.fs_hz)
+            .max(1500.0)
+            .max(mid_band.map_or(0.0, |(_, f1)| 2.5 * f1));
+        let below = mid_band.map_or(part, |(m, _)| m);
+        let highest = below.breakup_hz.map_or(4500.0, |f| (f / 2.0).min(4500.0));
         if highest < lowest {
             return Err(
-                "the tweeter cannot reach down to an octave below the woofer's break-up.".into(),
+                "the tweeter cannot reach down to an octave below the lower driver's break-up."
+                    .into(),
             );
         }
         let f = lowest * (highest / lowest).powf(x[10]);
         let level = lerp(-12.0, 0.0, x[11]);
-        let split = |band: &str| {
-            json!([{ "kind": "crossover", "family": "linkwitz-riley", "order": 4, "f_hz": f,
-                     "band": band }])
-        };
-        chains = vec![chain(split("low"), 0.0), chain(split("high"), level)];
+        let woofer_top = if mid.is_some() { low_f } else { f };
+        chains = vec![chain(json!([split("low", woofer_top)]), 0.0)];
+        let tweeter_z;
+        if let Some((m, f1)) = mid_band {
+            mounts.push(
+                json!({ "id": "m3", "surface": "front", "at_m": [ow / 2.0, mid_z],
+                "rear_into": "mid", "recess_m": 0.0 }),
+            );
+            radiators.push(json!({ "kind": "cone", "driver_id": m.id, "mount": "m3" }));
+            let mid_level = lerp(-12.0, 0.0, x[14]);
+            chains.push(chain(
+                json!([split("high", f1), split("low", f)]),
+                mid_level,
+            ));
+            tweeter_z = mid_z + m.outer_m / 2.0 + gap + t.outer_m / 2.0;
+            named.push(("lower crossover Hz".into(), f1));
+            named.push(("midrange level dB".into(), mid_level));
+            summary.push_str(&format!(", {} from {f1:.0} Hz", m.name));
+        } else if front {
+            tweeter_z = at[1] + part.outer_m / 2.0 + gap + t.outer_m / 2.0;
+        } else {
+            // The bass driver is on another face: the tweeter goes high on the front.
+            tweeter_z = lerp(oh / 2.0, oh - t.outer_m / 2.0 - WALL_M - 0.006, along)
+                .max(t.outer_m / 2.0 + WALL_M + 0.006);
+        }
+        if family.woofers > 1 {
+            // The second woofer above the tweeter, in the same chamber, on the same settings.
+            let z2 = tweeter_z + t.outer_m / 2.0 + gap + part.outer_m / 2.0;
+            mounts.push(
+                json!({ "id": "m4", "surface": "front", "at_m": [ow / 2.0, z2],
+                "rear_into": "main", "recess_m": 0.0 }),
+            );
+            radiators.insert(
+                1,
+                json!({ "kind": "cone", "driver_id": part.id, "mount": "m4" }),
+            );
+            chains.insert(1, chain(json!([split("low", woofer_top)]), 0.0));
+            summary.push_str(", two woofers");
+        }
+        mounts.push(
+            json!({ "id": "m2", "surface": "front", "at_m": [ow / 2.0, tweeter_z],
+            "rear_into": if mid.is_some() { "mid" } else { "main" }, "recess_m": 0.0 }),
+        );
+        radiators.push(json!({ "kind": "cone", "driver_id": t.id, "mount": "m2" }));
+        chains.push(chain(json!([split("high", f)]), level));
         named.push(("crossover Hz".into(), f));
         named.push(("tweeter level dB".into(), level));
         summary.push_str(&format!(", {} above {f:.0} Hz", t.name));
@@ -563,7 +686,15 @@ pub fn generate_family(
         .get(request.family)
         .cloned()
         .ok_or_else(|| format!("there is no family {}.", request.family))?;
-    let parts = parts();
+    let parts = if family.ways >= 3 {
+        parts_of(&["woofer"])
+    } else {
+        parts()
+    };
+    let mids = parts_of(&["midrange", "fullrange"]);
+    if family.ways >= 3 && mids.is_empty() {
+        return Err("the catalog has no sourced budget midrange with mounting sizes.".into());
+    }
     if parts.is_empty() {
         return Err("the catalog has no sourced budget driver with mounting sizes.".into());
     }
@@ -588,6 +719,20 @@ pub fn generate_family(
              frequency and the tweeter's level are searched.",
             names(&tweeters)
         ));
+    }
+    if family.ways >= 3 {
+        notes.push(format!(
+            "Midranges tried: {}. Each sits in its own sealed chamber above the woofer's and \
+             gets a band between two crossovers.",
+            names(&mids)
+        ));
+    }
+    if family.woofers > 1 {
+        notes.push(
+            "The two woofers share one chamber and the same processing, one above and one \
+             below the tweeter."
+                .into(),
+        );
     }
     if family.face != "front" {
         notes.push(
@@ -623,7 +768,7 @@ pub fn generate_family(
                 (scored - explore) as f64 / (budget - explore) as f64,
             );
             std::array::from_fn(|index| {
-                if index == 0 || index == 9 {
+                if CHOICES.contains(&index) {
                     if random.next() < 0.2 {
                         random.next()
                     } else {
@@ -634,7 +779,7 @@ pub fn generate_family(
                 }
             })
         };
-        let built = match build(base, &family, &parts, &tweeters, &x, registry) {
+        let built = match build(base, &family, &parts, &tweeters, &mids, &x, registry) {
             Ok(built) => built,
             Err(reason) => {
                 thrown_out += 1;

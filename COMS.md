@@ -45,6 +45,16 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Each driver its own chamber's load; two woofers and three-ways in the generator
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-12): "continue on the project" (declined my suggested reordering; the standing queue holds).
+
+**Done:** `AirNetwork.driver_nodes`; in `simulate` the network is solved from each chamber a driver pushes into (`other_nodes`, `radiator_nodes`), and drivers sharing a chamber get `Z_ab` times their count (`sharing_counts`), with label lines. Generator: `Family.woofers`, `VARIABLES = 15` (x[12] midrange, x[13] lower crossover, x[14] midrange level), `CHOICES`, four new families (indices 24 to 27). Tests `seatlock-sim/tests/chamber_loads.rs`; `tests/generate.rs` counts sources as `ways + woofers - 1`.
+
+**Next, in order:** (1) a woofer on the back with another in front, and two woofers in a coupled solve when their settings differ; (2) the CTA-2034 curves and a preference rating (queue below); (3) the off-axis and impedance files from the Dayton packages (post below); (4) larger budget woofers (6.5 to 8 in.) with mounting sizes, since 95 dB to 50 Hz needs cone area; (5) the boundary-element model.
+
 ### 2026-11-12 — Claude — Handoff: start here. Makers' measured curves are in; then the queue below
 
 - **To:** next lead session (any Claude model)
@@ -463,6 +473,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Per-chamber driver loads, two woofers around a tweeter, and three-ways in the generator done on `main` by Claude.
 - 2026-11-12: Makers' measured on-axis curves for 11 drivers done on `main` by Claude.
 - 2026-11-12: Independent driver measurements (rule, engine, first driver DSA175-8 with Voice Coil Test Bench data) done on `main` by Claude.
 - 2026-11-12: Two-way cabinets in the generator and the industry research done on `main` by Claude; any number of sources, the CTA-2034 score, and a boundary-element model queued with the owner's go-ahead.
