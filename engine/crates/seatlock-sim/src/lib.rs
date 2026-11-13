@@ -405,6 +405,13 @@ pub fn simulate_with_progress(
         Option<Vec<seatlock_acoustics::VentedSample>>,
     )> = Vec::new();
     let mut radiator_nodes: Vec<Option<usize>> = Vec::new();
+    // Walls of a cabinet divided into chambers (README 5.11): each chamber's walls are a
+    // shunt in the network, and every chamber's pressure per unit volume velocity pushed in
+    // is kept per load (the same keys as `radiator_nodes`), so the walls can be sources.
+    let mut chamber_cabinet: Option<Result<walls::CabinetWalls, String>> = None;
+    let mut driver_chamber = 0usize;
+    let mut node_pressures: std::collections::HashMap<usize, Vec<Vec<Complex64>>> =
+        Default::default();
     let network = chambers::air_network(
         design,
         outer.as_ref(),
@@ -427,19 +434,40 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
         Some(Ok(net)) => {
+            let wall_y: Vec<Vec<Complex64>> = if request.walls {
+                let modeled = walls::chamber_walls(design, outer.as_ref(), &net.chambers);
+                let y = match &modeled {
+                    Ok(cabinet) => freqs
+                        .iter()
+                        .map(|f| {
+                            (0..net.chambers.len())
+                                .map(|c| cabinet.chamber_admittance(c, *f))
+                                .collect()
+                        })
+                        .collect(),
+                    Err(_) => vec![Vec::new(); freqs.len()],
+                };
+                chamber_cabinet = Some(modeled);
+                y
+            } else {
+                vec![Vec::new(); freqs.len()]
+            };
             // The load each chamber a driver pushes into presents: the first driver's first,
             // then any other chamber a driver pushes into (README 5.2). Chambers that are not
             // joined by a duct do not affect each other, so each is exact on its own.
             let solve_from = |node: usize, fidelity: &mut Fidelity, notes: bool| {
                 let mut impedance = Vec::with_capacity(freqs.len());
                 let mut samples = Vec::with_capacity(freqs.len());
-                for freq in &freqs {
-                    let solved = seatlock_acoustics::network::lumped_network(
+                let mut pressures = Vec::with_capacity(freqs.len());
+                for (bin, freq) in freqs.iter().enumerate() {
+                    let solved = seatlock_acoustics::network::lumped_network_with_walls(
                         &net.volumes_m3,
                         &net.ducts,
                         node,
                         *freq,
+                        &wall_y[bin],
                     );
+                    pressures.push(solved.pressures.clone());
                     let mut sample = seatlock_acoustics::VentedSample {
                         z_ab: solved.z_ab,
                         h_sum: Complex64::new(0.0, 0.0),
@@ -467,11 +495,17 @@ pub fn simulate_with_progress(
                 match wave {
                     Some(Ok(network)) => {
                         for (bin, freq) in freqs.iter().enumerate() {
-                            let solved = if request.losses {
-                                seatlock_acoustics::solve_lossy(&network.root, *freq)
-                            } else {
-                                solve(&network.root, *freq)
-                            };
+                            let solved = seatlock_acoustics::solve_with_walls(
+                                &network.root,
+                                *freq,
+                                request.losses,
+                                &wall_y[bin],
+                            );
+                            for (slot, p) in &solved.pressures {
+                                if let Some(cell) = pressures[bin].get_mut(*slot) {
+                                    *cell = *p;
+                                }
+                            }
                             let sample = &mut samples[bin];
                             sample.z_ab = solved.z_in;
                             sample.h_each = [Complex64::new(0.0, 0.0); 4];
@@ -502,13 +536,16 @@ pub fn simulate_with_progress(
                     ),
                     None => {}
                 }
-                (impedance, samples)
+                (impedance, samples, pressures)
             };
             fidelity.ignored.extend(net.notes.iter().cloned());
-            let (impedance, samples) = solve_from(net.driver, &mut fidelity, true);
+            let (impedance, samples, pressures) = solve_from(net.driver, &mut fidelity, true);
+            node_pressures.insert(0, pressures);
+            driver_chamber = net.driver;
             for node in net.driver_nodes.iter().flatten() {
                 if *node != net.driver && !other_nodes.iter().any(|(n, _, _)| n == node) {
-                    let (z, s) = solve_from(*node, &mut fidelity, false);
+                    let (z, s, p) = solve_from(*node, &mut fidelity, false);
+                    node_pressures.insert(node + 1, p);
                     other_nodes.push((*node, z, if net.ports.is_empty() { None } else { Some(s) }));
                 }
             }
@@ -626,6 +663,8 @@ pub fn simulate_with_progress(
     };
     let (mut z_ab, mut vented) = (z_ab, vented);
     let mut fdtd_report = None;
+    // Frequencies whose `Z_ab` the full 3D model replaced (its grid's walls are rigid).
+    let mut replaced_3d = vec![false; freqs.len()];
     if full_3d {
         match full_3d_enclosure(
             design,
@@ -643,6 +682,7 @@ pub fn simulate_with_progress(
                 for (bin, z) in run.z.iter().enumerate() {
                     if let Some(z) = z {
                         z_ab[bin] = *z;
+                        replaced_3d[bin] = true;
                     }
                 }
                 if let Some(samples) = vented.as_mut() {
@@ -744,6 +784,7 @@ pub fn simulate_with_progress(
     // `Z_ab` and every port's `H_k` alike.
     let mut wall_admittances: Vec<Vec<Complex64>> = Vec::new();
     let mut wall_patches: Vec<SourcePatch> = Vec::new();
+    let mut wall_chambers: Vec<usize> = Vec::new();
     let wall_build = design
         .build
         .extra
@@ -752,16 +793,49 @@ pub fn simulate_with_progress(
         .and_then(Value::as_str)
         .filter(|kind| *kind != "solid");
     if request.walls {
-        let modeled = if !other_nodes.is_empty() || !design.speaker.enclosure.chambers.is_empty() {
-            Err(
-                "the inside is divided into chambers, and the spans of walls between solid \
-                 plastic and partitions are not worked out yet"
-                    .to_string(),
-            )
-        } else {
-            walls::cabinet_walls(design, outer.as_ref())
+        let divided = chamber_cabinet.is_some();
+        let modeled = match chamber_cabinet.take() {
+            Some(result) => result,
+            None => walls::cabinet_walls(design, outer.as_ref()),
         };
         match modeled {
+            Ok(cabinet) if divided => {
+                // Already a shunt on every chamber in the network; only the full 3D model's
+                // `Z_ab`, from rigid walls, takes its own chamber's walls here.
+                for (bin, freq) in freqs.iter().enumerate() {
+                    if replaced_3d[bin] {
+                        let scale = Complex64::new(1.0, 0.0)
+                            / (Complex64::new(1.0, 0.0)
+                                + z_ab[bin] * cabinet.chamber_admittance(driver_chamber, *freq));
+                        z_ab[bin] *= scale;
+                        if let Some(sample) = vented.as_mut().and_then(|s| s.get_mut(bin)) {
+                            sample.z_ab = z_ab[bin];
+                            sample.h_sum *= scale;
+                            for h in sample.h_each.iter_mut() {
+                                *h *= scale;
+                            }
+                        }
+                        if let Some(cell) = node_pressures
+                            .get_mut(&0)
+                            .and_then(|p| p.get_mut(bin))
+                            .and_then(|p| p.get_mut(driver_chamber))
+                        {
+                            *cell = z_ab[bin];
+                        }
+                    }
+                    wall_admittances.push(cabinet.element_admittances(*freq));
+                }
+                if replaced_3d.iter().any(|r| *r) {
+                    fidelity.ignored.push(
+                        "Full 3D: the driver's chamber's walls are added to its result; the \
+                         other chambers' pressures on their walls come from the detailed model."
+                            .into(),
+                    );
+                }
+                wall_patches = cabinet.patches();
+                wall_chambers = cabinet.element_chambers();
+                fidelity.ignored.extend(cabinet.notes.iter().cloned());
+            }
             Ok(cabinet) => {
                 for (bin, freq) in freqs.iter().enumerate() {
                     let scale = Complex64::new(1.0, 0.0)
@@ -777,6 +851,7 @@ pub fn simulate_with_progress(
                     wall_admittances.push(cabinet.element_admittances(*freq));
                 }
                 wall_patches = cabinet.patches();
+                wall_chambers = cabinet.element_chambers();
                 fidelity.ignored.extend(cabinet.notes.iter().cloned());
             }
             Err(why) => {
@@ -1110,14 +1185,21 @@ pub fn simulate_with_progress(
                 })
                 .collect()
         };
-        // The walls this driver pushes on: each element moves `Y_e * p`, with the chamber's
-        // pressure `p = Z_ab * U_in` and `U_in = -U_d` (README 5.11).
+        // The walls this driver pushes on: each element moves `Y_e * p`, with its chamber's
+        // pressure `p = P * U_in` and `U_in = -U_d` (README 5.11). `P` is `Z_ab` when the
+        // inside is one chamber, and that chamber's pressure per unit pushed in otherwise.
         if loads_box && !wall_admittances.is_empty() {
+            let pressures = node_pressures.get(&node);
             for (element, patch) in wall_patches.iter().enumerate() {
+                let chamber = wall_chambers.get(element).copied().unwrap_or(0);
                 sources.push(
                     (0..freqs.len())
                         .map(|bin| {
-                            -wall_admittances[bin][element] * z_ab[bin] * eval.volume_velocity[bin]
+                            let p = match pressures {
+                                Some(p) => p[bin].get(chamber).copied().unwrap_or_default(),
+                                None => z_ab[bin],
+                            };
+                            -wall_admittances[bin][element] * p * eval.volume_velocity[bin]
                         })
                         .collect(),
                 );

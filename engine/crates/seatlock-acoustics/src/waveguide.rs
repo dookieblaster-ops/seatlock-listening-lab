@@ -12,6 +12,9 @@ pub enum AcousticNode {
     Radiation { area_m2: f64, flush: bool },
     /// A chamber small enough to be a shunt compliance.
     Compliance { volume_m3: f64 },
+    /// A chamber that reports its pressure under `slot`, and whose walls take the admittance
+    /// given for that slot to [`solve_with_walls`] (README 5.11).
+    Chamber { volume_m3: f64, slot: usize },
     /// Uniform or tapered duct. A taper is sliced into pieces no longer than 10 mm.
     Duct {
         length_m: f64,
@@ -30,12 +33,15 @@ pub struct WaveguideResult {
     pub z_in: Complex64,
     /// Volume velocity leaving each radiation opening, per unit volume velocity into this node.
     pub openings: Vec<Complex64>,
+    /// Pressure in each [`AcousticNode::Chamber`] below this node, by slot, per unit volume
+    /// velocity into this node.
+    pub pressures: Vec<(usize, Complex64)>,
 }
 
 pub fn solve(node: &AcousticNode, freq_hz: f64) -> WaveguideResult {
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let k = omega / C0;
-    solve_at(node, k, omega, 0.0)
+    solve_at(node, k, omega, 0.0, &[])
 }
 
 /// README section 5.4: a smooth round duct of radius `a` loses `alpha = WALL_LOSS * sqrt(f) / a`
@@ -47,25 +53,61 @@ pub const WALL_LOSS: f64 = 2.99e-5;
 pub fn solve_lossy(node: &AcousticNode, freq_hz: f64) -> WaveguideResult {
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let k = omega / C0;
-    solve_at(node, k, omega, WALL_LOSS * freq_hz.max(0.0).sqrt())
+    solve_at(node, k, omega, WALL_LOSS * freq_hz.max(0.0).sqrt(), &[])
+}
+
+/// [`solve`] or [`solve_lossy`], with each chamber's walls a shunt: `walls[slot]` is the
+/// outward volume velocity of that chamber's walls per pascal inside (0 for rigid walls).
+pub fn solve_with_walls(
+    node: &AcousticNode,
+    freq_hz: f64,
+    lossy: bool,
+    walls: &[Complex64],
+) -> WaveguideResult {
+    let omega = 2.0 * PI * freq_hz.max(1e-6);
+    let loss = if lossy {
+        WALL_LOSS * freq_hz.max(0.0).sqrt()
+    } else {
+        0.0
+    };
+    solve_at(node, omega / C0, omega, loss, walls)
 }
 
 /// `loss` is `alpha * a`: the wall loss per meter times the duct's radius (0 for none).
-fn solve_at(node: &AcousticNode, k: f64, omega: f64, loss: f64) -> WaveguideResult {
+fn solve_at(
+    node: &AcousticNode,
+    k: f64,
+    omega: f64,
+    loss: f64,
+    walls: &[Complex64],
+) -> WaveguideResult {
     match node {
         AcousticNode::Rigid => WaveguideResult {
             z_in: Complex64::new(1.0e12, 0.0),
             openings: Vec::new(),
+            pressures: Vec::new(),
         },
         AcousticNode::Radiation { area_m2, flush } => WaveguideResult {
             z_in: radiation_impedance(*area_m2, *flush, k),
             openings: vec![Complex64::new(1.0, 0.0)],
+            pressures: Vec::new(),
         },
         AcousticNode::Compliance { volume_m3 } => {
             let admit = Complex64::new(0.0, omega * volume_m3 / (RHO0 * C0 * C0));
             WaveguideResult {
                 z_in: 1.0 / admit,
                 openings: Vec::new(),
+                pressures: Vec::new(),
+            }
+        }
+        AcousticNode::Chamber { volume_m3, slot } => {
+            let wall = walls.get(*slot).copied().unwrap_or_default();
+            let admit = Complex64::new(0.0, omega * volume_m3 / (RHO0 * C0 * C0)) + wall;
+            let z_in = 1.0 / admit;
+            WaveguideResult {
+                z_in,
+                openings: Vec::new(),
+                pressures: vec![(*slot, z_in)],
             }
         }
         AcousticNode::Duct {
@@ -91,15 +133,16 @@ fn solve_at(node: &AcousticNode, k: f64, omega: f64, loss: f64) -> WaveguideResu
                 return WaveguideResult {
                     z_in,
                     openings: Vec::new(),
+                    pressures: Vec::new(),
                 };
             }
-            let far = solve_at(load, k, omega, loss);
+            let far = solve_at(load, k, omega, loss, walls);
             duct_chain(length, *area_in_m2, *area_out_m2, far, k, loss)
         }
         AcousticNode::Parallel(branches) => {
             let solved: Vec<WaveguideResult> = branches
                 .iter()
-                .map(|branch| solve_at(branch, k, omega, loss))
+                .map(|branch| solve_at(branch, k, omega, loss, walls))
                 .collect();
             let mut admit = Complex64::new(0.0, 0.0);
             for branch in &solved {
@@ -107,13 +150,21 @@ fn solve_at(node: &AcousticNode, k: f64, omega: f64, loss: f64) -> WaveguideResu
             }
             let z_in = 1.0 / admit;
             let mut openings = Vec::new();
+            let mut pressures = Vec::new();
             for branch in &solved {
                 let share = z_in / branch.z_in;
                 for opening in &branch.openings {
                     openings.push(share * *opening);
                 }
+                for (slot, p) in &branch.pressures {
+                    pressures.push((*slot, share * *p));
+                }
             }
-            WaveguideResult { z_in, openings }
+            WaveguideResult {
+                z_in,
+                openings,
+                pressures,
+            }
         }
     }
 }
@@ -130,6 +181,7 @@ fn duct_chain(
     let piece = length_m / pieces as f64;
     let mut z_load = far.z_in;
     let mut carry = far.openings;
+    let mut pressures = far.pressures;
     for index in (0..pieces).rev() {
         let start = index as f64 / pieces as f64;
         let end = (index as f64 + 1.0) / pieces as f64;
@@ -145,11 +197,15 @@ fn duct_chain(
         let u_ratio = 1.0 / denom;
         let z_in = (z_load * cos + j * z0 * sin) / denom;
         carry = carry.into_iter().map(|opening| opening * u_ratio).collect();
+        for (_, p) in pressures.iter_mut() {
+            *p *= u_ratio;
+        }
         z_load = z_in;
     }
     WaveguideResult {
         z_in: z_load,
         openings: carry,
+        pressures,
     }
 }
 

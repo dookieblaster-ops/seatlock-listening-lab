@@ -20,6 +20,8 @@ pub struct NetworkSample {
     pub z_ab: Complex64,
     /// `H_k` for each duct to the outside, in the order the ducts were given.
     pub h_out: Vec<Complex64>,
+    /// Pressure in every chamber per unit volume velocity pushed in, by chamber.
+    pub pressures: Vec<Complex64>,
 }
 
 /// Solves the network at one frequency with `U_in = 1` pushed into `driver`.
@@ -29,12 +31,25 @@ pub fn lumped_network(
     driver: usize,
     freq_hz: f64,
 ) -> NetworkSample {
+    lumped_network_with_walls(volumes_m3, ducts, driver, freq_hz, &[])
+}
+
+/// [`lumped_network`] with each chamber's walls a shunt: `walls[i]` is the outward volume
+/// velocity of chamber `i`'s walls per pascal inside (README 5.11); missing entries are rigid.
+pub fn lumped_network_with_walls(
+    volumes_m3: &[f64],
+    ducts: &[Duct],
+    driver: usize,
+    freq_hz: f64,
+    walls: &[Complex64],
+) -> NetworkSample {
     let n = volumes_m3.len();
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let zero = Complex64::new(0.0, 0.0);
     let mut matrix = vec![vec![zero; n]; n];
     for (i, volume) in volumes_m3.iter().enumerate() {
         matrix[i][i] += Complex64::new(0.0, omega * volume / (RHO0 * C0 * C0));
+        matrix[i][i] += walls.get(i).copied().unwrap_or_default();
     }
     let impedance = |duct: &Duct| {
         Complex64::new(
@@ -62,6 +77,7 @@ pub fn lumped_network(
     NetworkSample {
         z_ab: pressure[driver],
         h_out,
+        pressures: pressure,
     }
 }
 

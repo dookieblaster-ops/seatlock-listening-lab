@@ -508,8 +508,9 @@ pub fn waveguide_network(
         order: &mut Vec<usize>,
     ) -> Result<AcousticNode, String> {
         seen[at] = true;
-        let mut branches = vec![AcousticNode::Compliance {
+        let mut branches = vec![AcousticNode::Chamber {
             volume_m3: volumes[at],
+            slot: at,
         }];
         for (index, edge) in edges.iter().enumerate() {
             if used[index] || (edge.a != Some(at) && edge.b != Some(at)) {

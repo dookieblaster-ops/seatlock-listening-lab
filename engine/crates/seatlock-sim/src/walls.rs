@@ -14,6 +14,8 @@ const PRINTED: [&str; 6] = ["box", "rounded", "chamfered", "sloped", "prism", "r
 
 pub struct PlacedWall {
     pub surface: String,
+    /// The chamber whose pressure pushes this wall (0 when the inside is one chamber).
+    pub chamber: usize,
     pub panel: WallPanel,
     /// One patch per element of `panel`, in the panel's element order.
     pub patches: Vec<SourcePatch>,
@@ -43,6 +45,23 @@ impl CabinetWalls {
         self.walls
             .iter()
             .flat_map(|w| w.patches.iter().copied())
+            .collect()
+    }
+
+    /// Outward volume velocity of one chamber's walls per pascal in that chamber.
+    pub fn chamber_admittance(&self, chamber: usize, freq_hz: f64) -> Complex64 {
+        self.walls
+            .iter()
+            .filter(|w| w.chamber == chamber)
+            .map(|w| w.panel.admittance(freq_hz))
+            .sum()
+    }
+
+    /// For every element, in the order of [`CabinetWalls::patches`], its chamber.
+    pub fn element_chambers(&self) -> Vec<usize> {
+        self.walls
+            .iter()
+            .flat_map(|w| std::iter::repeat_n(w.chamber, w.patches.len()))
             .collect()
     }
 
@@ -250,24 +269,150 @@ fn unit(a: [f64; 3]) -> [f64; 3] {
     [a[0] / n, a[1] / n, a[2] / n]
 }
 
-/// The cabinet's flat walls, or the reason they are left rigid.
-pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<CabinetWalls, String> {
-    let kind = design.speaker.enclosure.outer.kind.as_str();
-    if !PRINTED.contains(&kind) {
-        return Err(format!(
-            "walls of a {kind} cabinet are not modeled yet (only printed cabinets)"
-        ));
+/// A figure from a stock record: the number itself, or the middle of a published range.
+fn stock_figure(
+    record: &Value,
+    key: &str,
+    range_key: &str,
+    what: &str,
+    name: &str,
+    notes: &mut Vec<String>,
+) -> Option<f64> {
+    if let Some(v) = number(record, &[key]) {
+        return Some(v);
     }
-    let wall_m = design
+    let items = record.get(range_key)?.as_array()?;
+    let (a, b) = (items.first()?.as_f64()?, items.get(1)?.as_f64()?);
+    let middle = (a + b) / 2.0;
+    if !(middle.is_finite() && middle > 0.0) {
+        return None;
+    }
+    notes.push(format!(
+        "{name}: its {what} is published as a range, {a} to {b}; the lab takes the middle."
+    ));
+    Some(middle)
+}
+
+/// A sheet box's wall: one layer of its stock sheet.
+fn sheet_layer(design: &DesignFile, notes: &mut Vec<String>) -> Result<WallLayer, String> {
+    let id = design
         .speaker
         .enclosure
         .outer
         .fields
-        .get("wall_m")
+        .get("stock_id")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let record =
+        catalog::stock(id).ok_or_else(|| format!("sheet stock {id} is not in the catalog"))?;
+    let name = record
+        .get("model")
+        .and_then(Value::as_str)
+        .unwrap_or(id)
+        .to_string();
+    let thickness = number(&record, &["thickness_m"]).ok_or("the sheet has no thickness")?;
+    let youngs = stock_figure(
+        &record,
+        "youngs_modulus_pa",
+        "youngs_modulus_range_pa",
+        "stiffness (Pa)",
+        &name,
+        notes,
+    );
+    let density = stock_figure(
+        &record,
+        "density_kg_m3",
+        "density_range_kg_m3",
+        "density (kg/m3)",
+        &name,
+        notes,
+    );
+    let missing: Vec<&str> = [("stiffness", youngs), ("density", density)]
+        .iter()
+        .filter(|(_, v)| v.is_none())
+        .map(|(n, _)| *n)
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!(
+            "the sheet {name} has no published {} in the catalog",
+            missing.join(" or ")
+        ));
+    }
+    let poisson = number(&record, &["poisson"]).unwrap_or_else(|| {
+        notes.push(format!(
+            "{name}: Poisson's ratio is not published; the lab assumed {ASSUMED_POISSON}."
+        ));
+        ASSUMED_POISSON
+    });
+    let loss_factor = record
+        .get("loss_factor")
         .and_then(Value::as_f64)
-        .filter(|w| *w > 0.0)
-        .ok_or("the cabinet gives no wall thickness")?;
-    let (layers, mut notes) = wall_layers(design, wall_m)?;
+        .unwrap_or_else(|| {
+            notes.push(format!(
+                "{name}: the damping (loss factor) is not published; the lab assumed \
+                 {ASSUMED_LOSS_FACTOR}, so wall resonance heights are uncertain."
+            ));
+            ASSUMED_LOSS_FACTOR
+        });
+    Ok(WallLayer {
+        name,
+        thickness_m: thickness,
+        youngs_pa: youngs.unwrap_or(0.0),
+        poisson,
+        density_kg_m3: density.unwrap_or(0.0),
+        loss_factor,
+    })
+}
+
+/// The cabinet's flat walls, or the reason they are left rigid.
+pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<CabinetWalls, String> {
+    let kind = design.speaker.enclosure.outer.kind.as_str();
+    // A tube's walls are its two printed end caps; each spans the pipe's inside, as a square
+    // of the same area. The curved pipe is held still.
+    let mut cap_span = None;
+    let (wall_m, (layers, mut notes)) = match kind {
+        _ if PRINTED.contains(&kind) => {
+            let wall_m = design
+                .speaker
+                .enclosure
+                .outer
+                .fields
+                .get("wall_m")
+                .and_then(Value::as_f64)
+                .filter(|w| *w > 0.0)
+                .ok_or("the cabinet gives no wall thickness")?;
+            (wall_m, wall_layers(design, wall_m)?)
+        }
+        "sheet_box" => {
+            let mut notes = vec![
+                "The sheet box's panels are butt-jointed; each is taken as supported along its \
+                 edges."
+                    .to_string(),
+            ];
+            let layer = sheet_layer(design, &mut notes)?;
+            (layer.thickness_m, (vec![layer], notes))
+        }
+        "tube" => {
+            let cap = outer.panel_thickness_m("front")?;
+            let size = outer.outer_size_m()?;
+            let length = size[1] - 2.0 * cap;
+            let inside = (outer.interior_volume_m3()? / (std::f64::consts::PI * length)).sqrt();
+            cap_span = Some(inside * std::f64::consts::PI.sqrt());
+            let (layers, mut notes) = wall_layers(design, cap)?;
+            notes.push(
+                "Only the tube's printed end caps vibrate, each taken as a square of the pipe's \
+                 inside area; the curved pipe is held still."
+                    .into(),
+            );
+            (cap, (layers, notes))
+        }
+        _ => {
+            return Err(format!(
+                "walls of a {kind} cabinet are not modeled yet (printed cabinets, sheet boxes, \
+                 and tubes' end caps are)"
+            ))
+        }
+    };
     let stack = WallStack::from_layers(&layers)?;
     let size = outer.outer_size_m()?;
     let middle = [size[0] / 2.0, size[1] / 2.0, size[2] / 2.0];
@@ -342,7 +487,10 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
             approximated = true;
         }
         // The plate spans between the middles of the walls along its edges.
-        let (span_w, span_h) = (width - wall_m, height - wall_m);
+        let (span_w, span_h) = match cap_span {
+            Some(side) => (side, side),
+            None => (width - wall_m, height - wall_m),
+        };
         if span_w <= wall_m || span_h <= wall_m {
             continue;
         }
@@ -366,6 +514,7 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
             .collect();
         walls.push(PlacedWall {
             surface,
+            chamber: 0,
             panel,
             patches,
         });
@@ -403,5 +552,224 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
         notes
             .push("Walls that are not rectangles are taken as rectangles of the same area.".into());
     }
+    Ok(CabinetWalls { walls, notes })
+}
+
+/// Surfaces that carry a sound source other than a cone (a panel speaker): their walls are
+/// held still, because the source covers them.
+fn covered_surfaces(design: &DesignFile) -> Vec<String> {
+    design
+        .speaker
+        .radiators
+        .iter()
+        .filter(|r| r.kind != "cone")
+        .filter_map(|r| r.fields.get("mount").and_then(Value::as_str))
+        .filter_map(|id| {
+            design
+                .speaker
+                .enclosure
+                .mounts
+                .iter()
+                .find(|m| m.id == id)
+                .map(|m| m.surface.clone())
+        })
+        .collect()
+}
+
+/// How far the plastic reaches from `from` along `direction` before the outside air, if it
+/// does so within `limit_m`; `None` when another chamber's air or more plastic comes first.
+fn distance_to_outside(
+    outer: &dyn OuterShape,
+    chambers: &[crate::chambers::Chamber],
+    own: usize,
+    from: [f64; 3],
+    direction: [f64; 3],
+    limit_m: f64,
+) -> Option<f64> {
+    let step = 2.5e-4;
+    let mut t = step;
+    while t <= limit_m {
+        let p = [
+            from[0] + t * direction[0],
+            from[1] + t * direction[1],
+            from[2] + t * direction[2],
+        ];
+        if !outer.contains_cabinet(p).unwrap_or(true) {
+            return Some(t);
+        }
+        if chambers
+            .iter()
+            .enumerate()
+            .any(|(i, c)| i != own && c.contains(p))
+        {
+            return None;
+        }
+        t += step;
+    }
+    None
+}
+
+/// The walls of a cabinet divided into chambers (README 5.11): each face of a chamber that
+/// lies against the cabinet's outer wall is a plate over that face, pushed by that chamber's
+/// pressure. Faces against partitions or thicker plastic are held still.
+pub fn chamber_walls(
+    design: &DesignFile,
+    outer: &dyn OuterShape,
+    chambers: &[crate::chambers::Chamber],
+) -> Result<CabinetWalls, String> {
+    let kind = design.speaker.enclosure.outer.kind.as_str();
+    if !PRINTED.contains(&kind) {
+        return Err(format!(
+            "walls of a {kind} cabinet are not modeled yet (only printed cabinets)"
+        ));
+    }
+    let wall_m = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("wall_m")
+        .and_then(Value::as_f64)
+        .filter(|w| *w > 0.0)
+        .ok_or("the cabinet gives no wall thickness")?;
+    let (layers, mut notes) = wall_layers(design, wall_m)?;
+    let stack = WallStack::from_layers(&layers)?;
+    let covered = covered_surfaces(design);
+    let mut walls = Vec::new();
+    let mut held = 0usize;
+    for (index, chamber) in chambers.iter().enumerate() {
+        for axis in 0..3 {
+            for high in [false, true] {
+                let mut outward = [0.0; 3];
+                outward[axis] = if high { 1.0 } else { -1.0 };
+                let (u_axis, v_axis) = match axis {
+                    0 => (1, 2),
+                    1 => (0, 2),
+                    _ => (0, 1),
+                };
+                let mut centre: [f64; 3] =
+                    std::array::from_fn(|i| (chamber.min_m[i] + chamber.max_m[i]) / 2.0);
+                centre[axis] = if high {
+                    chamber.max_m[axis]
+                } else {
+                    chamber.min_m[axis]
+                };
+                let width = chamber.max_m[u_axis] - chamber.min_m[u_axis];
+                let height = chamber.max_m[v_axis] - chamber.min_m[v_axis];
+                // The middle and four points halfway to the corners must all reach the
+                // outside through no more than a wall and a half of plastic.
+                let mut reach = Vec::new();
+                for (du, dv) in [
+                    (0.0, 0.0),
+                    (-0.25, -0.25),
+                    (0.25, -0.25),
+                    (-0.25, 0.25),
+                    (0.25, 0.25),
+                ] {
+                    let mut p = centre;
+                    p[u_axis] += du * width;
+                    p[v_axis] += dv * height;
+                    reach.push(distance_to_outside(
+                        outer,
+                        chambers,
+                        index,
+                        p,
+                        outward,
+                        1.5 * wall_m + 1e-6,
+                    ));
+                }
+                let Some(thickness) = reach
+                    .iter()
+                    .copied()
+                    .collect::<Option<Vec<f64>>>()
+                    .map(|all| all[0])
+                else {
+                    held += 1;
+                    continue;
+                };
+                let surface = outer
+                    .surface_facing(outward)
+                    .unwrap_or_else(|| format!("chamber {} side", chamber.id));
+                if covered.contains(&surface) {
+                    notes.push(format!(
+                        "The {surface} wall carries a panel speaker and is held still."
+                    ));
+                    continue;
+                }
+                // The plate spans between the middles of the walls and partitions around it.
+                let (span_w, span_h) = (width + wall_m, height + wall_m);
+                if span_w <= wall_m || span_h <= wall_m {
+                    continue;
+                }
+                let panel = WallPanel::new(span_w, span_h, &stack)?;
+                let area = panel.element_area_m2();
+                let mut along = [0.0; 3];
+                along[u_axis] = 1.0;
+                let mut across = [0.0; 3];
+                across[v_axis] = 1.0;
+                let skin = [
+                    centre[0] + thickness * outward[0],
+                    centre[1] + thickness * outward[1],
+                    centre[2] + thickness * outward[2],
+                ];
+                let patches = panel
+                    .element_centers_m()
+                    .iter()
+                    .map(|[x, y]| SourcePatch {
+                        position_m: [
+                            skin[0] + x * along[0] + y * across[0],
+                            skin[1] + x * along[1] + y * across[1],
+                            skin[2] + x * along[2] + y * across[2],
+                        ],
+                        outward,
+                        area_m2: area,
+                    })
+                    .collect();
+                walls.push(PlacedWall {
+                    surface,
+                    chamber: index,
+                    panel,
+                    patches,
+                });
+            }
+        }
+    }
+    if walls.is_empty() {
+        return Err("no chamber lies against the cabinet's outer wall".into());
+    }
+    let first = walls
+        .iter()
+        .map(|w| w.panel.first_resonance_hz())
+        .fold(f64::INFINITY, f64::min);
+    let resolved = walls
+        .iter()
+        .map(|w| w.panel.resolved_up_to_hz)
+        .fold(f64::INFINITY, f64::min);
+    let names: Vec<&str> = layers.iter().map(|l| l.name.as_str()).collect();
+    notes.insert(
+        0,
+        format!(
+            "Walls vibrate: {} walls of {} ({:.1} kg/m2) over {} chambers, each a plate with \
+             supported edges over its chamber's side, pushed by that chamber's mean pressure; \
+             the lowest wall resonance is {first:.0} Hz, and wall resonances above {resolved:.0} \
+             Hz are left out.",
+            walls.len(),
+            names.join(" / "),
+            stack.mass_per_area,
+            chambers.len()
+        ),
+    );
+    if held > 0 {
+        notes.push(format!(
+            "{held} chamber sides lie against partitions or thicker plastic and are held still \
+             (partitions between two chambers do not vibrate in this model)."
+        ));
+    }
+    notes.push(
+        "Wall vibration leaves out the air's load on the walls, standing waves' pressure \
+         pattern on them, the driver's frame shaking the baffle, and the holes and braces in \
+         the walls; curved skin does not vibrate in this model."
+            .into(),
+    );
     Ok(CabinetWalls { walls, notes })
 }

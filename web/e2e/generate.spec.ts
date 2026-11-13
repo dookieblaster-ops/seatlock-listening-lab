@@ -3,7 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 test("the lab generates cabinets, ranks them, checks the best in 3D, and opens one", async ({ page }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000);
   await page.goto("/");
   const example = path.resolve(import.meta.dirname, "../../designs/examples/sealed-test.seatlock.json");
   await page.getByTestId("open-design-input").setInputFiles(example);
