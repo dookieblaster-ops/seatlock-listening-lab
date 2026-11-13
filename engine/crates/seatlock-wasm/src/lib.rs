@@ -26,6 +26,13 @@ struct CallRequest {
     voltage_v: Option<f64>,
     #[serde(default)]
     frequencies_hz: Option<Vec<f64>>,
+    /// Request options the page sets (README 3.2): passed through to `simulate`.
+    #[serde(default)]
+    listening_window: Option<bool>,
+    #[serde(default)]
+    losses: Option<bool>,
+    #[serde(default)]
+    walls: Option<bool>,
     #[serde(default)]
     correction: Option<bool>,
     #[serde(default)]
@@ -67,6 +74,12 @@ struct SimRequest {
     voltage_v: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     frequencies_hz: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    listening_window: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    losses: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    walls: Option<bool>,
 }
 
 fn read_utf8(ptr: *const u8, len: usize) -> Result<String, String> {
@@ -104,6 +117,9 @@ fn parse_request(request: &str) -> CallRequest {
         space: None,
         voltage_v: None,
         frequencies_hz: None,
+        listening_window: None,
+        losses: None,
+        walls: None,
         correction: None,
         impulse_len: None,
         sample_rate_hz: None,
@@ -287,6 +303,9 @@ fn dispatch(method: &str, request: &str) -> String {
                 space: parsed.space,
                 voltage_v: parsed.voltage_v,
                 frequencies_hz: parsed.frequencies_hz,
+                listening_window: parsed.listening_window,
+                losses: parsed.losses,
+                walls: parsed.walls,
             })
             .unwrap();
             match simulate_json(&text, &request_value, &builtin()) {
