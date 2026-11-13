@@ -45,6 +45,16 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Imported speakers (3MF and STL), materials per part, damping
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-12): import complete speakers with internal baffles and damping, a material per part, drivers in any orientation; 3MF and STL now, STEP later.
+
+**Done:** outer shape `mesh` (`seatlock-geom/src/mesh.rs`: parts, column grid, points as surfaces); `OuterShape::part_materials` and `damping_at`; per-part pricing in `cost.rs`; damping (Rayleigh) in `seatlock_fdtd::grid` via `Options.damping`, fed by `voxels::cabinet_grid`; page: `web/src/importMesh.ts` (STL, 3MF with units, components, transforms), `ImportedCabinet.tsx` (parts table, quarter turns, place by click, tilt and turn), click picking in `CabinetView.tsx`, op `mesh` in `printSolid.ts` and `openscad.ts`. README 3.3, 5.5, 6.2, 14, 15.
+
+**Next, in order:** (1) a real damping material in `catalog/damping/` from a source with a published flow resistivity (polyester fibre, mineral wool), and a frequency-dependent model when such figures exist; (2) damping in the detailed model as a lossy line where a part fills a duct; (3) STEP import (OpenCascade in WebAssembly in a worker, tessellate to the same parts); (4) stock-sheet parts in an imported assembly (cut list); (5) port size and length editable on the page; print splitting per imported part; (6) the queue of the posts below (coupled solve for unlike woofers sharing a chamber, CTA-2034 score, off-axis files, larger woofers, boundary elements).
+
 ### 2026-11-12 — Claude — Handoff: start here. Each driver its own chamber's load; two woofers and three-ways in the generator
 
 - **To:** next lead session (any Claude model)
@@ -473,6 +483,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Imported speakers (3MF and STL, materials per part, damping in the 3D model, drivers placed by clicking) done on `main` by Claude.
 - 2026-11-12: Per-chamber driver loads, two woofers around a tweeter, and three-ways in the generator done on `main` by Claude.
 - 2026-11-12: Makers' measured on-axis curves for 11 drivers done on `main` by Claude.
 - 2026-11-12: Independent driver measurements (rule, engine, first driver DSA175-8 with Voice Coil Test Bench data) done on `main` by Claude.

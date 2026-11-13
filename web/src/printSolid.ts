@@ -49,6 +49,12 @@ export type PrintTree =
       origin_m: number[];
       segments?: number;
     }
+  | {
+      /** An imported part (outer shape `mesh`): corners and triangles, closed and wound outward. */
+      op: "mesh";
+      vertices_m: number[];
+      triangles: number[];
+    }
   | { op: "union" | "difference"; of: PrintTree[] };
 
 type Wasm = ManifoldToplevel;
@@ -97,6 +103,19 @@ function build(wasm: Wasm, node: PrintTree): Solid | null {
     const placed = blank.transform([u[0], u[1], u[2], 0, v[0], v[1], v[2], 0, w[0], w[1], w[2], 0, o[0], o[1], o[2], 1]);
     blank.delete();
     return placed;
+  }
+  if (node.op === "mesh") {
+    const mesh = new wasm.Mesh({
+      numProp: 3,
+      vertProperties: new Float32Array(node.vertices_m),
+      triVerts: new Uint32Array(node.triangles),
+    });
+    mesh.merge();
+    const solid = new Manifold(mesh);
+    if (solid.status() !== "NoError") {
+      throw new Error(`an imported part is not a closed solid (${solid.status()}).`);
+    }
+    return solid;
   }
   if (node.op === "revolve") {
     // Manifold revolves about z; turn z onto y, then move the axis to its place.

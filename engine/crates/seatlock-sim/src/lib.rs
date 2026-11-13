@@ -2281,6 +2281,15 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
     let mut features = Vec::new();
     let mut feature_volume = 0.0;
     for mount in &design.speaker.enclosure.mounts {
+        if mount.surface.is_empty() {
+            // An imported cabinet before its sound sources are placed: show it, cut nothing.
+            warnings.push(format!(
+                "Mount {}: not placed yet. Choose Place on model and click where it goes.",
+                mount.id
+            ));
+            can_export = false;
+            continue;
+        }
         let pose = shape
             .mount_pose(&mount.surface, mount.at_m)
             .map_err(|err| format!("Mount {}: {}", mount.id, shape_message(kind, &err)))?;

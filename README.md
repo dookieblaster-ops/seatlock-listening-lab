@@ -214,7 +214,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 
 | Family | A member must provide | First members (level) |
 | --- | --- | --- |
-| Outer shape | The print solid or stock parts; inside tests for its air and for the whole cabinet, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism`, `tube`, and `sheet_box` (2), `revolved` and `loft` (3), imported mesh (4) |
+| Outer shape | The print solid or stock parts; inside tests for its air and for the whole cabinet, or a mesh, for the voxel grid; named mounting surfaces that return a position and an outward direction for any surface coordinate; outline data for diffraction. | `box` (1), `prism`, `tube`, and `sheet_box` (2), `revolved` and `loft` (3), imported `mesh` (3, owner request 2026-11-12) |
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), placed plastic `voxels` (3), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6): one net volume velocity, or a list of surface elements, each a place on the mounting surface measured from the mount point, an area, and a volume velocity; its limits; whether it pushes on the cabinet's air; what it needs from its mount; its lines for the fidelity label; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
@@ -419,7 +419,8 @@ The rules below were found while validating this specification with a reference 
 - **Self-check every run**: below `C0 / (50 * longest internal dimension)`, `Z_ab` must match `lumped` within 3 %, or the result carries a warning. In a cabinet with ports `Z_ab` there is the ports' air mass, so the difference also holds the end corrections that `lumped` only estimates (5.1 % for the CHK-FDTD-4 cabinet at 5 mm).
 - **Time budgets** on the reference machine with one worker: a 20-liter cabinet in under 20 s at 10 mm for a preview and under 5 min at 5 mm for a final result. These are targets. Record measured times in `STATUS.md`.
 
-- **Wall losses** (as built, Level 3). At a wall, sound loses a little to the air's friction and heat flow. For sound grazing the wall the loss is the duct's of section 5.4: a specific admittance whose real part is `B = 2.99e-5 * sqrt(f)`. Friction is `1/1.4737` of that and counts with `sin^2` of the angle from the wall's normal; heat flow is the rest and counts at every angle. Sound arriving from all directions alike loses on average `(2/3 + 0.4737)/1.4737 = 0.774` of the grazing value, which makes every resonance decay at `s(f) = 0.774 * C0 * B(f) * S/V` per second, with `S/V` the cabinet's wall area over its air volume, both counted on the grid. A request with `losses` applies it as a decay weight: each signal's Fourier sum at frequency `f` is weighted by `e^(-s(f)*t)`, which is exactly the response of the same grid with a uniform loss `s(f)` in its air, each resonance `s/pi` Hz wide. It costs nothing, works with the early stop (the fitted tail takes the same weight), and makes peak heights finite and independent of the run's length. It is one average: a single resonance's own loss differs from it by up to about half (0.65 of it for a wave grazing every wall, as in a duct), and stair-stepped walls count a little large. The label says so. Damping fill is not built. CHK-FDTD-5.
+- **Wall losses** (as built, Level 3). At a wall, sound loses a little to the air's friction and heat flow. For sound grazing the wall the loss is the duct's of section 5.4: a specific admittance whose real part is `B = 2.99e-5 * sqrt(f)`. Friction is `1/1.4737` of that and counts with `sin^2` of the angle from the wall's normal; heat flow is the rest and counts at every angle. Sound arriving from all directions alike loses on average `(2/3 + 0.4737)/1.4737 = 0.774` of the grazing value, which makes every resonance decay at `s(f) = 0.774 * C0 * B(f) * S/V` per second, with `S/V` the cabinet's wall area over its air volume, both counted on the grid. A request with `losses` applies it as a decay weight: each signal's Fourier sum at frequency `f` is weighted by `e^(-s(f)*t)`, which is exactly the response of the same grid with a uniform loss `s(f)` in its air, each resonance `s/pi` Hz wide. It costs nothing, works with the early stop (the fitted tail takes the same weight), and makes peak heights finite and independent of the run's length. It is one average: a single resonance's own loss differs from it by up to about half (0.65 of it for a wave grazing every wall, as in a duct), and stair-stepped walls count a little large. The label says so. CHK-FDTD-5.
+- **Damping material** (as built, Level 3, for imported `damping` parts). A cell of damping material slows the air by a flow resistivity `sigma` (Pa*s/m^2), the Rayleigh model: the velocity update becomes `v_new = ((1 - b)*v_old - kv*dp) / (1 + b)` with `b = sigma*dt/(2*RHO0)`, stable for any `sigma`. A face takes the mean of its two cells' figures. Checked against a lossy duct's closed form (`k_c = k*sqrt(1 - j*sigma/(RHO0*omega))`, `Z_c = RHO0*C0*k_c/(k*S)`), at the half cell where the grid records pressure: within 0.14 %. One figure at every frequency (real fibre's resistance and its added air mass change with frequency), and only the full 3D model sees it: the quick and detailed models treat damping as air, and the label says so.
 
 This model knows the full shape of the internal air, within its grid. The walls are rigid; their loss is the average above when asked for, and otherwise none. It does not model wall vibration or damping fill.
 
@@ -616,7 +617,7 @@ A parametric model of the cabinet. The user edits numbers and drags handles, and
 
 ### 6.2 Geometry data
 
-**Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. Level 4 adds an imported mesh. The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
+**Outer shape.** The cabinet's outside is a member of the outer-shape family (section 3.3). `box` is the Level 1 member. Level 2 adds rounded and chamfered edges, a sloped baffle, and `prism`, which is any closed outline extruded along one axis. Level 3 adds `revolved` shapes such as cylinders, spheres, and eggs, and `loft`, which places cross-sections along a spine. An imported assembly, `mesh`, was brought forward to Level 3 at the owner's request (below). The wall follows the outer shape at `wall_m` thickness unless the chambers say otherwise.
 
 The Level 2 printed shapes, as they appear in a design file:
 
@@ -635,6 +636,22 @@ The Level 3 curved shape, `revolved`: a body of revolution about the front-to-ba
 ```
 
 The outside radius runs from the front's rim to the widest point, `widest_at` of the way back, along a quarter ellipse, and from there to the back's rim along another. The inside is every point at least `wall_m` from the outer surface, found numerically as a profile of 96 steps; volumes are those of the stepped profiles, and the print solid revolves the same profiles in 96 segments. Its surfaces are `front` and `back`; `[u, v]` is measured from the lower-left corner of the square the body fits in, so the middle of a flat face is `[diameter/2, diameter/2]`, and a mount must sit on the flat. The everyday radiation model takes the flat front's rim as the baffle edge, though the skin curves away gently there, and the cabinet's notes say so. `loft` is not built.
+
+**Imported speakers, `mesh`** (as built, Level 3; owner, 2026-11-12: import a whole speaker with internal baffles and damping, give each part a material, place drivers in any orientation). The page reads a 3MF file (one part per object the build places, with its units, components, and transforms) or STL files (one part each, in millimeters). STEP is not read yet; it can be added later as another importer that produces the same parts.
+
+```jsonc
+{ "kind": "mesh",
+  "parts": [ { "name": "shell", "role": "solid", "material": "pla",
+               "vertices_m": "<base64 of little-endian f32 x, y, z>", "triangles": "<base64 of little-endian u32 a, b, c>" },
+             { "name": "wool", "role": "damping", "material": "...", "flow_resistivity_pa_s_m2": 10000, ... } ],
+  "points": [ { "id": "at-m1", "point_m": [0.08, 0.0, 0.15], "normal": [0.0, -1.0, 0.0],
+                "base_normal": [0.0, -1.0, 0.0], "tilt_deg": 0, "turn_deg": 0 } ] }
+```
+
+- Every part must be a closed mesh; an open one is refused with its name. Space is sorted on a grid of columns along `z` (no finer than 2 mm, at most about 4 million cells): each column's crossings with each part give that part's inside exactly along the column. Air that cannot reach the outside without passing through a solid part is the cabinet's air; a damping part is air the sound passes through. Volumes integrate the exact crossings over columns a quarter of a cell apart.
+- A part's `role` is `solid` (printed, in its own `material`, priced by it) or `damping` (listed in litres; its flow resistivity is the part's own figure, or its material's record in `catalog/damping/`).
+- Mounting points are the surfaces: a mount's `surface` names a point, and `at_m` is ignored. The page places a point where the user clicks the model, facing out from the surface there; `tilt_deg` and `turn_deg` turn it from that face (`base_normal`), and `normal` is the result. The surface's outline for edge diffraction is the flat region around the point that shares its plane; the wall thickness is found by a ray through the part. A port placed on the model is a 40 mm round duct 100 mm long, straight inward.
+- The print tree holds the parts as meshes (op `mesh`), less the holes and ports. A mount not yet placed is a warning, not an error: the speaker is shown and the print file waits.
 
 The wall follows the outside everywhere: the inside of a rounded box is rounded by `edge_radius_m - wall_m`, a chamfer's inside leg is `chamfer_m - wall_m * (2 - sqrt 2)`, and a prism's inside outline is every side moved inward by `wall_m`. Rounded and chamfered boxes keep the six box faces, and a mount must sit on the flat part of its face. A sloped box's faces are `front` (the slope), `back`, `top`, `bottom`, `left`, and `right`. A prism's faces are `front`, `back`, and `side-1`, `side-2`, ... for the sides from the first outline corner onward. On any face, `[u, v]` is measured from the lower-left corner as seen from outside, with `v` running up the face; the top and bottom keep the box's convention.
 
@@ -922,7 +939,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - I: the generator of section 11.4, for any number of sound sources; the CTA-2034 curves and a preference rating as the score (section 2.6); optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
 - End to end, CHK-E2E-3: the example design `folded-line` runs in all three enclosure models, and the report lists what each model ignored. The example design `rear-panel`, a rear-facing DML panel on an outer shape that is not a box, runs with `exterior` radiation and the `simple` room, and its in-room response differs from its direct response.
 
-**Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, imported meshes as outer shapes, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.
+**Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, STEP files and stock-sheet parts for imported speakers, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.
 
 ## 13. Checks
 
@@ -994,6 +1011,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
+- "Import a speaker" reads a 3MF or STL assembly: a quarter-turn control for its front, a table of its parts (solid in a print material, or damping with its flow resistivity), and buttons that place each sound source or a port by clicking the 3D view, with tilt and turn.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
 - A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.
 
@@ -1005,7 +1023,7 @@ Say so in the interface wherever it matters.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
 - For DML panels: the air's load on the panel, an open back, and anything above the frequency the label gives (section 5.9). A panel's result also depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
-- Damping fill, and each resonance's own wall loss (the 3D model applies one average, section 5.5).
+- Damping fill in the quick and detailed models (the full 3D model has it for imported damping parts, with one flow-resistivity figure at every frequency, section 5.5), and each resonance's own wall loss (the 3D model applies one average, section 5.5).
 - Voice-coil heating over time, and distortion.
 - Passive crossovers are out of scope by design.
 

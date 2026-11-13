@@ -559,6 +559,13 @@ impl MeshShape {
     }
 
     fn point(&self, id: &str) -> Result<&Point, String> {
+        if id.is_empty() {
+            return Err(
+                "this sound source is not placed on the model yet: choose Place on model and \
+                 click where it goes."
+                    .into(),
+            );
+        }
         self.points
             .iter()
             .find(|p| p.id == id)

@@ -23,6 +23,18 @@ function node(tree: PrintTree, indent: string, hull: HullMesh): string[] {
     const size = [0, 1, 2].map((k) => tree.max_m[k] - tree.min_m[k]);
     return [`${indent}translate(${vec(tree.min_m)}) cube(${vec(size)});`];
   }
+  if (tree.op === "mesh") {
+    const points: string[] = [];
+    for (let i = 0; i < tree.vertices_m.length; i += 3) {
+      points.push(vec(tree.vertices_m.slice(i, i + 3)));
+    }
+    // OpenSCAD wants faces wound clockwise seen from outside, the reverse of the file's.
+    const faces: string[] = [];
+    for (let i = 0; i < tree.triangles.length; i += 3) {
+      faces.push(`[${tree.triangles[i]}, ${tree.triangles[i + 2]}, ${tree.triangles[i + 1]}]`);
+    }
+    return [`${indent}polyhedron(points = [${points.join(", ")}], faces = [${faces.join(", ")}], convexity = 10);`];
+  }
   if (tree.op === "cylinder") {
     // The same turn the page's own builder makes: about x, then about y.
     const [ax, ay, az] = tree.axis;

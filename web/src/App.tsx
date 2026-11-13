@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { CabinetView } from "./CabinetView";
+import { ImportedCabinet, placeAt, type PickTarget } from "./ImportedCabinet";
 import { CostPanel } from "./CostPanel";
 import { CostQuality } from "./CostQuality";
 import { Generate } from "./Generate";
@@ -198,6 +199,7 @@ export default function App() {
     }
   }
 
+  const [picking, setPicking] = useState<PickTarget>(null);
   const outer = design?.speaker.enclosure.outer;
   const mount = design?.speaker.enclosure.mounts[0];
   const radiator = design?.speaker.radiators[0];
@@ -319,14 +321,25 @@ export default function App() {
               void publish(next, designName);
             }} />
           </label>
-          <div className="grid">
+          {outer.kind !== "mesh" && (<div className="grid">
             <NumberField label="Width (mm)" testId="box-width-mm" value={mm(Number(outer.width_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.width_m", value / 1000)} />
             <NumberField label="Height (mm)" value={mm(Number(outer.height_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.height_m", value / 1000)} />
             <NumberField label="Depth (mm)" value={mm(Number(outer.depth_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.depth_m", value / 1000)} />
             <NumberField label="Wall thickness (mm)" value={mm(Number(outer.wall_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.wall_m", value / 1000)} />
             <NumberField label="Edge radius (mm)" value={mm(Number(outer.edge_radius_m ?? 0))} onChange={(value) => updateNumber("speaker.enclosure.outer.edge_radius_m", value / 1000)} />
             <NumberField label="Listening distance (m)" value={design.speaker.listening.distance_m} onChange={(value) => updateNumber("speaker.listening.distance_m", value)} />
-          </div>
+          </div>)}
+          {outer.kind === "mesh" && (
+            <div className="grid">
+              <NumberField label="Listening distance (m)" value={design.speaker.listening.distance_m} onChange={(value) => updateNumber("speaker.listening.distance_m", value)} />
+            </div>
+          )}
+          <ImportedCabinet
+            design={design}
+            publish={(next) => void publish(next, designName)}
+            picking={picking}
+            setPicking={setPicking}
+          />
           <h3>Room</h3>
           <label title="Adds the wall behind the speaker and the room's reverberant sound to the results. It is an estimate for comparing designs, not a room simulation.">
             <input
@@ -553,6 +566,15 @@ export default function App() {
             positions={solid.positions}
             indices={solid.indices}
             driver={geom.mounts[0]?.position_m ?? null}
+            markers={design?.speaker.enclosure.outer.kind === "mesh" ? geom.mounts.slice(1).map((m) => m.position_m) : undefined}
+            onPick={
+              picking && design
+                ? (point, normal) => {
+                    void publish(placeAt(design, picking, point, normal), designName);
+                    setPicking(null);
+                  }
+                : undefined
+            }
           />
           <div className="row">
             {(geom.print_split?.parts.length ?? 0) > 0 && parts.length > 0 && (

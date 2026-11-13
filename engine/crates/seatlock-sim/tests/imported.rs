@@ -280,3 +280,17 @@ fn a_port_on_an_imported_cabinet_sounds_like_the_same_port_on_a_box() {
     assert!(rb.can_export_print, "{:?}", rb.warnings);
     assert!((ra.solid_volume_m3 - rb.solid_volume_m3).abs() < 2e-3 * ra.solid_volume_m3);
 }
+
+#[test]
+fn a_freshly_imported_cabinet_with_nothing_placed_still_shows_and_says_what_to_do() {
+    let mut design = imported_sealed_test();
+    design["speaker"]["enclosure"]["outer"]["points"] = json!([]);
+    design["speaker"]["enclosure"]["mounts"][0]["surface"] = json!("");
+    let design: seatlock_core::DesignFile = serde_json::from_value(design).unwrap();
+    let report = geometry_report(&design).unwrap();
+    assert!(report.print_tree.is_object());
+    let sim = simulate(&design, &SimulateRequest::default(), &builtin());
+    let text = format!("{:?}", sim.issues);
+    eprintln!("{text}");
+    assert!(text.contains("not placed"), "{text}");
+}
