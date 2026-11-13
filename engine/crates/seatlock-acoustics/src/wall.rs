@@ -36,12 +36,14 @@ use crate::plate::{Edges, Plate, PlateModes};
 
 /// Polynomial degree of a wall's basis along its longer side.
 pub const WALL_DEGREE: usize = 16;
-/// Largest element side on a wall, in m, and the fewest and most elements along a side. A wall
-/// moves most below a few kilohertz, where a few patches place its sound well enough; each
-/// patch costs as much as a driver in every direction the radiation model is asked about.
+/// Largest element side on a wall, in m, and the fewest and most elements along a side. Each
+/// patch costs as much as a driver in every direction the radiation model is asked about, and
+/// a wall sounds mostly through its net flow: one patch per wall moved the largest difference
+/// from rigid walls by at most 0.2 dB against 3 by 3 patches on `sealed-test`, at a fifth of
+/// the cost on the page's frequency grid. The element machinery stays for finer grids.
 const ELEMENT_M: f64 = 0.08;
 const FEWEST_ELEMENTS: usize = 1;
-const MOST_ELEMENTS: usize = 3;
+const MOST_ELEMENTS: usize = 1;
 
 /// One layer of a wall.
 #[derive(Clone, Debug)]

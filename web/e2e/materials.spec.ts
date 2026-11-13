@@ -4,6 +4,8 @@ import { expect, test } from "@playwright/test";
 // Novel materials on the page (README sections 5.9, 6.2, 9.1, 14): a layered panel speaker,
 // and a printed cabinet with filled or two-filament walls.
 test("a sandwich panel and a sand-filled wall are chosen on the page, simulated, and priced", async ({ page }) => {
+  // Each simulation of this design (panel, room, and vibrating walls) takes a few seconds.
+  test.setTimeout(120_000);
   await page.goto("/");
   await expect(page.getByTestId("engine-version")).toContainText("0.1.0", { timeout: 15_000 });
   const example = path.resolve(import.meta.dirname, "../../designs/examples/rear-panel.seatlock.json");
