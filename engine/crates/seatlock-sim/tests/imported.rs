@@ -160,3 +160,123 @@ fn each_part_is_priced_by_its_own_material_and_damping_is_bought_by_volume() {
         damping.quantity
     );
 }
+
+#[test]
+fn a_damping_part_calms_the_cabinets_resonances_in_the_3d_model() {
+    let run = |sigma: Option<f64>| {
+        let mut design = imported_sealed_test();
+        if let Some(sigma) = sigma {
+            // Wool filling the back half of the box.
+            let mut wool = part(
+                "wool",
+                "damping",
+                &[box_mesh([0.008, 0.09, 0.008], [0.152, 0.172, 0.242], true)],
+            );
+            wool["flow_resistivity_pa_s_m2"] = json!(sigma);
+            design["speaker"]["enclosure"]["outer"]["parts"]
+                .as_array_mut()
+                .unwrap()
+                .push(wool);
+        }
+        let design: seatlock_core::DesignFile = serde_json::from_value(design).unwrap();
+        let request = SimulateRequest {
+            enclosure: "fdtd".into(),
+            fdtd_dx_m: Some(0.01),
+            ..Default::default()
+        };
+        let r = simulate(&design, &request, &builtin());
+        assert!(
+            r.issues
+                .iter()
+                .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+            "{:?}",
+            r.issues
+        );
+        if sigma.is_some() {
+            assert!(
+                r.fidelity
+                    .ignored
+                    .iter()
+                    .any(|l| l.contains("Damping material")),
+                "{:?}",
+                r.fidelity.ignored
+            );
+        }
+        // How far the 3D result strays from the quick model, which has no standing waves.
+        let quick = simulate(&design, &SimulateRequest::default(), &builtin());
+        let stray: Vec<f64> = r.radiators[0]
+            .impedance_ohm
+            .iter()
+            .zip(&quick.radiators[0].impedance_ohm)
+            .map(|(a, b)| (a - b).abs())
+            .collect();
+        (r.frequencies_hz.clone(), stray)
+    };
+    let (f, bare) = run(None);
+    let (_, damped) = run(Some(10000.0));
+    // The cabinet's first standing wave along its height shows in the driver's impedance near
+    // 700 Hz; damping lowers its peak. Below 100 Hz the box is unchanged.
+    let band = |lo: f64, hi: f64, z: &[f64]| {
+        f.iter()
+            .zip(z)
+            .filter(|(x, _)| **x >= lo && **x <= hi)
+            .map(|(_, v)| *v)
+            .fold(0.0, f64::max)
+    };
+    let (ripple_bare, ripple_damped) = (band(500.0, 3000.0, &bare), band(500.0, 3000.0, &damped));
+    eprintln!("largest standing-wave effect on the impedance, 500 Hz to 3 kHz: {ripple_bare:.3} ohm bare, {ripple_damped:.3} ohm damped");
+    assert!(ripple_damped < 0.7 * ripple_bare);
+}
+
+#[test]
+fn a_port_on_an_imported_cabinet_sounds_like_the_same_port_on_a_box() {
+    let port = json!([{ "id": "port", "from": "main", "to": "outside",
+        "path_m": [[0.04, 0.09, 0.05], [0.04, 0.0, 0.05]],
+        "section": { "shape": "round", "start_m": [0.03], "end_m": [0.03] } }]);
+    let mut plain = example();
+    plain["speaker"]["enclosure"]["ducts"] = port.clone();
+    let mut imported = imported_sealed_test();
+    imported["speaker"]["enclosure"]["ducts"] = port;
+    imported["speaker"]["enclosure"]["outer"]["points"]
+        .as_array_mut()
+        .unwrap()
+        .push(
+            json!({ "id": "port-mouth", "point_m": [0.04, 0.0, 0.05], "normal": [0.0, -1.0, 0.0] }),
+        );
+    let plain: seatlock_core::DesignFile = serde_json::from_value(plain).unwrap();
+    let imported: seatlock_core::DesignFile = serde_json::from_value(imported).unwrap();
+    let request = SimulateRequest {
+        enclosure: "waveguide".into(),
+        radiation: "baffle".into(),
+        ..Default::default()
+    };
+    let a = simulate(&plain, &request, &builtin());
+    let b = simulate(&imported, &request, &builtin());
+    assert!(
+        b.issues
+            .iter()
+            .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        b.issues
+    );
+    let worst = a
+        .summed_spl_db
+        .iter()
+        .zip(&b.summed_spl_db)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0, f64::max);
+    assert!(worst < 0.1, "the imported ported box differs by {worst} dB");
+    let ra = geometry_report(&plain).unwrap();
+    let rb = geometry_report(&imported).unwrap();
+    eprintln!(
+        "air {} vs {}, plastic {} vs {}, print {} {:?}",
+        ra.interior_volume_m3,
+        rb.interior_volume_m3,
+        ra.solid_volume_m3,
+        rb.solid_volume_m3,
+        rb.can_export_print,
+        rb.warnings
+    );
+    assert!(rb.can_export_print, "{:?}", rb.warnings);
+    assert!((ra.solid_volume_m3 - rb.solid_volume_m3).abs() < 2e-3 * ra.solid_volume_m3);
+}

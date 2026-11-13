@@ -42,6 +42,7 @@ fn peak_width(s: f64, early_stop: bool) -> (f64, f64) {
             z_scale: Vec::new(),
             relaxed: Vec::new(),
             loss_per_s: vec![s; freqs.len()],
+            damping: Vec::new(),
         },
         &mut |_, _| true,
     );

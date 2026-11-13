@@ -39,6 +39,9 @@ pub struct CabinetGrid {
     pub longest_m: f64,
     /// True for the cells of chamber air: inside the cabinet and not in a duct's bore.
     pub chamber_air: Vec<bool>,
+    /// Faces in damping material: `(axis, face slot, flow resistivity in Pa*s/m^2)`, the
+    /// mean of the two cells' figures (README 5.5).
+    pub damping: Vec<(u8, usize, f32)>,
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -571,6 +574,43 @@ pub fn cabinet_grid(
         .map(|axis| (high[axis] - low[axis] + dx).max(0.0))
         .fold(0.0, f64::max);
 
+    // Damping material: each inside cell's flow resistivity, and the faces between two inside
+    // cells carry the mean of theirs.
+    let sigma: Vec<f32> = (0..cells)
+        .map(|cell| {
+            if kind[cell] != INSIDE {
+                return 0.0;
+            }
+            shape
+                .damping_at(lattice.center(lattice.coords(cell)))
+                .unwrap_or(0.0) as f32
+        })
+        .collect();
+    let mut damping = Vec::new();
+    if sigma.iter().any(|s| *s > 0.0) {
+        let stride = [n[1] * n[2], n[2], 1];
+        for cell in 0..cells {
+            let c = lattice.coords(cell);
+            for axis in 0..3 {
+                if c[axis] == 0 {
+                    continue;
+                }
+                let other = cell - stride[axis];
+                if kind[cell] == INSIDE && kind[other] == INSIDE {
+                    let face = 0.5 * (sigma[cell] + sigma[other]);
+                    if face > 0.0 {
+                        damping.push((axis as u8, cell, face));
+                    }
+                }
+            }
+        }
+        notes.push(
+            "Damping material: one flow resistivity per material at every frequency (a Rayleigh \
+             model); the material's own mass and frame are left out."
+                .into(),
+        );
+    }
+
     Ok(CabinetGrid {
         grid: Grid {
             n,
@@ -589,5 +629,6 @@ pub fn cabinet_grid(
         chamber_air: (0..cells)
             .map(|cell| kind[cell] == INSIDE && duct_of[cell] == NO_DUCT)
             .collect(),
+        damping,
     })
 }

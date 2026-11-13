@@ -66,6 +66,11 @@ pub struct Options {
     /// `e^(-s*t)`, which gives exactly the response of the same grid with that loss: each
     /// resonance `s/pi` Hz wide.
     pub loss_per_s: Vec<f64>,
+    /// Damping material in the air (README 5.5): faces `(axis, slot, sigma)` with a flow
+    /// resistivity `sigma` in Pa*s/m^2, which adds the resistive force `-sigma * v` to the
+    /// face's velocity update (a Rayleigh model: one figure at every frequency; the material's
+    /// own mass and the air it shuts off are left out).
+    pub damping: Vec<(u8, usize, f32)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -230,6 +235,12 @@ pub fn run(
     );
     let (sx, sy) = (stride[0], stride[1]);
 
+    let damped: Vec<(u8, usize, f32)> = options
+        .damping
+        .iter()
+        .filter(|&&(axis, c, _)| open[axis as usize].get(c).is_some_and(|m| *m != 0.0))
+        .map(|&(axis, c, sigma)| (axis, c, (sigma as f64 * dt / (2.0 * RHO0)) as f32))
+        .collect();
     while steps < options.max_steps {
         let time = steps as f64 * dt;
         let pulse = (-((time - t0) / sigma).powi(2)).exp();
@@ -241,6 +252,16 @@ pub fn run(
             for c in first..last {
                 vel[c] -= kv * mask[c] * (pressure[c] - pressure[c - s]);
             }
+        }
+        // Damped faces, semi-implicitly: v_new = ((1 - b) v_old - kv dp) / (1 + b), with
+        // b = sigma dt / (2 rho), from the plain update's result v' = v_old - kv dp.
+        for &(axis, c, b) in &damped {
+            let s = stride[axis as usize];
+            let mask = open[axis as usize][c];
+            let vel = &mut v[axis as usize];
+            let step = kv * mask * (pressure[c] - pressure[c - s]);
+            let old = vel[c] + step;
+            vel[c] = ((1.0 - b) * old - step) / (1.0 + b);
         }
         let [vx, vy, vz] = &v;
         let net = |c: usize| -> f32 { vx[c + sx] - vx[c] + vy[c + sy] - vy[c] + vz[c + 1] - vz[c] };

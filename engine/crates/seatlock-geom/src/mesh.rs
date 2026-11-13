@@ -199,7 +199,18 @@ fn parse_part(raw: &Value, index: usize) -> Result<Part, String> {
         vertices,
         triangles,
         volume_m3: volume.abs(),
-        resistivity: raw.get("flow_resistivity_pa_s_m2").and_then(Value::as_f64),
+        resistivity: raw
+            .get("flow_resistivity_pa_s_m2")
+            .and_then(Value::as_f64)
+            .or_else(|| {
+                // The damping material's own record (README 9.1, `catalog/damping/`).
+                let id = raw.get("material").and_then(Value::as_str)?;
+                seatlock_core::catalog::all("catalog/damping/")
+                    .into_iter()
+                    .find(|r| r.get("id").and_then(Value::as_str) == Some(id))?
+                    .get("flow_resistivity_pa_s_m2")?
+                    .as_f64()
+            }),
     })
 }
 

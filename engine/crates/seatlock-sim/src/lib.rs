@@ -383,6 +383,13 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
     };
+    if outer.part_materials().iter().any(|part| part.3) && !full_3d {
+        fidelity.ignored.push(
+            "Damping parts are modeled only by the full 3D model; this model treats them as \
+             air."
+                .into(),
+        );
+    }
     // Loads of chambers other than the first driver's, by chamber index, and for each
     // radiator which load it sees: 0 for the first driver's chamber, n + 1 for chamber n.
     let mut other_nodes: Vec<(
@@ -1616,6 +1623,7 @@ fn full_3d_enclosure(
         ));
     }
     let built = cabinet_grid_of(design, outer, dx)?;
+    let damping = built.damping.clone();
     let mut grid = built.grid;
     grid.true_volume_m3 = net_volume_m3;
     let valid = C0 / (10.0 * dx);
@@ -1672,6 +1680,7 @@ fn full_3d_enclosure(
             .collect(),
         relaxed: Vec::new(),
         loss_per_s,
+        damping,
     };
     let response = seatlock_fdtd::grid::run(&grid, &options, progress);
     if response.canceled {

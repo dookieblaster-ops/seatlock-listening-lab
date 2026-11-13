@@ -497,6 +497,7 @@ pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
         z_scale: Vec::new(),
         relaxed: Vec::new(),
         loss_per_s: Vec::new(),
+        damping: Vec::new(),
     };
     let response = grid::run(&grid, &options, &mut |_, _| true);
     OpeningCurve {
