@@ -239,3 +239,24 @@ fn a_stiff_core_gives_the_laminates_stiffness_and_a_loose_fill_only_mass() {
     assert!((stack.mass_per_area / mass - 1.0).abs() < 1e-12);
     assert!((stack.fill_loss - 0.09 * 1602.0 * 0.0048 / mass).abs() < 1e-12);
 }
+
+#[test]
+fn bessel_j1_holds_at_large_arguments() {
+    use seatlock_acoustics::bessel_j1;
+    // Where the series is still exact, the two forms agree.
+    let series = |x: f64| {
+        let (mut sum, mut term) = (x / 2.0, x / 2.0);
+        for m in 1..80 {
+            term *= -(x * x) / (4.0 * m as f64 * (m as f64 + 1.0));
+            sum += term;
+        }
+        sum
+    };
+    for x in [12.0, 13.5, 15.0] {
+        assert!((bessel_j1(x) - series(x)).abs() < 1e-7, "{x}");
+    }
+    // Large arguments: bounded by the asymptotic envelope sqrt(2/(pi x)).
+    for x in [20.0, 50.0, 100.0, 300.0] {
+        assert!(bessel_j1(x).abs() <= (2.0 / (PI * x)).sqrt() * 1.01, "{x}");
+    }
+}

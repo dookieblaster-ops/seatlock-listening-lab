@@ -9,6 +9,23 @@ pub fn bessel_j1(x: f64) -> f64 {
     if x.abs() < 1e-8 {
         return x / 2.0;
     }
+    // The power series loses its digits to cancellation for large arguments (a large piston,
+    // or a cabinet wall, off axis at high frequency); there the asymptotic form of Numerical
+    // Recipes' `bessj1` holds to about 1e-8.
+    if x.abs() >= 12.0 {
+        let ax = x.abs();
+        let z = 8.0 / ax;
+        let y = z * z;
+        let xx = ax - 2.356_194_491;
+        let p = 1.0
+            + y * (0.183_105e-2
+                + y * (-0.351_639_649_6e-4 + y * (0.245_752_017_4e-5 + y * (-0.240_337_019e-6))));
+        let q = 0.046_874_999_95
+            + y * (-0.200_269_087_3e-3
+                + y * (0.844_919_909_6e-5 + y * (-0.882_289_87e-6 + y * 0.105_787_412e-6)));
+        let value = (0.636_619_772 / ax).sqrt() * (xx.cos() * p - z * xx.sin() * q);
+        return if x < 0.0 { -value } else { value };
+    }
     let mut sum = 0.0;
     let mut term = x / 2.0;
     sum += term;
