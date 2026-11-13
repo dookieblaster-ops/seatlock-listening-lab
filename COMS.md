@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-13 — Claude — Handoff: start here. Walls for divided cabinets, sheet boxes, and tube caps
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued item 1 of the post below under the standing rule (no new owner go-ahead needed; it was queued work).
+
+**Done:** README 5.11 ("Cabinets divided into chambers", "Stock cabinets", checks), 6.2, 6.4, 12, 15. `seatlock-acoustics`: `AcousticNode::Chamber { volume_m3, slot }` and `WaveguideResult.pressures` (pressure in each chamber per unit flow into a node, carried through ducts and parallel branches like the openings); `solve_with_walls(node, f, lossy, walls)`; `network::lumped_network_with_walls` and `NetworkSample.pressures`. `chambers::waveguide_network` emits `Chamber` nodes (bit-identical with no walls). `seatlock-sim/src/walls.rs`: `chamber_walls` (chamber sides against the outer wall found by marching outward through `contains_cabinet`, at most 1.5 walls), `PlacedWall.chamber`, `chamber_admittance`, `element_chambers`; `cabinet_walls` takes `sheet_box` (`sheet_layer`, `stock_figure`: a range at its middle, refuses without stiffness or density) and `tube` (end caps, square of the pipe's inside area). In `simulate`: walls go into each node solve (`wall_y` per bin per chamber), `node_pressures` keyed like `radiator_nodes`, wall sources use their own chamber's pressure; the old post-hoc shunt remains for one-chamber cabinets and for full-3D bins of the driver's chamber (`replaced_3d`). `web/e2e/generate.spec.ts`: own limit 15 minutes (it was 10 against an inner 14-minute wait, and failed the baseline check under load).
+
+**Last full check on this commit:** `tools/cloud-check.sh`: rustfmt, clippy, 206 engine tests, bindings, both wasm modules, type check, vitest, build, 37 of 37 browser tests, "All checks passed" (stable 1.97.0).
+
+**Honest to say:** partitions are held still; MDF and plywood boxes stay rigid until their records get a sourced density (MDF) and stiffness and density (plywood); a 3 mm foam-board box is absurdly floppy (its walls hold 4.4 times the air's compliance), which the lab now shows rather than hides.
+
+**Next, in order:** (1) source MDF and plywood stiffness, density, and if possible loss factor (Wood Handbook or a maker's sheet, opened in the session; README 9.1), then their sheet boxes vibrate with no code change; (2) braces: a `brace` solid splits a wall's span (README 6.2); (3) partitions as two-sided plates between two chambers' pressures; (4) real damping figures (tap test on a printed strip, DMA data for the TPU cores); (5) soft walls' modal limit (residual mass term or a faster eigen solver); (6) the air's load on the walls; (7) the queue of the posts below (real exciters, STEP import, CTA-2034 score, boundary elements).
+
+**Pitfalls:** as below. Do not run a second cargo build beside `tools/cloud-check.sh`: the generator's browser test is close to its time limit under load. A worktree with its own `CARGO_TARGET_DIR` lets you code while the check runs, but only after its build steps finish.
+
 ### 2026-11-13 — Claude — Handoff: start here. Walls vibrate and are heard
 
 - **To:** next lead session (any Claude model)
@@ -511,6 +527,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-13: Walls for cabinets divided into chambers, foam-board sheet boxes, and tube end caps done on `main` by Claude.
 - 2026-11-13: Wall vibration (sand-filled, plaster-filled, and two-filament walls heard) done on `main` by Claude.
 - 2026-11-12: Novel materials (panel, damping, wall fill, foaming filament records), layered and direction-dependent panels, and priced wall builds done on `main` by Claude.
 - 2026-11-12: Imported speakers (3MF and STL, materials per part, damping in the 3D model, drivers placed by clicking) done on `main` by Claude.

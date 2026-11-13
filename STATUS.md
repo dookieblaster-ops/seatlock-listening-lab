@@ -184,6 +184,7 @@ The full history is in `docs/status-history.md`. The latest state:
   - `pvc-tube`: two cap walls of the pipe's inside area exactly, lowest resonance 1361 Hz, 0.052 % of the air's compliance; the same identity within 0.00002 dB at 10 and 20 Hz.
   - `mdf-box` rebuilt in Komatex foam board (3 mm): lowest wall resonance 87.7 Hz, the walls hold 4.43 times the air's compliance. The identity holds within 0.0083 dB at 2.9 Hz (a thirtieth of the resonance) and 0.0031 dB at half that; at 5.8 Hz it was 0.028 dB off: the walls' own mass, which matters this much only because they are so compliant. A 3 mm foam-board box is far too floppy for a speaker; the maker says so too (STATUS stock note).
   - `two-chamber` (bandpass): sand-filled walls against solid PLA, largest difference 14.5 dB under the page's request; no `wall_build_not_heard`.
+  - `tools/cloud-check.sh` on the final commit: rustfmt, clippy, 206 engine tests, bindings, both wasm modules, type check, vitest, build, 37 of 37 browser tests (11.6 minutes), "All checks passed" (stable 1.97.0).
   - The full engine suite in the worktree passed with these changes (every crate, including the generator's families, whose three-ways now have walls).
   - Baseline check on unchanged `main` at the start of this session: 201 engine tests passed; 36 of 37 browser tests passed; the generator's test hit its own 10-minute limit while its inner wait allowed 14 minutes, with a cargo build running beside it. The limit is now 15 minutes.
 
