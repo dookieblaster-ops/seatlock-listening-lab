@@ -109,6 +109,17 @@ pub trait OuterShape: Send + Sync {
 
     /// True when the point is in the printed plastic of the cabinet's walls, before any
     /// cut-out. Alignment pins for print splitting are placed where this holds.
+    /// The parts of an assembly with a material each: (part name, material id, volume in
+    /// m^3, true for damping). Empty for a shape built of one material, the design's own.
+    fn part_materials(&self) -> Vec<(String, String, f64, bool)> {
+        Vec::new()
+    }
+
+    /// The flow resistivity (Pa*s/m^2) of damping material at a point, if any is there.
+    fn damping_at(&self, _point_m: [f64; 3]) -> Option<f64> {
+        None
+    }
+
     fn contains_solid(&self, _point_m: [f64; 3]) -> Result<bool, String> {
         not_finished()
     }

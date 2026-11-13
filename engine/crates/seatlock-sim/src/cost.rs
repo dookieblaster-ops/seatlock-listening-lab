@@ -50,6 +50,9 @@ pub struct CabinetParts {
     pub stock_cuts: Vec<(String, f64)>,
     /// Flat panels for one speaker: (stock id, name, [a, b] in m).
     pub stock_panels: Vec<(String, String, [f64; 2])>,
+    /// An assembly's parts with a material each (outer shape `mesh`): (part name, material,
+    /// volume in m^3, true for damping). Empty when the whole print is the design's material.
+    pub part_materials: Vec<(String, String, f64, bool)>,
     pub problems: Vec<String>,
 }
 
@@ -266,14 +269,93 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         }
     }
 
+    // Parts of an imported assembly with materials of their own: each printed part priced by
+    // its material, its share of the print after cut-outs by its own volume; damping bought
+    // by volume.
+    let solid_parts: Vec<&(String, String, f64, bool)> =
+        parts.part_materials.iter().filter(|p| !p.3).collect();
+    let mut print_mass_kg = 0.0;
+    let mut print_time_h_at_least = None;
+    if !solid_parts.is_empty() {
+        let raw: f64 = solid_parts.iter().map(|p| p.2).sum();
+        let solid = parts.print_solid_m3.unwrap_or(raw).max(0.0);
+        let scale = if raw > 0.0 { solid / raw } else { 0.0 };
+        let mut printed_m3 = 0.0;
+        for (name, id, volume, _) in solid_parts.iter().copied() {
+            let Some(record) = catalog::material(id) else {
+                problems.push(format!(
+                    "Part {name}: material {id} is not a print material in the catalog."
+                ));
+                continue;
+            };
+            let Some(density) = record.get("density_kg_m3").and_then(Value::as_f64) else {
+                problems.push(format!(
+                    "Print material {id} has no density in the catalog."
+                ));
+                continue;
+            };
+            let mass = volume * scale * density * design.build.infill_fraction * n;
+            print_mass_kg += mass;
+            printed_m3 += volume * scale;
+            lines.push(line(
+                format!("Printed {}, {name}", id.to_uppercase()),
+                mass,
+                "kg",
+                record.get("price_per_kg").and_then(Value::as_f64),
+                record
+                    .pointer("/price_source/read_on")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                false,
+            ));
+        }
+        for (name, id, volume, _) in parts.part_materials.iter().filter(|p| p.3) {
+            let record = catalog::all("catalog/damping/")
+                .into_iter()
+                .find(|r| r.get("id").and_then(Value::as_str) == Some(id.as_str()));
+            let litres = volume * n * 1000.0;
+            match record {
+                Some(r) => lines.push(line(
+                    format!("Damping, {name}: {}", name_of(&r, id)),
+                    litres,
+                    "L",
+                    r.get("price_per_litre").and_then(Value::as_f64),
+                    r.pointer("/price/read_on")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    r.pointer("/price/via").is_some(),
+                )),
+                None => lines.push(line(
+                    format!(
+                        "Damping, {name}: {}",
+                        if id.is_empty() {
+                            "material not chosen"
+                        } else {
+                            id
+                        }
+                    ),
+                    litres,
+                    "L",
+                    None,
+                    None,
+                    false,
+                )),
+            }
+        }
+        let flow = catalog::printer(None)
+            .and_then(|record| record.get("max_flow_m3_per_s").and_then(Value::as_f64));
+        print_time_h_at_least =
+            flow.map(|flow| printed_m3 * design.build.infill_fraction * n / flow / 3600.0);
+    }
+
     // Printed parts.
     let material = catalog::material(&design.build.material);
     let density = material
         .as_ref()
         .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64));
-    let mut print_mass_kg = 0.0;
-    let mut print_time_h_at_least = None;
-    if let Some(solid) = parts.print_solid_m3.filter(|solid| *solid > 0.0) {
+    if !solid_parts.is_empty() {
+        // Priced part by part above.
+    } else if let Some(solid) = parts.print_solid_m3.filter(|solid| *solid > 0.0) {
         match density {
             Some(density) => {
                 print_mass_kg = solid * density * design.build.infill_fraction * n;

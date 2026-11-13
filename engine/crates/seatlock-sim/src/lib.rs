@@ -2620,6 +2620,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
             print_solid_m3: Some(solid + print_split.pins_m3),
             stock_cuts: shape.stock_cuts(),
             stock_panels: shape.stock_panels(),
+            part_materials: shape.part_materials(),
             problems: Vec::new(),
         },
     );
@@ -2689,6 +2690,7 @@ pub fn design_cost(design: &DesignFile) -> CostReport {
                 print_solid_m3: None,
                 stock_cuts: Vec::new(),
                 stock_panels: Vec::new(),
+                part_materials: Vec::new(),
                 problems: vec![err],
             },
         ),
