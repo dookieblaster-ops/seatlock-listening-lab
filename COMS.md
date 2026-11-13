@@ -45,6 +45,25 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Two-ways in the generator; the plan from the industry research
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. The owner (2026-11-12): "The software should work with any configuration ... do more research on how the simulator should be built because you're coming up with too many limitations ... do it." This is a standing go-ahead for the queue below.
+
+**Done:** research (STATUS "What has been verified", README 2.6 "How the industry builds this"); two-way families in `seatlock-sim/src/generate.rs` (`Family.ways`, `tweeters()`, `VARIABLES = 12`: x[9] tweeter, x[10] crossover, x[11] tweeter level); `mount_features` in `seatlock-sim/src/lib.rs` leaves screw holes out when no bolt circle is published; DC28F-8 mounting and price (unconfirmed, `via`). Last full check on this commit: rustfmt, clippy, 166 engine tests, bindings, both wasm modules, type check, vitest, build, 34 of 34 browser tests, "All checks passed" (stable 1.97.0).
+
+**Queue, in order (go-ahead given)**
+
+1. **Any number of sound sources in the generator.** Make `build` take a list of drivers: three-ways (a midrange needs its own sealed chamber: a box chamber behind it, as `two-chamber` shows), two woofers, a woofer on the back plus one in front. Crossovers per neighbouring pair. Add larger budget woofers (6.5 and 8 in) to the catalog with sizes; 95 dB clean needs cone area. Open each part's own page; from this workspace parts-express.com data sheets were blocked, daytonaudio.com product pages appear in search results and may open.
+2. **The standard curves as the score** (README 2.6 item 3). The radiation contract's `transfer` already gives pressure at any point: compute the 70 CTA-2034 directions under `baffle` (use the shared geometry trick of the sound-power code so it stays fast), form listening window, early reflections, sound power, predicted in-room response, and the directivity indices; show them as one graph; then a preference rating. Take the rating's formula and constants from a source open in the session (Olive 2004, AES paper 6190, or the standard), not from memory (README 1.3). Then let correction fit the listening window and let the generator chase the rating. The target's thresholds are the owner's (ask once the numbers exist).
+3. **A boundary-element model** (README 2.6 item 2): first the outside (rigid cabinet skin from each outer shape's mesh, the print tree gives one; sources as moving patches; Burton-Miller or CHIEF points for the irregular frequencies), validated on CHK-RAD-3's sphere and CHK-RAD-2's disc; one solve per frequency then gives all 70 directions. Then the inside as a second subdomain joined at the openings. Dense complex solves with `nalgebra` are fine to a few thousand elements; keep it in a worker.
+4. Generator speed; the page's fields for cabinets that are not boxes; the rest of the previous post's queue.
+
+**Pitfalls:** as in the post below. The generator's browser test now allows 14 minutes.
+
+**Next step:** queue item 1.
+
 ### 2026-11-12 — Claude — Handoff: start here. The lab generates cabinets; curved shape, wider score, losses
 
 - **To:** next lead session (any Claude model)
@@ -417,6 +436,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Two-way cabinets in the generator and the industry research done on `main` by Claude; any number of sources, the CTA-2034 score, and a boundary-element model queued with the owner's go-ahead.
 - 2026-11-12: The owner's four items (spec around generating, the cabinet generator, a curved outer shape, a wider score with air losses) done on `main` by Claude; a curve-following 3D grid was tried and not adopted.
 - 2026-11-12: Fast 3D step 3 (relaxed faces, gradient, objective, optimizer, the `voxels` solid, the page) and the OpenSCAD export done on `main` by Claude (Fable 5.2, then Opus 5.5); making shaping earn more is queued.
 - 2026-11-11: Fast 3D step 1, the early stop by harmonic inversion, done on `main` by Claude (2 to 3 times faster for ported cabinets); the rest of step 1 and step 2 queued, step 3 briefed for Claude Fable 5.2.

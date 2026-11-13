@@ -2154,9 +2154,12 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
             holes.push((pose, cutout));
             let thickness = shape.panel_thickness_m(&mount.surface).unwrap_or(0.0);
             match mount_features(design, mount, &pose, cutout, thickness) {
-                Ok((parts, volume)) => {
+                Ok((parts, volume, note)) => {
                     features.extend(parts);
                     feature_volume += volume;
+                    if let Some(note) = note {
+                        warnings.push(format!("Mount {}: {note}", mount.id));
+                    }
                 }
                 Err(problem) => {
                     warnings.push(format!("Mount {}: {problem}", mount.id));
@@ -2620,7 +2623,7 @@ fn mount_features(
     pose: &seatlock_geom::MountPose,
     cutout_m: f64,
     thickness_m: f64,
-) -> Result<(Vec<Value>, f64), String> {
+) -> Result<(Vec<Value>, f64, Option<String>), String> {
     let driver = mount_driver(design, &mount.id).ok_or("no driver record")?;
     let size = |key: &str| {
         driver
@@ -2662,14 +2665,23 @@ fn mount_features(
         ));
         volume += pi * ((flange / 2.0).powi(2) - (cutout_m / 2.0).powi(2)) * recess;
     }
-    let circle = size("bolt_circle_m").ok_or(
-        "the driver's bolt circle is not published, so its bolt holes cannot be drilled and \
-         the print file is refused.",
-    )?;
-    let count = size("bolt_count").map(|n| n.round() as usize).ok_or(
-        "the driver's bolt count is not published, so its bolt holes cannot be drilled and \
-         the print file is refused.",
-    )?;
+    // Without a published bolt circle the hole is still cut; the screw holes are left to the
+    // builder, who marks them through the driver's own flange (README 6.4).
+    let (Some(circle), Some(count)) = (
+        size("bolt_circle_m"),
+        size("bolt_count").map(|n| n.round() as usize),
+    ) else {
+        return Ok((
+            parts,
+            volume,
+            Some(
+                "the driver's bolt circle is not published, so no screw holes are in the print \
+                 file: hold the driver in its hole, mark the holes through its flange, and \
+                 drill them."
+                    .into(),
+            ),
+        ));
+    };
     let hole = mount
         .extra
         .get("bolt_hole_m")
@@ -2698,7 +2710,7 @@ fn mount_features(
         ));
         volume += pi * (hole / 2.0).powi(2) * (thickness_m - recess);
     }
-    Ok((parts, volume))
+    Ok((parts, volume, None))
 }
 
 /// Whether the sound source on `mount_id` names no driver: a panel, or another kind of

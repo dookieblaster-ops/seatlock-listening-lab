@@ -45,6 +45,13 @@ pub struct Family {
     pub layout: String,
     /// The face the driver sits on.
     pub face: String,
+    /// Sound sources: 1 is one driver, 2 adds a tweeter on the front with a crossover.
+    #[serde(default = "one")]
+    pub ways: u32,
+}
+
+fn one() -> u32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,14 +88,18 @@ const OUTERS: [(&str, &str); 6] = [
 /// The families the generator searches.
 pub fn families() -> Vec<Family> {
     let mut out: Vec<Family> = Vec::new();
-    let mut push = |label: String, outer: &str, layout: &str, face: &str| {
+    let mut push_ways = |label: String, outer: &str, layout: &str, face: &str, ways: u32| {
         out.push(Family {
             index: out.len(),
             label,
             outer: outer.into(),
             layout: layout.into(),
             face: face.into(),
+            ways,
         });
+    };
+    let mut push = |label: String, outer: &str, layout: &str, face: &str| {
+        push_ways(label, outer, layout, face, 1)
     };
     for (kind, name) in OUTERS {
         push(format!("{name}, sealed"), kind, "sealed", "front");
@@ -98,6 +109,44 @@ pub fn families() -> Vec<Family> {
     for (face, name) in [("top", "driver facing up"), ("back", "driver facing back")] {
         push(format!("Box, sealed, {name}"), "box", "sealed", face);
         push(format!("Box, ported, {name}"), "box", "vented", face);
+    }
+    // Two-ways: a woofer and a tweeter on the front, split by a digital crossover. Added
+    // after the one-driver families so those keep their numbers.
+    for (label, outer, layout, face) in [
+        ("Box, sealed, woofer and tweeter", "box", "sealed", "front"),
+        ("Box, ported, woofer and tweeter", "box", "vented", "front"),
+        (
+            "Rounded box, ported, woofer and tweeter",
+            "rounded",
+            "vented",
+            "front",
+        ),
+        (
+            "Leaning front, ported, woofer and tweeter",
+            "sloped",
+            "vented",
+            "front",
+        ),
+        (
+            "Box, folded line, woofer and tweeter",
+            "box",
+            "line",
+            "front",
+        ),
+        (
+            "Box, ported, woofer facing up, tweeter in front",
+            "box",
+            "vented",
+            "top",
+        ),
+        (
+            "Box, ported, woofer facing back, tweeter in front",
+            "box",
+            "vented",
+            "back",
+        ),
+    ] {
+        push_ways(label.into(), outer, layout, face, 2);
     }
     out
 }
@@ -116,6 +165,15 @@ struct Part {
 /// Sourced budget drivers that can carry a cabinet's bass and whose record prints the sizes a
 /// cut-out needs (README 9.1, 11.4).
 fn parts() -> Vec<Part> {
+    parts_of(&["woofer", "fullrange", "midrange"])
+}
+
+/// Sourced budget tweeters whose records give the sizes a cut-out needs.
+fn tweeters() -> Vec<Part> {
+    parts_of(&["tweeter"])
+}
+
+fn parts_of(kinds: &[&str]) -> Vec<Part> {
     catalog::all("catalog/drivers/")
         .into_iter()
         .filter_map(|record| {
@@ -123,7 +181,7 @@ fn parts() -> Vec<Part> {
             if text("status") != Some("sourced") || text("tier") != Some("budget") {
                 return None;
             }
-            if !matches!(text("kind"), Some("woofer" | "fullrange" | "midrange")) {
+            if !kinds.contains(&text("kind")?) {
                 return None;
             }
             let number = |path: &str| record.pointer(path).and_then(Value::as_f64);
@@ -141,6 +199,9 @@ fn parts() -> Vec<Part> {
 }
 
 const WALL_M: f64 = 0.008;
+/// Search variables per candidate: driver, volume, two proportions, driver place, tuning or
+/// line size, shape, line taper, line exit, then tweeter, crossover frequency, tweeter level.
+const VARIABLES: usize = 12;
 /// The room a candidate is judged in when its driver does not face the listener and the
 /// starting design has no room of its own: the example of README section 5.10.
 fn default_room() -> Value {
@@ -200,7 +261,8 @@ fn build(
     base: &DesignFile,
     family: &Family,
     parts: &[Part],
-    x: &[f64; 9],
+    tweeters: &[Part],
+    x: &[f64; VARIABLES],
     registry: &Registry,
 ) -> Result<Built, String> {
     let part = &parts[((x[0] * parts.len() as f64) as usize).min(parts.len() - 1)];
@@ -212,6 +274,17 @@ fn build(
     let along = lerp(0.3, 0.72, x[4]);
     let shape_t = x[6];
     let line = family.layout == "line";
+    let tweeter = match family.ways {
+        1 => None,
+        _ => Some(
+            tweeters
+                .get(((x[9] * tweeters.len() as f64) as usize).min(tweeters.len().max(1) - 1))
+                .ok_or("the catalog has no sourced budget tweeter with mounting sizes.")?,
+        ),
+    };
+    // Room on the front for the tweeter above (or apart from) the bass driver.
+    let gap = 0.012;
+    let tweeter_room = tweeter.map_or(0.0, |t| t.outer_m + gap);
 
     // Inner air w x h x d of the asked volume and proportions, then the true shape scaled
     // until its own air matches.
@@ -233,12 +306,26 @@ fn build(
     if ow < part.outer_m + 2.0 * WALL_M + 0.012 {
         return Err("the cabinet is narrower than the driver.".into());
     }
+    if let Some(t) = tweeter {
+        if ow < t.outer_m + 2.0 * WALL_M + 0.012 {
+            return Err("the cabinet is narrower than the tweeter.".into());
+        }
+        if od < t.depth_m + 2.0 * WALL_M + 0.01 {
+            return Err("the cabinet is too shallow for the tweeter.".into());
+        }
+    }
+    let front = family.face == "front";
+    // Both on the front: the tweeter sits right above the bass driver.
+    let stacked = if front { tweeter_room } else { 0.0 };
     let (face_w, face_h) = match family.face.as_str() {
         "top" => (ow, od),
         _ => (ow, oh),
     };
-    if face_h < part.outer_m + 2.0 * WALL_M + 0.012 {
-        return Err("the face is shorter than the driver.".into());
+    if face_h < part.outer_m + stacked + 2.0 * WALL_M + 0.012 {
+        return Err("the face is shorter than its drivers.".into());
+    }
+    if tweeter.is_some() && !front && oh < tweeter_room + 2.0 * WALL_M + 0.012 {
+        return Err("the front is shorter than the tweeter.".into());
     }
     let reach = part.outer_m / 2.0 + WALL_M + 0.006;
     let egg = family.outer == "revolved";
@@ -249,7 +336,7 @@ fn build(
     let v = if egg {
         face_h / 2.0
     } else {
-        (along * face_h).clamp(reach, face_h - reach)
+        (along * face_h).clamp(reach, face_h - reach - stacked)
     };
     let facing_depth = if family.face == "top" { oh } else { od };
     if facing_depth < part.depth_m + 2.0 * WALL_M + 0.01 {
@@ -289,11 +376,18 @@ fn build(
             }
             // At the end of the height away from a front driver.
             let low = WALL_M + diameter / 2.0 + 0.012;
-            let z = if family.face == "front" && v < oh / 2.0 {
+            let z = if front && tweeter.is_none() && v < oh / 2.0 {
                 oh - low
             } else {
                 low
             };
+            if front
+                && tweeter.is_some()
+                && !back
+                && v - part.outer_m / 2.0 < z + diameter / 2.0 + 0.01
+            {
+                return Err("the port does not fit under the bass driver.".into());
+            }
             let px = ow / 2.0;
             let path = if egg {
                 // Through the middle of the flat back, clear of the driver's magnet.
@@ -317,7 +411,10 @@ fn build(
         "line" => {
             // A chamber behind the driver at the top; below it a slot that runs down the
             // back, forward along the bottom, up behind the front, and out through it.
-            let chamber_h = (part.outer_m + 0.03).max(0.3 * oh).min(oh - 0.25);
+            let chamber_h = (part.outer_m + stacked + 0.03).max(0.3 * oh).min(oh - 0.25);
+            if chamber_h < part.outer_m + stacked + 0.02 {
+                return Err("the cabinet is too short for a line under its drivers.".into());
+            }
             let floor = oh - WALL_M - chamber_h;
             let slot_w = (ow - 2.0 * WALL_M - 0.02).min(0.9 * ow);
             let start = lerp(0.05, 0.1, x[5]).min((od - 3.0 * WALL_M) / 2.0 - 0.012);
@@ -350,11 +447,46 @@ fn build(
     }
     // The driver: on a line cabinet it sits in the chamber at the top.
     let at = if line {
-        let chamber_h = (part.outer_m + 0.03).max(0.3 * oh).min(oh - 0.25);
-        [face_w / 2.0, oh - WALL_M - chamber_h / 2.0]
+        let chamber_h = (part.outer_m + stacked + 0.03).max(0.3 * oh).min(oh - 0.25);
+        [face_w / 2.0, oh - WALL_M - chamber_h / 2.0 - stacked / 2.0]
     } else {
         [face_w / 2.0, v]
     };
+    let mut mounts = vec![json!({ "id": "m1", "surface": family.face, "at_m": at,
+        "rear_into": "main", "recess_m": 0.0 })];
+    let mut radiators = vec![json!({ "kind": "cone", "driver_id": part.id, "mount": "m1" })];
+    let chain = |blocks: Value, gain_db: f64| {
+        json!({ "blocks": blocks, "delay_s": 0.0, "gain_db": gain_db, "invert": false,
+                "limiter": null })
+    };
+    let mut chains = vec![chain(json!([]), 0.0)];
+    if let Some(t) = tweeter {
+        let z = if front {
+            at[1] + part.outer_m / 2.0 + gap + t.outer_m / 2.0
+        } else {
+            // The bass driver is on another face: the tweeter goes high on the front.
+            lerp(oh / 2.0, oh - t.outer_m / 2.0 - WALL_M - 0.006, along)
+                .max(t.outer_m / 2.0 + WALL_M + 0.006)
+        };
+        mounts.push(
+            json!({ "id": "m2", "surface": "front", "at_m": [ow / 2.0, z],
+            "rear_into": "main", "recess_m": 0.0 }),
+        );
+        radiators.push(json!({ "kind": "cone", "driver_id": t.id, "mount": "m2" }));
+        // Crossover between two octaves above the tweeter's resonance at the least (it must
+        // not be asked for bass) and 4.5 kHz.
+        let lowest = (2.0 * t.fs_hz).max(1500.0);
+        let f = lowest * (4500.0f64 / lowest).max(1.0).powf(x[10]);
+        let level = lerp(-12.0, 0.0, x[11]);
+        let split = |band: &str| {
+            json!([{ "kind": "crossover", "family": "linkwitz-riley", "order": 4, "f_hz": f,
+                     "band": band }])
+        };
+        chains = vec![chain(split("low"), 0.0), chain(split("high"), level)];
+        named.push(("crossover Hz".into(), f));
+        named.push(("tweeter level dB".into(), level));
+        summary.push_str(&format!(", {} above {f:.0} Hz", t.name));
+    }
     let facing = family.face != "front";
     if facing {
         summary.push_str(match family.face.as_str() {
@@ -369,10 +501,9 @@ fn build(
     };
     let mut speaker = json!({
         "enclosure": { "outer": fields, "chambers": chambers, "ducts": ducts,
-            "mounts": [{ "id": "m1", "surface": family.face, "at_m": at, "rear_into": "main",
-                         "recess_m": 0.0 }],
+            "mounts": mounts,
             "solids": [] },
-        "radiators": [{ "kind": "cone", "driver_id": part.id, "mount": "m1" }],
+        "radiators": radiators,
         "listening": base.speaker.listening,
     });
     if !room.is_null() {
@@ -385,8 +516,7 @@ fn build(
         "dsp": {
             "sample_rate_hz": base.dsp.sample_rate_hz,
             "whole_speaker": [],
-            "per_radiator": [{ "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false,
-                               "limiter": null }],
+            "per_radiator": chains,
             "correction": base.dsp.correction,
         },
         "electronics": base.electronics,
@@ -426,15 +556,28 @@ pub fn generate_family(
     if parts.is_empty() {
         return Err("the catalog has no sourced budget driver with mounting sizes.".into());
     }
-    let mut notes = vec![format!(
-        "Drivers tried: {}. Only sourced budget drivers whose records print their mounting sizes \
-         are proposed; one driver per cabinet for now.",
-        parts
-            .iter()
+    let tweeters = tweeters();
+    if family.ways > 1 && tweeters.is_empty() {
+        return Err("the catalog has no sourced budget tweeter with mounting sizes.".into());
+    }
+    let names = |list: &[Part]| {
+        list.iter()
             .map(|part| part.name.clone())
             .collect::<Vec<_>>()
             .join(", ")
+    };
+    let mut notes = vec![format!(
+        "Drivers tried: {}. Only sourced budget drivers whose records give their mounting sizes \
+         are proposed.",
+        names(&parts)
     )];
+    if family.ways > 1 {
+        notes.push(format!(
+            "Tweeters tried: {}. The split is a fourth-order Linkwitz-Riley crossover; its \
+             frequency and the tweeter's level are searched.",
+            names(&tweeters)
+        ));
+    }
     if family.face != "front" {
         notes.push(
             "The driver does not face the listener, so these are judged in a room. The everyday \
@@ -448,7 +591,7 @@ pub fn generate_family(
     let budget = request.evaluations.max(4);
     let explore = (budget * 3).div_ceil(5);
     let mut points = Vec::new();
-    let mut best: Vec<(f64, [f64; 9], Generated)> = Vec::new();
+    let mut best: Vec<(f64, [f64; VARIABLES], Generated)> = Vec::new();
     let mut scored = 0usize;
     let mut thrown_out = 0usize;
     let mut reasons: Vec<(String, usize)> = Vec::new();
@@ -458,7 +601,7 @@ pub fn generate_family(
     let mut tries = 0usize;
     while scored < budget && tries < budget * 40 {
         tries += 1;
-        let x: [f64; 9] = if scored < explore || best.is_empty() {
+        let x: [f64; VARIABLES] = if scored < explore || best.is_empty() {
             std::array::from_fn(|_| random.next())
         } else {
             // Refine one of the best: small moves, and now and then another driver.
@@ -469,18 +612,18 @@ pub fn generate_family(
                 (scored - explore) as f64 / (budget - explore) as f64,
             );
             std::array::from_fn(|index| {
-                if index == 0 {
+                if index == 0 || index == 9 {
                     if random.next() < 0.2 {
                         random.next()
                     } else {
-                        from[0]
+                        from[index]
                     }
                 } else {
                     (from[index] + spread * (2.0 * random.next() - 1.0)).clamp(0.0, 1.0)
                 }
             })
         };
-        let built = match build(base, &family, &parts, &x, registry) {
+        let built = match build(base, &family, &parts, &tweeters, &x, registry) {
             Ok(built) => built,
             Err(reason) => {
                 thrown_out += 1;

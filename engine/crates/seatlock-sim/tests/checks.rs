@@ -1286,19 +1286,20 @@ fn bolt_holes_sit_on_the_bolt_circle_in_the_face() {
 }
 
 #[test]
-fn a_mounting_size_the_record_does_not_print_refuses_the_export() {
-    // dayton-nd65-4 prints no bolt circle; a recess needs the flange, and must be thinner
-    // than the wall.
+fn a_missing_bolt_circle_leaves_the_screw_holes_out_and_a_bad_recess_refuses_the_export() {
+    // dayton-nd65-4 prints no bolt circle; a recess must be thinner than the wall.
     let mut value: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
     value["speaker"]["radiators"][0]["driver_id"] = serde_json::json!("dayton-nd65-4");
     let design: seatlock_core::DesignFile = serde_json::from_value(value).unwrap();
     let report = seatlock_sim::geometry_report(&design).unwrap();
-    assert!(!report.can_export_print);
+    // No bolt circle: the hole is cut, the screw holes are left to the builder, and the
+    // report says so (owner, 2026-11-12: a missing detail must not stop a design).
+    assert!(report.can_export_print);
     assert!(
         report
             .warnings
             .iter()
-            .any(|line| line.contains("bolt circle")),
+            .any(|line| line.contains("bolt circle") && line.contains("mark the holes")),
         "{:?}",
         report.warnings
     );

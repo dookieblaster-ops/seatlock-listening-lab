@@ -10,9 +10,9 @@ test("the lab generates cabinets, ranks them, checks the best in 3D, and opens o
   await expect(page.getByTestId("formula-solid")).toBeVisible({ timeout: 20_000 });
   const started = Date.now();
   await page.getByTestId("generate-start").click();
-  await expect(page.getByTestId("generate-table")).toBeVisible({ timeout: 240_000 });
+  await expect(page.getByTestId("generate-table")).toBeVisible({ timeout: 300_000 });
   console.log(`first generated cabinets after ${((Date.now() - started) / 1000).toFixed(0)} s`);
-  await expect(page.getByTestId("generate-note")).toHaveText("The generator finished.", { timeout: 540_000 });
+  await expect(page.getByTestId("generate-note")).toHaveText("The generator finished.", { timeout: 840_000 });
   console.log(`generator finished after ${((Date.now() - started) / 1000).toFixed(0)} s`);
   await expect(page.getByTestId("generate-verified")).toContainText("3D check of the top cabinet");
   const rows = page.getByTestId("generate-table").locator("tbody tr");

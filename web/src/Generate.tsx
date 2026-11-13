@@ -56,7 +56,7 @@ export function Generate({ text, onOpen }: { text: string; onOpen: (design: unkn
           try {
             const json = await runJob(
               "generate.family",
-              { text, family: index, seed: 1, evaluations: 16 },
+              { text, family: index, seed: 1, evaluations: 12 },
               (done, total) => setProgress((old) => ({ ...old, [index]: `${label}: ${done} of ${total}` })),
               workers.current,
             );

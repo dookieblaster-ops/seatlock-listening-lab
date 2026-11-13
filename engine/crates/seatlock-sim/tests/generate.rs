@@ -47,6 +47,20 @@ fn every_family_proposes_cabinets_that_can_be_built_and_scored() {
         let report = seatlock_sim::geometry_report(&top.design).unwrap();
         assert!(report.can_export_print, "{:?}", report.warnings);
         assert_eq!(top.design.speaker.room.is_some(), family.face != "front");
+        // As many sound sources as the family says, each with its own channel and, for a
+        // two-way, a crossover; the tweeter is a real part on the front.
+        assert_eq!(top.design.speaker.radiators.len(), family.ways as usize);
+        assert_eq!(top.design.dsp.per_radiator.len(), family.ways as usize);
+        if family.ways == 2 {
+            let tweeter = top.design.speaker.radiators[1].fields["driver_id"]
+                .as_str()
+                .unwrap();
+            assert!(!tweeter.starts_with("test-"));
+            assert_eq!(top.design.speaker.enclosure.mounts[1].surface, "front");
+            for chain in &top.design.dsp.per_radiator {
+                assert!(chain.blocks.iter().any(|block| block.kind == "crossover"));
+            }
+        }
         // Best first.
         for pair in result.best.windows(2) {
             let rank = |s: &seatlock_sim::compare::Score| {

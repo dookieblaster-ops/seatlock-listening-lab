@@ -11,10 +11,21 @@
     "qes": 1.33,
     "qms": 0.81,
     "re_ohm": 5.4,
-    "le_h": 0.00009,
+    "le_h": 9e-05,
     "sd_m2": 0.00066,
     "pe_w": 50.0,
     "sens_db_1w": 89.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.073914,
+    "outer_diameter_m": 0.109982,
+    "depth_m": 0.038862,
+    "source": {
+      "url": "https://www.parts-express.com/Dayton-Audio-DC28F-8-1-1-8-Silk-Dome-Tweeter-275-070",
+      "title": "Parts Express listing: cutout 2.91 in, outside 4.33 in, depth 1.53 in",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    }
   },
   "response_file": null,
   "source": {
@@ -22,5 +33,12 @@
     "title": "Dayton Audio DC28F-8 specification sheet",
     "read_on": "2026-11-10"
   },
-  "price": null
+  "price": {
+    "amount": 32.99,
+    "currency": "USD",
+    "vendor": "Dayton Audio (maker's list price)",
+    "url": "https://www.daytonaudio.com/product/29/dc28f-8-1-1-8-silk-dome-tweeter-8-ohm",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  }
 }
