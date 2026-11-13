@@ -160,6 +160,8 @@ struct Part {
     sd_m2: f64,
     outer_m: f64,
     depth_m: f64,
+    /// The lowest cone break-up an independent test found (README 9.1).
+    breakup_hz: Option<f64>,
 }
 
 /// Sourced budget drivers that can carry a cabinet's bass and whose record prints the sizes a
@@ -193,6 +195,7 @@ fn parts_of(kinds: &[&str]) -> Vec<Part> {
                 sd_m2: number("/published/sd_m2")?,
                 outer_m: number("/mounting/outer_diameter_m").filter(|v| *v > 0.0)?,
                 depth_m: number("/mounting/depth_m").unwrap_or(0.06),
+                breakup_hz: seatlock_acoustics::breakup(&record).map(|(f, _)| f),
             })
         })
         .collect()
@@ -475,8 +478,16 @@ fn build(
         radiators.push(json!({ "kind": "cone", "driver_id": t.id, "mount": "m2" }));
         // Crossover between two octaves above the tweeter's resonance at the least (it must
         // not be asked for bass) and 4.5 kHz.
+        // and, where an independent test found the woofer's cone break up, an octave below
+        // that.
         let lowest = (2.0 * t.fs_hz).max(1500.0);
-        let f = lowest * (4500.0f64 / lowest).max(1.0).powf(x[10]);
+        let highest = part.breakup_hz.map_or(4500.0, |f| (f / 2.0).min(4500.0));
+        if highest < lowest {
+            return Err(
+                "the tweeter cannot reach down to an octave below the woofer's break-up.".into(),
+            );
+        }
+        let f = lowest * (highest / lowest).powf(x[10]);
         let level = lerp(-12.0, 0.0, x[11]);
         let split = |band: &str| {
             json!([{ "kind": "crossover", "family": "linkwitz-riley", "order": 4, "f_hz": f,

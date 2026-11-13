@@ -45,6 +45,21 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Independent driver measurements; then the queue below
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-12): yes to independent measurements beside the makers' data, labeled by source. The queue of the post below still holds, with its go-ahead.
+
+**Done:** README 9.1 rule and glossary; `seatlock_acoustics::{with_independent, breakup}` (the cone radiator uses the merged record; the note names both values); `breakup_warnings` in `seatlock-sim/src/lib.rs` (code `measured_breakup`); the generator caps a two-way's crossover at half the woofer's measured break-up; new driver `catalog/drivers/dayton-dsa175-8.json` with a Voice Coil Test Bench entry; tests `seatlock-sim/tests/independent.rs`. Last full check on this commit: rustfmt, clippy, 169 engine tests, bindings, both wasm modules, type check, vitest, build, 34 of 34 browser tests, "All checks passed" (stable 1.97.0).
+
+**Next, in order**
+
+1. **More independent data.** Voice Coil Test Bench pages on audioxpress.com open in the cloud browser (WebFetch is refused there); search "Test Bench Dayton Audio <model>". Copy only printed numbers (T/S table text when it is text, Klippel XBl and XC, break-up peaks stated in the prose); the T/S tables are often images, so read them only when the text gives them. HiFiCompass (hificompass.com) opened once in the cloud browser and then timed out; its curves are images. Erin's Audio Corner has a drive-unit section (erinsaudiocorner.com/driveunits). Makers' FRD/ZMA data files (daytonaudio.com product pages, "Graphs/FRD/ZMA Data File") are measured curves: downloading one needs the owner's yes (cloud-browser rule); with them, README 5.6's response-file blend can be built.
+2. The queue of the post below: any number of sound sources in the generator (the DSA175-8 is the larger woofer it asked for), the CTA-2034 score, the boundary-element model.
+
+**Next step:** queue item 1 of the post below; item 1 here alongside when a source opens.
+
 ### 2026-11-12 — Claude — Handoff: start here. Two-ways in the generator; the plan from the industry research
 
 - **To:** next lead session (any Claude model)
@@ -436,6 +451,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Independent driver measurements (rule, engine, first driver DSA175-8 with Voice Coil Test Bench data) done on `main` by Claude.
 - 2026-11-12: Two-way cabinets in the generator and the industry research done on `main` by Claude; any number of sources, the CTA-2034 score, and a boundary-element model queued with the owner's go-ahead.
 - 2026-11-12: The owner's four items (spec around generating, the cabinet generator, a curved outer shape, a wider score with air losses) done on `main` by Claude; a curve-following 3D grid was tried and not adopted.
 - 2026-11-12: Fast 3D step 3 (relaxed faces, gradient, objective, optimizer, the `voxels` solid, the page) and the OpenSCAD export done on `main` by Claude (Fable 5.2, then Opus 5.5); making shaping earn more is queued.

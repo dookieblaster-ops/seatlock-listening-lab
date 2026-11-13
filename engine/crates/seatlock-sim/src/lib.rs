@@ -282,6 +282,8 @@ pub fn simulate_with_progress(
         ));
     }
 
+    issues.extend(breakup_warnings(design));
+
     let mut fidelity = Fidelity {
         enclosure: request.enclosure.clone(),
         radiation: request.radiation.clone(),
@@ -1692,6 +1694,54 @@ fn max_spl_db(input: SplLimit) -> f64 {
         return spl_1v;
     }
     spl_1v + 20.0 * limit.log10()
+}
+
+/// A driver whose independent measurement found a cone break-up peak (README 9.1) is asked to
+/// stay at least an octave below it: a fourth-order low-pass is 24 dB down there, which
+/// leaves a typical peak well under the rest. The cone model itself has no break-up.
+fn breakup_warnings(design: &DesignFile) -> Vec<Issue> {
+    let mut out = Vec::new();
+    for (index, radiator) in design.speaker.radiators.iter().enumerate() {
+        let Some(id) = radiator.fields.get("driver_id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some((f, peak)) = seatlock_core::catalog::driver(id)
+            .as_ref()
+            .and_then(seatlock_acoustics::breakup)
+        else {
+            continue;
+        };
+        let low_pass = design.dsp.per_radiator.get(index).and_then(|chain| {
+            chain
+                .blocks
+                .iter()
+                .filter(|block| {
+                    block.kind == "crossover"
+                        && block.fields.get("band").and_then(Value::as_str) == Some("low")
+                })
+                .filter_map(|block| block.fields.get("f_hz").and_then(Value::as_f64))
+                .reduce(f64::min)
+        });
+        let message = match low_pass {
+            Some(cut) if cut <= f / 2.0 => continue,
+            Some(cut) => format!(
+                "{id}: an independent test found a {peak:.0} dB cone break-up peak at {:.1} kHz, and its low-pass at {:.1} kHz leaves it in play. The cone model does not show it; move the crossover to {:.1} kHz or lower.",
+                f / 1000.0,
+                cut / 1000.0,
+                f / 2000.0
+            ),
+            None => format!(
+                "{id}: an independent test found a {peak:.0} dB cone break-up peak at {:.1} kHz, and nothing filters it out. The cone model does not show it, so the treble here reads smoother than it will sound.",
+                f / 1000.0
+            ),
+        };
+        out.push(Issue::warning(
+            "measured_breakup",
+            message,
+            format!("dsp.per_radiator[{index}]"),
+        ));
+    }
+    out
 }
 
 fn highest_crossover(design: &DesignFile) -> Option<(usize, f64)> {

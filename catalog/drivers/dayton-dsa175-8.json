@@ -1,0 +1,62 @@
+{
+  "id": "dayton-dsa175-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "DSA175-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 38.36,
+    "qes": 0.35,
+    "qms": 1.66,
+    "vas_m3": 0.018689,
+    "re_ohm": 5.8,
+    "le_h": 0.00085,
+    "sd_m2": 0.01287,
+    "xmax_m": 0.0053,
+    "pe_w": 70.0,
+    "mms_kg": 0.0242,
+    "cms_m_per_n": 0.00071,
+    "bl_tm": 9.75,
+    "sens_db_2v83": 88.1
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.144018,
+    "outer_diameter_m": 0.175514,
+    "bolt_circle_m": 0.165862,
+    "bolt_count": 5,
+    "depth_m": 0.080518
+  },
+  "independent": [
+    {
+      "by": "Vance Dickason, Voice Coil Test Bench (Klippel analysis by Redrock Acoustics)",
+      "title": "Test Bench: Dayton Audio DSA175 Designer Series 6.5\u201d Woofer",
+      "url": "https://audioxpress.com/article/test-bench-dayton-audio-dsa175-designer-series-6-5-woofer",
+      "published_on": "2016-12",
+      "read_on": "2026-11-12",
+      "values": {
+        "xmax_m": 0.0021
+      },
+      "breakup": [
+        {
+          "f_hz": 4700.0,
+          "peak_db": 7.0
+        }
+      ],
+      "note": "Usable cone travel is the Klippel figure at 10 % distortion (compliance limits it: XC 2.1 mm; Bl allows 4.6 mm). At 20 % distortion the review gives 4.1 mm. On axis it measured within 2.7 dB from 300 Hz to 4.3 kHz."
+    }
+  ],
+  "response_file": null,
+  "source": {
+    "url": "https://www.parts-express.com/Dayton-Audio-DSA175-8-6-1-2-Designer-Series-Aluminum-Cone-Woofer-295-528",
+    "title": "Parts Express product page, Dayton Audio DSA175-8 specifications",
+    "read_on": "2026-11-12"
+  },
+  "price": {
+    "amount": 54.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DSA175-8-6-1-2-Designer-Series-Aluminum-Cone-Woofer-295-528",
+    "read_on": "2026-11-12"
+  }
+}

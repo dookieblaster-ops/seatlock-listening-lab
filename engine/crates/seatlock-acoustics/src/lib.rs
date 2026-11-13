@@ -146,6 +146,9 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
         .and_then(Value::as_str)
         .ok_or_else(|| "missing driver_id".to_string())?;
     let record = catalog::driver(driver_id).ok_or_else(|| format!("unknown driver {driver_id}"))?;
+    // Independent measurements, where the record has them, replace the maker's values
+    // (README 9.1); the note names both.
+    let (record, independent) = with_independent(&record);
     let published = published_from_catalog(&record)?;
     let has_xmax = record
         .pointer("/published/xmax_m")
@@ -157,6 +160,9 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let mut notes = Vec::new();
+    if let Some(note) = independent {
+        notes.push(note);
+    }
     if let Some(note) = derivation_note(&record) {
         notes.push(note);
     }
@@ -178,6 +184,101 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
             Some(notes.join(" "))
         },
     }))
+}
+
+/// Names of the values an independent measurement may replace, with how each is shown.
+const MEASURED_FIELDS: [(&str, &str, f64, &str); 9] = [
+    ("fs_hz", "resonance", 1.0, "Hz"),
+    ("qes", "Qes", 1.0, ""),
+    ("qms", "Qms", 1.0, ""),
+    ("vas_m3", "Vas", 1000.0, "L"),
+    ("re_ohm", "coil resistance", 1.0, "ohm"),
+    ("le_h", "coil inductance", 1000.0, "mH"),
+    ("sd_m2", "cone area", 10000.0, "cm^2"),
+    ("xmax_m", "usable cone travel", 1000.0, "mm"),
+    ("pe_w", "power handling", 1.0, "W"),
+];
+
+/// The record with the first independent measurement's values put in place of the maker's
+/// (README 9.1), and a sentence saying who measured what. Values the measurement does not
+/// give stay the maker's. A record without `independent` comes back unchanged.
+pub fn with_independent(record: &Value) -> (Value, Option<String>) {
+    let Some(entry) = record
+        .get("independent")
+        .and_then(Value::as_array)
+        .and_then(|list| list.first())
+    else {
+        return (record.clone(), None);
+    };
+    let mut merged = record.clone();
+    let mut changed = Vec::new();
+    if let (Some(values), Some(sheet)) = (
+        entry.get("values").and_then(Value::as_object),
+        merged.get_mut("published").and_then(Value::as_object_mut),
+    ) {
+        for (key, name, scale, unit) in MEASURED_FIELDS {
+            let Some(value) = values.get(key).and_then(Value::as_f64) else {
+                continue;
+            };
+            let maker = sheet.get(key).and_then(Value::as_f64);
+            sheet.insert(key.into(), Value::from(value));
+            let shown = |v: f64| {
+                format!("{:.3}", v * scale)
+                    .trim_end_matches('0')
+                    .trim_end_matches('.')
+                    .to_string()
+            };
+            changed.push(
+                match maker {
+                    Some(m) => {
+                        format!("{name} {} {unit} (maker {} {unit})", shown(value), shown(m))
+                    }
+                    None => format!("{name} {} {unit} (maker: not printed)", shown(value)),
+                }
+                .replace("  ", " ")
+                .replace(" )", ")"),
+            );
+        }
+    }
+    let by = entry
+        .get("by")
+        .and_then(Value::as_str)
+        .unwrap_or("an independent test");
+    let when = entry
+        .get("published_on")
+        .and_then(Value::as_str)
+        .map(|d| format!(", {d}"))
+        .unwrap_or_default();
+    let mut sentence = format!("Independent measurement by {by}{when}");
+    if changed.is_empty() {
+        sentence.push('.');
+    } else {
+        sentence.push_str(&format!(" is used: {}.", changed.join("; ")));
+    }
+    if let Some((f, peak)) = breakup(&merged) {
+        sentence.push_str(&format!(
+            " It found a cone break-up peak of {peak:.0} dB at {:.1} kHz, which the cone model does not show: keep this driver's low-pass at or below {:.1} kHz.",
+            f / 1000.0,
+            f / 2000.0
+        ));
+    }
+    if let Some(note) = entry.get("note").and_then(Value::as_str) {
+        sentence.push(' ');
+        sentence.push_str(note);
+    }
+    (merged, Some(sentence))
+}
+
+/// The lowest cone break-up an independent measurement found: frequency and peak height.
+pub fn breakup(record: &Value) -> Option<(f64, f64)> {
+    record
+        .get("independent")?
+        .as_array()?
+        .iter()
+        .filter_map(|entry| entry.get("breakup")?.as_array())
+        .flatten()
+        .filter_map(|peak| Some((peak.get("f_hz")?.as_f64()?, peak.get("peak_db")?.as_f64()?)))
+        .min_by(|a, b| a.0.total_cmp(&b.0))
 }
 
 pub fn published_from_catalog(record: &Value) -> Result<Published, String> {
