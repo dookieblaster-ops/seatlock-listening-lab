@@ -24,6 +24,10 @@ test("a sandwich panel and a sand-filled wall are chosen on the page, simulated,
   await page.getByTestId("wall-kind").selectOption("filled");
   await expect(page.getByTestId("wall-fill")).toHaveValue("quikrete-play-sand");
   await expect(page.getByRole("cell", { name: /^Wall fill, Quikrete Premium Play Sand/ })).toBeVisible({ timeout: 30_000 });
+  // The walls are heard: the label names the layers, and the wall carrying the panel is held still.
+  await expect(page.getByTestId("response-graph-fidelity")).toContainText("Walls vibrate", { timeout: 30_000 });
+  await expect(page.getByTestId("response-graph-fidelity")).toContainText("Quikrete Premium Play Sand");
+  await expect(page.getByTestId("response-graph-fidelity")).toContainText("carries a panel speaker");
   await page.getByTestId("wall-kind").selectOption("two_material");
   await page.getByTestId("wall-core").selectOption("lw_pla");
   await expect(page.getByRole("cell", { name: /^Printed wall core, colorFabb LW-PLA/ })).toBeVisible({ timeout: 30_000 });

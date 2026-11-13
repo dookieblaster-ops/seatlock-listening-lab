@@ -75,6 +75,20 @@
       "title": "colorFabb varioShore TPU technical datasheet v1.0 (2019)",
       "read_on": "2026-11-12",
       "via": "search_extract"
+    },
+    "youngs_modulus_xy_pa": 4090000.0,
+    "loss_factor": 0.1,
+    "youngs_source": {
+      "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_TPU_95A_Technical_Data_Sheet.pdf",
+      "title": "Bambu TPU 95A Technical Data Sheet V3.0",
+      "read_on": "2026-11-13",
+      "note": "colorFabb publishes no modulus for varioShore (its sheet v1.0 of 2023-03-14 gives Shore 92A, 1.22 g/cm3, 58.6 MPa tensile strength). Derived: the nearest published printed TPU, Bambu TPU 95A, 9.2 MPa along the layers (ISO 527), scaled to the foamed density 813 of 1220 kg/m3 by the square of the density ratio: 4.09 MPa. Uncertain by a factor of two or more."
+    },
+    "loss_factor_source": {
+      "url": "https://www.researchgate.net/publication/373989804_DAMPING_PROPERTIES_OF_MATERIALS_Revision_D",
+      "title": "Tom Irvine, Damping Properties of Materials, Revision D (Vibrationdata, 2010-07-02), Table 3",
+      "read_on": "2026-11-13",
+      "note": "A generic figure for rubber: Table 3 gives rubber a damping ratio of about 0.05, and the document's own relation, loss factor = 2 x damping ratio, gives 0.10. Not measured for this filament."
     }
   },
   "roamr_tpu_air_85a": {
@@ -88,6 +102,13 @@
       "title": "Siraya Tech Roamr TPU Air HR 85A user guide",
       "read_on": "2026-11-12",
       "via": "search_extract"
+    },
+    "loss_factor": 0.1,
+    "loss_factor_source": {
+      "url": "https://www.researchgate.net/publication/373989804_DAMPING_PROPERTIES_OF_MATERIALS_Revision_D",
+      "title": "Tom Irvine, Damping Properties of Materials, Revision D (Vibrationdata, 2010-07-02), Table 3",
+      "read_on": "2026-11-13",
+      "note": "A generic figure for rubber: Table 3 gives rubber a damping ratio of about 0.05, and the document's own relation, loss factor = 2 x damping ratio, gives 0.10. Not measured for this filament."
     }
   }
 }

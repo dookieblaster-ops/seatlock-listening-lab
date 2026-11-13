@@ -51,7 +51,7 @@ export function WallBuildField({
   const cores = (catalogs?.materials ?? []).filter((m) => m.id !== "pla");
   return (
     <div className="grid" data-testid="wall-build">
-      <label title="How the cabinet walls are made. Filled: two thin printed skins with sand or gypsum cement poured between them. Two filaments: the space between the skins printed in a second, softer or foaming filament (constrained-layer damping). The lab prices these; it does not hear them yet, because walls are simulated as rigid.">
+      <label title="How the cabinet walls are made. Filled: two thin printed skins with sand or gypsum cement poured between them. Two filaments: the space between the skins printed in a second, softer or foaming filament (constrained-layer damping). The lab prices them and hears them: each flat wall vibrates as a plate of these layers, and its sound is added to the speaker's.">
         Wall build
         <select
           data-testid="wall-kind"

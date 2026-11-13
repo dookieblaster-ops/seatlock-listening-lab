@@ -31,6 +31,7 @@ pub mod shape;
 pub mod solids;
 pub mod split;
 pub mod voxels;
+pub mod walls;
 pub use cost::{CabinetParts, CostLine, CostReport};
 
 pub fn builtin() -> Registry {
@@ -71,6 +72,11 @@ pub struct SimulateRequest {
     /// model's ducts, and in the 3D model as one average over the cabinet.
     #[serde(default)]
     pub losses: bool,
+    /// Let the cabinet's walls vibrate (README section 5.11): each flat wall of a printed
+    /// cabinet is a plate of the wall build's layers, pushed by the pressure inside, and it
+    /// sends out sound of its own.
+    #[serde(default)]
+    pub walls: bool,
     /// Cell size of the air outside the cabinet when `radiation` is `exterior`; 10 mm by
     /// default.
     #[serde(default)]
@@ -107,6 +113,7 @@ impl Default for SimulateRequest {
             sound_power: false,
             listening_window: false,
             losses: false,
+            walls: false,
             exterior_dx_m: None,
             fdtd_full_decay: false,
         }
@@ -283,28 +290,6 @@ pub fn simulate_with_progress(
     }
 
     issues.extend(breakup_warnings(design));
-    if let Some(kind) = design
-        .build
-        .extra
-        .get("wall")
-        .and_then(|wall| wall.get("kind"))
-        .and_then(Value::as_str)
-        .filter(|kind| *kind != "solid")
-    {
-        issues.push(Issue::warning(
-            "wall_build_not_heard",
-            format!(
-                "The {} wall build changes the cost and the weight; the sound does not show it \
-                 yet, because cabinet walls are simulated as rigid (README section 15).",
-                if kind == "filled" {
-                    "filled"
-                } else {
-                    "two-material"
-                }
-            ),
-            "build.wall",
-        ));
-    }
 
     let mut fidelity = Fidelity {
         enclosure: request.enclosure.clone(),
@@ -754,6 +739,75 @@ pub fn simulate_with_progress(
             }
         }
     }
+    // Vibrating walls (README section 5.11): a shunt on the driver's chamber, and sources of
+    // their own. All flows in the cabinet follow the chamber's pressure, so the shunt scales
+    // `Z_ab` and every port's `H_k` alike.
+    let mut wall_admittances: Vec<Vec<Complex64>> = Vec::new();
+    let mut wall_patches: Vec<SourcePatch> = Vec::new();
+    let wall_build = design
+        .build
+        .extra
+        .get("wall")
+        .and_then(|wall| wall.get("kind"))
+        .and_then(Value::as_str)
+        .filter(|kind| *kind != "solid");
+    if request.walls {
+        let modeled = if !other_nodes.is_empty() || !design.speaker.enclosure.chambers.is_empty() {
+            Err(
+                "the inside is divided into chambers, and the spans of walls between solid \
+                 plastic and partitions are not worked out yet"
+                    .to_string(),
+            )
+        } else {
+            walls::cabinet_walls(design, outer.as_ref())
+        };
+        match modeled {
+            Ok(cabinet) => {
+                for (bin, freq) in freqs.iter().enumerate() {
+                    let scale = Complex64::new(1.0, 0.0)
+                        / (Complex64::new(1.0, 0.0) + z_ab[bin] * cabinet.admittance(*freq));
+                    z_ab[bin] *= scale;
+                    if let Some(sample) = vented.as_mut().and_then(|s| s.get_mut(bin)) {
+                        sample.z_ab = z_ab[bin];
+                        sample.h_sum *= scale;
+                        for h in sample.h_each.iter_mut() {
+                            *h *= scale;
+                        }
+                    }
+                    wall_admittances.push(cabinet.element_admittances(*freq));
+                }
+                wall_patches = cabinet.patches();
+                fidelity.ignored.extend(cabinet.notes.iter().cloned());
+            }
+            Err(why) => {
+                fidelity.ignored.push(format!("Walls are rigid: {why}."));
+                if wall_build.is_some() {
+                    issues.push(Issue::warning(
+                        "wall_build_not_heard",
+                        format!(
+                            "The wall build changes the cost and the weight, but the sound \
+                             cannot show it here: {why}."
+                        ),
+                        "build.wall",
+                    ));
+                }
+            }
+        }
+    } else if let Some(kind) = wall_build {
+        issues.push(Issue::warning(
+            "wall_build_not_heard",
+            format!(
+                "The {} wall build changes the cost and the weight; these curves were asked for \
+                 with rigid walls, so the sound does not show it (README section 5.11).",
+                if kind == "filled" {
+                    "filled"
+                } else {
+                    "two-material"
+                }
+            ),
+            "build.wall",
+        ));
+    }
     let silent = vec![Complex64::new(0.0, 0.0); freqs.len()];
     let mut radiation_fields = Map::new();
     if let Some(dx) = request.exterior_dx_m {
@@ -981,7 +1035,7 @@ pub fn simulate_with_progress(
         };
         let surface = radiator.surface(&freqs);
         let is_surface = surface.is_some();
-        let patches: Vec<SourcePatch> = if let Some(elements) = surface {
+        let mut patches: Vec<SourcePatch> = if let Some(elements) = surface {
             // A radiator that is a grid of sources: each sits on the mount's surface at its
             // own surface coordinates (README sections 5.6 and 5.9).
             let mount = part
@@ -1056,6 +1110,20 @@ pub fn simulate_with_progress(
                 })
                 .collect()
         };
+        // The walls this driver pushes on: each element moves `Y_e * p`, with the chamber's
+        // pressure `p = Z_ab * U_in` and `U_in = -U_d` (README 5.11).
+        if loads_box && !wall_admittances.is_empty() {
+            for (element, patch) in wall_patches.iter().enumerate() {
+                sources.push(
+                    (0..freqs.len())
+                        .map(|bin| {
+                            -wall_admittances[bin][element] * z_ab[bin] * eval.volume_velocity[bin]
+                        })
+                        .collect(),
+                );
+                patches.push(*patch);
+            }
+        }
         for note in radiator.notes() {
             if !fidelity.ignored.contains(&note) {
                 fidelity.ignored.push(note);

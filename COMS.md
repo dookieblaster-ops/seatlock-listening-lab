@@ -45,6 +45,20 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-13 — Claude — Handoff: start here. Walls vibrate and are heard
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-13): go-ahead for item 1 of the post below, "so sand-filled, plaster-filled, and two-filament walls change the simulated sound, not just the cost."
+
+**Done:** README 5.11 (new), 3.2, 5.5, 5.6, 6.2, 6.4, 9.1, 12, 13 (CHK-WALL-1, CHK-WALL-2), 14, 15, 16. `seatlock-acoustics/src/wall.rs` (`WallLayer`, `WallStack` with the Mead-Markus / RKU stiffness `D(k)`, `WallPanel`: supported plate modes per wall size, cached, complex stiffness per mode, `admittance`, `element_admittances`); `PlateModes::cell_integrals` in `plate.rs` (separable 1D Gauss integrals); `seatlock-sim/src/walls.rs` (`wall_layers` from `build.material` and `build.wall`, `cabinet_walls`: flat surfaces from `surface_outline`, span less one wall, at most 3 x 3 patches, walls under a panel held still); `SimulateRequest.walls`; in `simulate` the walls are a shunt on `Z_ab` and every `H_k` after the full 3D step, and each loading driver gets one extra source per wall patch (`-Y_e * Z_ab * U_d`). `walls: true` in `compare::request`, the wasm full 3D call, and `web/src/engineWorker.ts`. Catalog: sand and plaster loss factors, plaster stiffness (derived), varioShore stiffness (derived), both TPU loss factors, each with its source in the record. Numbers in STATUS, "What has been verified".
+
+**Honest to say:** the model is a fair first-order one; the biggest unknowns are material figures (PLA's damping is assumed, the TPU and plaster stiffnesses are derived, sand is taken as loose). It already shows real trade-offs: in `sealed-test` plaster-filled walls ring least; a soft core or loose sand between thin skins softens the wall more than its damping helps.
+
+**Next, in order:** (1) walls for cabinets divided into chambers (each wall's span between partitions and solid plastic; each chamber's walls on its own pressure), and for `sheet_box` and `tube` (MDF and plywood records need published E and loss factor first); (2) braces: a `brace` solid splits a wall's span (README 6.2 lists it, not built); (3) real damping figures: a tap test on a printed strip (the page could take a recorded decay), published DMA data for the TPU cores; (4) the air's load on the walls (mass and radiation damping), which lowers and widens each wall resonance a little; (5) the queue of the posts below (real exciters, measured loss factors, STEP import, CTA-2034 score, boundary elements).
+
+**Pitfalls:** walls are off in the engine's default and in correction's own simulate call (`correction_plan`), on purpose. `wall_build_not_heard` now fires only when walls are not asked for or not modeled. A first call per wall size solves its modes; the cache holds 16 sizes. Do not edit Rust or catalog files while `tools/cloud-check.sh` runs (the catalog is embedded in the wasm build).
+
 ### 2026-11-12 — Claude — Handoff: start here. Novel materials, layered panels, wall builds
 
 - **To:** next lead session (any Claude model)
@@ -493,6 +507,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-13: Wall vibration (sand-filled, plaster-filled, and two-filament walls heard) done on `main` by Claude.
 - 2026-11-12: Novel materials (panel, damping, wall fill, foaming filament records), layered and direction-dependent panels, and priced wall builds done on `main` by Claude.
 - 2026-11-12: Imported speakers (3MF and STL, materials per part, damping in the 3D model, drivers placed by clicking) done on `main` by Claude.
 - 2026-11-12: Per-chamber driver loads, two woofers around a tweeter, and three-ways in the generator done on `main` by Claude.

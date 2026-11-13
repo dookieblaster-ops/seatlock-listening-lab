@@ -12,6 +12,7 @@ mod response;
 mod room;
 mod sealed;
 mod vented;
+pub mod wall;
 mod waveguide;
 
 pub use baffle::{

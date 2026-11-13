@@ -13,5 +13,19 @@
     "read_on": "2026-11-12",
     "via": "search_extract"
   },
-  "price": null
+  "price": null,
+  "youngs_pa": 10410000000.0,
+  "loss_factor": 0.035,
+  "loss_factor_source": {
+    "url": "https://www.researchgate.net/publication/373989804_DAMPING_PROPERTIES_OF_MATERIALS_Revision_D",
+    "title": "Tom Irvine, Damping Properties of Materials, Revision D (Vibrationdata, 2010-07-02), Table 7",
+    "read_on": "2026-11-13",
+    "note": "Table 7 gives 'Plaster' a loss factor of 0.02 to 0.05; the record holds the middle."
+  },
+  "youngs_source": {
+    "url": "https://www.theceramicshop.com/technical_info/Plaster/FGR-DataSheet.pdf",
+    "title": "USG Hydrocal FGR 95 Gypsum Cement data sheet, IG1960 rev. 12-16",
+    "read_on": "2026-11-13",
+    "note": "USG publishes no stiffness for Hydrocal White. Derived: FGR 95's modulus of elasticity in flexure, 14.5 to 15.2 GPa (middle 14.85) at 1650 to 1794 kg/m3 (middle 1722), scaled to Hydrocal White's dry density, 1442 kg/m3, by the square of the density ratio (the usual law for a porous solid): 10.41 GPa. FGR 95 is made for glass-fibre casts, so its figure may include fibre; treat this as uncertain by a factor of two."
+  }
 }

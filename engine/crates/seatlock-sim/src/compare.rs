@@ -116,6 +116,7 @@ fn request() -> SimulateRequest {
         space: SPACE.to_string(),
         listening_window: true,
         losses: true,
+        walls: true,
         ..SimulateRequest::default()
     }
 }

@@ -470,6 +470,69 @@ impl PlateModes {
         self.modes.iter().map(|mode| mode.freq_hz).collect()
     }
 
+    /// Every mode's shape integrated over each cell of a `cells_u` by `cells_v` grid of equal
+    /// cells: `[mode][iu * cells_v + iv]`. Each mode is a sum of products of one function
+    /// along `u` and one along `v`, so a cell's integral is a sum of products of 1D integrals,
+    /// each taken by Gauss-Legendre on sub-intervals short against the shortest half-wave.
+    pub fn cell_integrals(&self, cells_u: usize, cells_v: usize) -> Vec<Vec<f64>> {
+        let q = self.plate.edges.power();
+        let highest = |pick: fn(&Mode) -> &Vec<usize>| {
+            self.modes
+                .iter()
+                .filter_map(|mode| pick(mode).last().copied())
+                .max()
+                .map_or(1, |degree| degree + 1)
+        };
+        let points = gauss_legendre(8);
+        // 1D integrals of every basis function over each of `cells` equal intervals of [-1, 1],
+        // in the plate's own length (`side`).
+        let line_integrals = |count: usize, cells: usize, side: f64| -> Vec<Vec<f64>> {
+            let pieces = 4;
+            let mut out = vec![vec![0.0; count]; cells];
+            let width = 2.0 / (cells * pieces) as f64;
+            for (cell, row) in out.iter_mut().enumerate() {
+                for piece in 0..pieces {
+                    let start = -1.0 + (cell * pieces + piece) as f64 * width;
+                    for (x, w) in &points {
+                        let at = start + (x + 1.0) * width / 2.0;
+                        let (value, _, _) = basis_at(at, count, q);
+                        for (sum, v) in row.iter_mut().zip(&value) {
+                            *sum += v * w * width / 2.0 * side / 2.0;
+                        }
+                    }
+                }
+            }
+            out
+        };
+        let along_u = line_integrals(highest(|mode| &mode.degrees_u), cells_u, self.plate.width_m);
+        let along_v = line_integrals(
+            highest(|mode| &mode.degrees_v),
+            cells_v,
+            self.plate.height_m,
+        );
+        self.modes
+            .iter()
+            .map(|mode| {
+                let mut cells = vec![0.0; cells_u * cells_v];
+                for iu in 0..cells_u {
+                    for iv in 0..cells_v {
+                        let mut sum = 0.0;
+                        for (a, &i) in mode.degrees_u.iter().enumerate() {
+                            let mut inner = 0.0;
+                            for (b, &j) in mode.degrees_v.iter().enumerate() {
+                                inner += mode.coefficients[a * mode.degrees_v.len() + b]
+                                    * along_v[iv][j];
+                            }
+                            sum += along_u[iu][i] * inner;
+                        }
+                        cells[iu * cells_v + iv] = sum;
+                    }
+                }
+                cells
+            })
+            .collect()
+    }
+
     /// Every mode's deflection at the point `(u, v)` m from the plate's lower-left corner.
     pub fn shapes_at(&self, u_m: f64, v_m: f64) -> Vec<f64> {
         let q = self.plate.edges.power();

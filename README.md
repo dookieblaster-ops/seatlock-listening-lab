@@ -200,7 +200,8 @@ simulate(design, request) -> results
               radiation: "point" | "baffle" | "exterior", space: "full" | "half" | "step",
               frequency grid, which outputs (sound_power), cell sizes (fdtd_dx_m, exterior_dx_m),
               fdtd_full_decay (run the 3D cabinet model to the end instead of stopping early),
-              listening_window (section 11.1), losses (the air's wall losses, sections 5.4 and 5.5) }
+              listening_window (section 11.1), losses (the air's wall losses, sections 5.4 and 5.5),
+              walls (the cabinet's walls vibrate, section 5.11) }
   results:  per radiator and summed: complex pressure response, impedance, cone travel,
             opening air speed, limits, maximum level; score; cost; warnings;
             and for every curve the fidelity label of section 5.8
@@ -422,7 +423,7 @@ The rules below were found while validating this specification with a reference 
 - **Wall losses** (as built, Level 3). At a wall, sound loses a little to the air's friction and heat flow. For sound grazing the wall the loss is the duct's of section 5.4: a specific admittance whose real part is `B = 2.99e-5 * sqrt(f)`. Friction is `1/1.4737` of that and counts with `sin^2` of the angle from the wall's normal; heat flow is the rest and counts at every angle. Sound arriving from all directions alike loses on average `(2/3 + 0.4737)/1.4737 = 0.774` of the grazing value, which makes every resonance decay at `s(f) = 0.774 * C0 * B(f) * S/V` per second, with `S/V` the cabinet's wall area over its air volume, both counted on the grid. A request with `losses` applies it as a decay weight: each signal's Fourier sum at frequency `f` is weighted by `e^(-s(f)*t)`, which is exactly the response of the same grid with a uniform loss `s(f)` in its air, each resonance `s/pi` Hz wide. It costs nothing, works with the early stop (the fitted tail takes the same weight), and makes peak heights finite and independent of the run's length. It is one average: a single resonance's own loss differs from it by up to about half (0.65 of it for a wave grazing every wall, as in a duct), and stair-stepped walls count a little large. The label says so. CHK-FDTD-5.
 - **Damping material** (as built, Level 3, for imported `damping` parts). A cell of damping material slows the air by a flow resistivity `sigma` (Pa*s/m^2), the Rayleigh model: the velocity update becomes `v_new = ((1 - b)*v_old - kv*dp) / (1 + b)` with `b = sigma*dt/(2*RHO0)`, stable for any `sigma`. A face takes the mean of its two cells' figures. Checked against a lossy duct's closed form (`k_c = k*sqrt(1 - j*sigma/(RHO0*omega))`, `Z_c = RHO0*C0*k_c/(k*S)`), at the half cell where the grid records pressure: within 0.14 %. One figure at every frequency (real fibre's resistance and its added air mass change with frequency), and only the full 3D model sees it: the quick and detailed models treat damping as air, and the label says so.
 
-This model knows the full shape of the internal air, within its grid. The walls are rigid; their loss is the average above when asked for, and otherwise none. It does not model wall vibration or damping fill.
+This model knows the full shape of the internal air, within its grid. The walls are rigid in the grid; their loss is the average above when asked for, and otherwise none. A request with `walls` adds the walls' vibration to its result as a shunt (section 5.11). It does not model damping fill except imported damping parts.
 
 **Shaping the inside** (as built, Level 3). The 3D model can work out where plastic inside the cabinet evens out the sound.
 
@@ -495,7 +496,7 @@ What validated it (CHK-RAD-3, CHK-RAD-4, and three more tests beside them):
 
 A grid that follows the surface (tried, not in use). `Domain::around_smooth` keeps the cells a curved surface cuts, with the air fraction of each cell's volume and of each face's area: a face's velocity update is scaled by its fraction, a cell's pressure update is divided by its fraction (never below a sixth of the sum of its faces' fractions, which keeps the plain time step stable), and the body's share of a face carries the prescribed velocity. On the CHK-RAD-3 sphere it is stable, and the worst error in the shadow falls from 3.42 to 2.58 dB at 10 mm and from 1.67 to 1.55 dB at 5 mm, while the lit point goes from 0.67 to 1.02 dB and the side from 0.24 to 0.56 dB at 10 mm. That is not a clear gain, so the simulator still uses stair-steps. It also shows that most of the shadow error is not the stair-steps themselves; the grid's dispersion along the path around the body is the likely rest, which is not yet tested.
 
-Not modeled: wall vibration, openings as openings (a port's mouth is a patch of rigid skin that moves), and anything that needs smooth curved surfaces in deep shadow.
+Not modeled: openings as openings (a port's mouth is a patch of rigid skin that moves), and anything that needs smooth curved surfaces in deep shadow.
 
 Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field. The results give it as a level in dB re 1 pW, with the directivity index: the on-axis intensity at the listening distance against the mean over all directions, `10*log10(|p_axis|^2 * 4*pi*r^2 / (RHO0*C0*W))`. Both are computed when the design has a room, or when the request sets `sound_power`.
 
@@ -624,6 +625,36 @@ The results keep the direct sound as it is (`summed_spl_db`, and the complex pre
 
 This is an estimate for comparing designs. It is not a room simulation.
 
+### 5.11 Wall vibration
+
+Cabinet walls are not rigid. The pressure inside pushes every wall, the wall bends, and it sends out sound of its own. A request with `walls` models it; the page, scores, the optimizer, and the generator ask for it, and the engine's default, which the numbered checks use, does not. It is what makes a wall build (section 6.2) heard: sand-filled, plaster-filled, and two-filament walls change the sound, not just the cost.
+
+**Each flat wall is a plate**, simply supported along its edges, spanning between the middles of the walls around it (the outline less one wall thickness each way). Its layers come from `build.material` and `build.wall`, from the inside face out:
+
+```
+Q_k        = E_k*(1 + j*eta_k) / (1 - nu_k^2)            each layer, with its loss
+D_local    = sum Q_k * t_k^3 / 12                        layers bending about their own middles
+D_sandwich = sum Q_k * t_k * z_k^2                       layers carried apart by the core
+S          = d^2 / sum(t_k / G_k)                        shear through the thickness (G complex)
+D(k)       = D_local + D_sandwich / (1 + D_sandwich*k^2 / S)
+```
+
+`D(k)` is the sandwich result of Mead and Markus, the Ross-Kerwin-Ungar model for a symmetric stack. A soft lossy core between stiff skins shears as the wall bends and damps it, with loss factor `beta*Y*g / (1 + (2 + Y)*g + (1 + Y)*(1 + beta^2)*g^2)`, `Y = D_sandwich/D_local`, `g = S/(D_sandwich*k^2)`, `beta` the core's loss factor (CHK-WALL-2). A stiff bonded core (a gypsum cast, a stiff filament) gives the laminate's own stiffness. A loose fill (sand) carries no stiffness and no shear, so the skins bend apart and the fill adds mass; its loss enters as its own loss factor times its share of the mass, since at a resonance the energy it holds is its share of the kinetic energy. A solid wall is one layer of the print material. A material whose stiffness is not published is a loose mass, and a missing loss factor or Poisson's ratio takes the lab's 0.02 or 0.3, each named in the label.
+
+**Modes.** The wall's modes are the supported plate's (section 5.9's Rayleigh-Ritz solver, degree 16), solved once per wall size with unit stiffness and mass, since a supported plate's shapes do not depend on them; each mode then takes the stack's complex stiffness at its own wavenumber, `k^2 = sqrt(lambda*m / D(0))`:
+
+```
+lambda_n = lambda_ref,n * D(k_n) / D(0) * (1 + j*eta_fill)
+s_n      = integral of mode n's shape over the wall          (unit modal mass)
+Y_wall   = j*omega * sum s_n^2 / (lambda_n - omega^2)         outward volume velocity per pascal inside
+```
+
+**Joined to the cabinet.** All walls together are a shunt on the driver's chamber: `Z_ab' = Z_ab / (1 + Z_ab*Y_walls)`. Every flow in the cabinet follows that chamber's pressure, so each port's `H_k` scales by the same factor, and this holds for every enclosure model, the full 3D one included (its grid's walls stay rigid; the shunt is applied to its result). Each wall is cut into patches about 80 mm across, from 1 to 3 along each side, each a surface source (section 5.6) with volume velocity `Y_e * Z_ab' * U_in`, `U_in = -U_d`, so the walls are heard through the same radiation model, room, listening window, sound power, and DSP chain as the driver that pushes them. Below its resonances a wall is a spring: the box acts larger, and the wall gives back, in opposite phase, the share of the cone's flow it took. Near a resonance it sings; above, its mass holds it still.
+
+As built, checked by CHK-WALL-1 and CHK-WALL-2 and a test beside them: a supported PLA wall under uniform pressure against Navier's series, every driven resonance within 0.1 % (1 % near the basis limit) and the response within 1 % at, between, and below them; the static compliance within 1 % of the whole series; the stack's stiffness against a hand calculation to 1e-9 and against the Ross-Kerwin-Ungar loss factor within the core's own bending loss; and, through the simulator, `sealed-test` at 10 and 20 Hz against a rigid box larger by the walls' compliance plus their give-back, within 0.01 dB.
+
+Not modeled, each said in the label: the air's load on the walls; the pattern of standing waves' pressure on them (each wall feels the chamber's mean pressure, which holds while the chamber is small against a wavelength); the driver's frame shaking the baffle; holes, braces, and placed plastic; curved skin (a `revolved` body's flat ends vibrate, its curved side does not); a wall that carries a panel speaker, which is held still; walls not rectangles, taken as rectangles of the same area; a cabinet divided into chambers (walls stay rigid there for now, with the reason); stock cabinets (`tube`, `sheet_box`) and imported ones. Each mode takes its stiffness at its own wavenumber, an approximation for a frequency-dependent core away from that mode's resonance.
+
 ## 6. Cabinet builder
 
 ### 6.1 What it is
@@ -679,9 +710,9 @@ The wall follows the outside everywhere: the inside of a rounded box is rounded 
 "wall": { "kind": "two_material", "skin_m": 0.0016, "core": "varioshore_tpu" }       // a second filament
 ```
 
-A filled wall is printed hollow and filled with sand or gypsum cement (the "sand-filled" and "dental plaster" DIY builds); a two-material wall prints its core in a second filament, soft or foaming, which damps the wall the way a rubber layer between two sheets does (constrained-layer damping). The core's volume is estimated as the print's solid times `1 - 2*skin_m/wall_m`; the cost prices it from the fill's `buy_kg_per_m3` or the filament's printed density, and a printed core counts toward the plastic and the print time. Wall vibration is not simulated (section 15), so a wall build changes the cost and the weight and not the sound, and the results say so (`wall_build_not_heard`).
+A filled wall is printed hollow and filled with sand or gypsum cement (the "sand-filled" and "dental plaster" DIY builds); a two-material wall prints its core in a second filament, soft or foaming, which damps the wall the way a rubber layer between two sheets does (constrained-layer damping). The core's volume is estimated as the print's solid times `1 - 2*skin_m/wall_m`; the cost prices it from the fill's `buy_kg_per_m3` or the filament's printed density, and a printed core counts toward the plastic and the print time. A wall build is heard through section 5.11's wall model when the request asks for walls (the page does); a request with rigid walls says so (`wall_build_not_heard`). A fill or core with a published stiffness is bonded to the skins; one without is a loose mass between them. Sand is loose, so a sand-filled wall is only as stiff as its two skins: thin skins make it heavy and soft.
 
-Printing is optional. A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. When the same cabinet can be built more than one way, the lab shows the ways side by side, each with its cost and its results. Printing earns its place through geometry that stock parts cannot make, such as shaped ports, folds, and curved baffles. Wall stiffness also differs between materials, but wall vibration is not simulated (section 15), so the comparison says so.
+Printing is optional. A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. When the same cabinet can be built more than one way, the lab shows the ways side by side, each with its cost and its results. Printing earns its place through geometry that stock parts cannot make, such as shaped ports, folds, and curved baffles. Wall stiffness also differs between materials; section 5.11 models it for printed walls, and stock walls are still rigid, which the comparison says.
 
 **Mounts.** A mount names one of the outer shape's surfaces and a position on it. The outer shape returns the mount's position and outward direction, so a radiator can sit on any surface and face any way: front, back, side, top, or along a curve.
 
@@ -725,7 +756,7 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 - Driver cut-outs, recesses, and bolt holes come from the driver's mounting data. When a record gives no bolt circle, the hole is still cut and the screw holes are left out, with a note to mark them through the driver's flange and drill them (owner, 2026-11-12: a missing detail must not stop a design). A missing cut-out size still refuses the print file.
 - From Level 2, split the cabinet into parts that fit the printer's build volume, add alignment features, and report part count, material mass, and print time. The engine picks the number of pieces along each axis for whichever way the cabinet can stand on the bed gives the fewest parts, cuts evenly, and places up to three alignment pin holes (4.2 mm, 8 mm deep each side) across every joint where there is plastic all around them, away from driver flanges and ports. The pins are printed (4 mm by 15 mm) and counted in the plastic. The page cuts the solid into the parts with manifold-3d and exports one 3MF object per part and per pin.
 - An OpenSCAD program (`cabinet.scad`), from Level 3: the engine's own recipe of solids written out in millimeters (cubes, cylinders, polyhedra for hulls, extruded outlines, unions and differences), with the print cuts as a `part` setting and the pin as a module. OpenSCAD opens it, and FreeCAD through its OpenSCAD workbench. It goes one way: a file changed there does not come back into the lab.
-- Enforce a minimum wall thickness and warn about thin features. Wall vibration is not simulated, and the interface says so.
+- Enforce a minimum wall thickness and warn about thin features. Printed walls vibrate in the simulation (section 5.11); stock walls do not yet, and the interface says so.
 
 ## 7. Crossover and DSP chain
 
@@ -809,7 +840,7 @@ Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing ru
 
 - `catalog/panels/`: panel materials. Isotropic records give `youngs_pa`; direction-dependent ones give `youngs_u_pa`, `youngs_v_pa`, `poisson_uv`, and `shear_pa` (wood, from the Wood Handbook's elastic ratios); cores give `core_only` and `transverse_shear_pa`. Each gives `density_kg_m3`, and `poisson` and `loss_factor` when published (section 5.9 says what the lab assumes otherwise). Present: XPS foam board, two foamed PVC sheets, polycarbonate, balsa sheet, end-grain balsa, birch veneer for plywood, polypropylene honeycomb, PET foam, solid printed PLA, and foamed LW-PLA.
 - `catalog/damping/`: fill for the inside of a cabinet, with `flow_resistivity_pa_s_m2` (a published minimum is stored as that minimum, and the note says so): mineral wool, glass wool, polyester wadding.
-- `catalog/fills/`: what a hollow printed wall is filled with: `density_kg_m3` as placed, `buy_kg_per_m3` (powder bought per volume, for a cast), and a price per kilogram: play sand, gypsum cement.
+- `catalog/fills/`: what a hollow printed wall is filled with: `density_kg_m3` as placed, `buy_kg_per_m3` (powder bought per volume, for a cast), a price per kilogram, and for the wall model (section 5.11) `loss_factor` and, for a cast that sets bonded to the skins, `youngs_pa`, each with its own source: play sand, gypsum cement. A print material may give `loss_factor` too.
 - `catalog/materials.json`: print materials, including foaming filaments (`"foaming": true`): their `density_kg_m3` is the printed density at the stated setting, and `filament_density_kg_m3` the filament's own. Present: colorFabb LW-PLA, Bambu PLA Aero, colorFabb varioShore TPU, Siraya Tech Roamr TPU Air.
 
 A figure a source gives as a range is stored as the middle of the range, and one derived from a source (a foamed density from the flow setting, a wood density from its specific gravity) is marked as derived in the record's note.
@@ -963,7 +994,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 - A: undo and redo; design history.
 - B: exciters and panel materials, damping materials, wall fills, and foaming filaments; stale-price warnings; alternative vendors per part.
-- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard. CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1.
+- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed single-chamber cabinets, section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a boundary-element model of the air around (and then inside) the cabinet, joined to the driver network, giving every direction from one solve per frequency (section 2.6); a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
@@ -1028,6 +1059,8 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
 | CHK-PLATE-2 | An orthotropic plate 0.40 x 0.30 m, 4 mm thick, `E_u` 3.74 GPa, `E_v = 0.015*E_u`, `G = 0.037*E_u`, `nu_uv` 0.488, 179 kg/m^3, simply supported, shear through the thickness left out. | Every resonance below 95 % of the resolved limit matches `omega^2 = (D11*p^4 + 2*(D12 + 2*D66)*p^2*q^2 + D22*q^4)/m`, `p = i*pi/a`, `q = j*pi/b`, within 1 %, with at least 25 of them. |
 | CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
+| CHK-WALL-1 | A wall 0.152 x 0.242 m of 8 mm PLA (E 2.68 GPa, nu 0.3, 1240 kg/m^3, loss factor 0.02), supported edges, under uniform pressure. | Every resonance the pressure drives, and its shape's integral, against Navier's series (`f_ij` from `(i*pi/a)^2 + (j*pi/b)^2`, `s_ij^2 = 64*a*b / (m*pi^4*i^2*j^2)`, odd `i`, `j`): frequency within 0.1 % below half the resolved limit and 1 % above, integral within 0.5 % and 5 %. Outward volume velocity per pascal at 5 Hz, half the first resonance, the first three resonances, and between the first two, within 1 % of the series. Static compliance within 1 % of the series to 400 terms. |
+| CHK-WALL-2 | Two lossless 1.6 mm PLA skins on a 4.8 mm core, E 4.1 MPa, loss factor 0.5, wavenumbers 5 to 320 per m. | The stack's complex stiffness equals the hand-assembled `D_local + D_core*(1 + j*beta) + D_sandwich*g/(1 + g)` within 1e-9, and its loss factor the Ross-Kerwin-Ungar formula within the core's own bending loss, `beta*D_core/D_local`. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
 
 ## 14. Interface
@@ -1045,7 +1078,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
-- Materials are chosen from the catalog by name: the print material (foaming filaments marked), the wall build (solid, two skins filled with sand or gypsum cement, or two skins with a second filament), a panel's material or its layers (with Sandwich and Plywood presets), and an imported damping part's material.
+- Materials are chosen from the catalog by name: the print material (foaming filaments marked), the wall build (solid, two skins filled with sand or gypsum cement, or two skins with a second filament; each heard through the wall model of section 5.11), a panel's material or its layers (with Sandwich and Plywood presets), and an imported damping part's material.
 - "Import a speaker" reads a 3MF or STL assembly: a quarter-turn control for its front, a table of its parts (solid in a print material, or damping with its flow resistivity), and buttons that place each sound source or a port by clicking the 3D view, with tilt and turn.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
 - A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.
@@ -1054,7 +1087,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 
 Say so in the interface wherever it matters.
 
-- Cabinet wall vibration. Printed walls flex, and cheap stock materials such as cardboard and foam board flex more. Until this is modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness. Filled and two-material walls (section 6.2) are priced but not heard.
+- Cabinet wall vibration of stock cabinets, imported cabinets, cabinets divided into chambers, and curved skin. Printed single-chamber cabinets have it (section 5.11), with the limits listed there. Cheap stock materials such as cardboard and foam board flex more than printed walls; until their walls are modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
 - For DML panels: the air's load on the panel, an open back, and anything above the frequency the label gives (section 5.9). A panel's result also depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
@@ -1088,6 +1121,7 @@ Say so in the interface wherever it matters.
 | Quick, Detailed, Full 3D | `lumped`, `waveguide`, `fdtd` | The three enclosure models, from fastest to most complete. |
 | Sandwich panel | `layers` in a panel | Two thin stiff skins on a light core: far stiffer for its weight than one sheet (section 5.9). |
 | Wall build | `build.wall` | How a printed wall is made: solid, two skins filled with sand or gypsum cement, or two skins with a second filament between them. |
+| Wall vibration, wall resonance | Section 5.11 | Cabinet walls bending under the pressure inside and sending out sound of their own; strongest at each wall's resonances. |
 | Foaming filament | `"foaming": true` in `materials.json` | A filament that foams as it prints, so the part is lighter and less stiff than solid plastic. |
 | Independent measurement | `independent` in a driver record | What a respected tester measured on real samples, used in place of the maker's figure and shown beside it (section 9.1). |
 | Thiele–Small parameters | `fs_hz`, `qes`, `qms`, `qts`, `vas_m3`, `re_ohm`, `le_h`, `sd_m2`, `bl`, `mms`, `cms`, `rms` | The published numbers that describe a driver: resonance frequency, electrical, mechanical, and total Q, equivalent air volume, coil resistance and inductance, cone area, force factor, moving mass, suspension compliance, mechanical resistance. |

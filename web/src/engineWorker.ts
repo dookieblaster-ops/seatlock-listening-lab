@@ -111,6 +111,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         listening_window: true,
         // The air's loss at duct walls (README 5.4).
         losses: true,
+        // Cabinet walls vibrate and are heard (README 5.11).
+        walls: true,
       });
       const json = eng.call("simulate", request);
       self.postMessage({ type: "result", id: msg.id, json } satisfies WorkerResponse);
