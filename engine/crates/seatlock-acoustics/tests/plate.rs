@@ -5,27 +5,11 @@ use std::f64::consts::PI;
 
 /// `test-panel-a` of README section 13.
 fn test_panel(edges: Edges) -> Plate {
-    Plate {
-        width_m: 0.40,
-        height_m: 0.30,
-        thickness_m: 0.003,
-        youngs_pa: 3.5e9,
-        density_kg_m3: 1240.0,
-        poisson: 0.35,
-        edges,
-    }
+    Plate::isotropic(0.40, 0.30, 0.003, 3.5e9, 1240.0, 0.35, edges)
 }
 
 fn square(edges: Edges) -> Plate {
-    Plate {
-        width_m: 0.3,
-        height_m: 0.3,
-        thickness_m: 0.003,
-        youngs_pa: 3.5e9,
-        density_kg_m3: 1240.0,
-        poisson: 0.3,
-        edges,
-    }
+    Plate::isotropic(0.3, 0.3, 0.003, 3.5e9, 1240.0, 0.3, edges)
 }
 
 /// Frequency parameter `omega * a^2 * sqrt(m / D)` of each resonance of a square plate.

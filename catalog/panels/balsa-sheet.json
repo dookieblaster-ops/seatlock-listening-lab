@@ -1,0 +1,20 @@
+{
+  "id": "balsa-sheet",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "Balsa sheet, grain along the panel's width",
+  "youngs_u_pa": 3740000000.0000005,
+  "youngs_v_pa": 56100000.00000001,
+  "poisson_uv": 0.488,
+  "shear_pa": 138380000.0,
+  "transverse_shear_pa": 61454471,
+  "density_kg_m3": 179.2,
+  "note": "Wood Handbook chapter 5: balsa at 12 % moisture, bending modulus of elasticity 3,400 MPa (Table 5-5a), raised 10 % to E_L as footnote a of Table 5-1 says; elastic ratios E_T/E_L 0.015, E_R/E_L 0.046, G_LR/E_L 0.054, G_LT/E_L 0.037, G_RT/E_L 0.005 (Table 5-1); Poisson's ratio mu_LT 0.488 (Table 5-2). Density derived from specific gravity 0.16 (ovendry weight over green volume) times 1.12 for 12 % moisture, shrinkage left out. Wood varies widely between pieces; balsa sold for models is graded by weight. The thickness runs radially; the shear through it is the geometric mean of G_LR and G_RT, a lab estimate.",
+  "source": {
+    "url": "https://www.cedengineering.com/userfiles/S04-019%20-%20Wood%20as%20An%20Engineering%20Material%20-%20Mechanical%20Properties%20of%20Wood%20-%20US.pdf",
+    "title": "USDA Forest Products Laboratory, Wood Handbook (FPL-GTR-190), chapter 5, Mechanical Properties of Wood (copy by CED Engineering)",
+    "read_on": "2026-11-12"
+  },
+  "price": null
+}

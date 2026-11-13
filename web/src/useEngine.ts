@@ -117,6 +117,14 @@ export function useEngine() {
     [call],
   );
 
+  const catalogList = useCallback(
+    async (folder: "panels" | "damping" | "fills" | "materials") => {
+      const json = await call({ type: "call", method: "catalog.list", request: JSON.stringify({ text: folder }) });
+      return JSON.parse(json) as CatalogEntry[];
+    },
+    [call],
+  );
+
   const geometry = useCallback(
     async (text: string) => {
       const json = await call({ type: "geometry", text });
@@ -133,7 +141,7 @@ export function useEngine() {
     [call],
   );
 
-  return { version, ready, error, designCheck, simulate, geometry, correct, listen, driverRecord };
+  return { version, ready, error, designCheck, simulate, geometry, correct, listen, driverRecord, catalogList };
 }
 
 export type ListenPackage = {
@@ -244,4 +252,13 @@ export type FdtdReport = {
   z_ab: { re: number[]; im: number[] };
   z_ab_quick: { re: number[]; im: number[] };
   port_ids: string[];
+};
+
+export type CatalogEntry = {
+  id: string;
+  name: string | null;
+  foaming?: boolean;
+  core_only?: boolean;
+  flow_resistivity_pa_s_m2?: number | null;
+  status?: string;
 };

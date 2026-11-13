@@ -33,6 +33,16 @@ pub fn panel_material(id: &str) -> Option<Value> {
     json_with_id("catalog/panels/", id)
 }
 
+/// A pourable fill for hollow printed walls (sand, gypsum cement): density and price per kg.
+pub fn fill(id: &str) -> Option<Value> {
+    json_with_id("catalog/fills/", id)
+}
+
+/// A damping material: flow resistivity, density, and price.
+pub fn damping(id: &str) -> Option<Value> {
+    json_with_id("catalog/damping/", id)
+}
+
 /// The owner's printer: the record named by `id`, or the first one in `catalog/printers/`.
 pub fn printer(id: Option<&str>) -> Option<Value> {
     if let Some(id) = id {

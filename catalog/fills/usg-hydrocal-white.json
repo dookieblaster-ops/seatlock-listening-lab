@@ -1,0 +1,17 @@
+{
+  "id": "usg-hydrocal-white",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "fill",
+  "name": "USG Hydrocal White gypsum cement (cast into the wall)",
+  "density_kg_m3": 1442.0,
+  "buy_kg_per_m3": 1215.0,
+  "note": "USG: use consistency 45 lb water per 100 lb, wet density 110 lb/ft3, dry density 90 lb/ft3. Powder to buy per volume derived: wet density times 100/145. A hard, heavy cast with high inner damping between two printed walls (the 'dental plaster' DIY build).",
+  "source": {
+    "url": "https://www.freemansupply.com/datasheets/USG.pdf",
+    "title": "USG Industrial Plasters and Gypsum Cement, product comparison (Freeman Supply copy)",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}

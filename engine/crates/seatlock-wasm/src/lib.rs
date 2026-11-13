@@ -320,6 +320,42 @@ fn dispatch(method: &str, request: &str) -> String {
                 .unwrap(),
             }
         }
+        "catalog.list" => {
+            // The records of one catalog folder, or the print materials, as id and name.
+            let parsed = parse_request(request);
+            let folder = parsed.text.unwrap_or_default();
+            let entries: Vec<serde_json::Value> = if folder.trim() == "materials" {
+                catalog::embedded_file("catalog/materials.json")
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(text).ok())
+                    .and_then(|value| value.as_object().cloned())
+                    .map(|map| {
+                        map.into_iter()
+                            .map(|(id, record)| {
+                                serde_json::json!({
+                                    "id": id,
+                                    "name": record.get("name").cloned().unwrap_or(serde_json::Value::Null),
+                                    "foaming": record.get("foaming").cloned().unwrap_or(serde_json::Value::Bool(false)),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                catalog::all(&format!("catalog/{}/", folder.trim()))
+                    .into_iter()
+                    .map(|record| {
+                        serde_json::json!({
+                            "id": record.get("id").cloned().unwrap_or_default(),
+                            "name": record.get("name").cloned().unwrap_or_default(),
+                            "core_only": record.get("core_only").cloned().unwrap_or(serde_json::Value::Bool(false)),
+                            "flow_resistivity_pa_s_m2": record.get("flow_resistivity_pa_s_m2").cloned().unwrap_or_default(),
+                            "status": record.get("status").cloned().unwrap_or_default(),
+                        })
+                    })
+                    .collect()
+            };
+            serde_json::Value::Array(entries).to_string()
+        }
         "catalog.driver" => {
             let parsed = parse_request(request);
             let id = parsed.text.unwrap_or_default();

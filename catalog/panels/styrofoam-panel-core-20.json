@@ -1,0 +1,18 @@
+{
+  "id": "styrofoam-panel-core-20",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "DuPont Styrofoam Panel Core 20 (XPS foam board)",
+  "youngs_pa": 11000000.0,
+  "shear_pa": 2275000.0,
+  "density_kg_m3": 24.0,
+  "note": "Typical values: density 1.5 lb/ft3 (24 kg/m3, ASTM D1622), flexural modulus 1,600 psi (11,000 kPa, ASTM C203), shear modulus 330 psi (2,275 kPa, ASTM C273). XPS is the classic DIY panel-speaker material. The flexural modulus includes the foam's own shear, so a thin XPS panel reads a little soft.",
+  "source": {
+    "url": "https://stocorp.com/wp-content/content/Products_TechService/Insulation/Product%20Bulletins/DuPont%20Panel%20Core%2020%20PIS.pdf",
+    "title": "DuPont Styrofoam Brand Panel Core 20 XPS Foam Insulation, Product Information Sheet",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}

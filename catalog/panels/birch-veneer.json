@@ -1,0 +1,20 @@
+{
+  "id": "birch-veneer",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "Yellow birch veneer, grain along the panel's width (for plywood layers)",
+  "youngs_u_pa": 15290000000.000002,
+  "youngs_v_pa": 764500000.0000001,
+  "poisson_uv": 0.451,
+  "shear_pa": 1039720000.0000002,
+  "transverse_shear_pa": 542310241,
+  "density_kg_m3": 694.4,
+  "note": "Wood Handbook chapter 5: yellow birch at 12 % moisture, bending modulus 13,900 MPa (Table 5-3a) raised 10 % to E_L; E_T/E_L 0.050, G_LR/E_L 0.074, G_LT/E_L 0.068, G_RT/E_L 0.017 (Table 5-1); mu_LT 0.451 (Table 5-2); density from specific gravity 0.62 times 1.12. Plywood is stacked from this veneer with alternate layers turned 90 degrees; the glue is left out.",
+  "source": {
+    "url": "https://www.cedengineering.com/userfiles/S04-019%20-%20Wood%20as%20An%20Engineering%20Material%20-%20Mechanical%20Properties%20of%20Wood%20-%20US.pdf",
+    "title": "USDA Forest Products Laboratory, Wood Handbook (FPL-GTR-190), chapter 5, Mechanical Properties of Wood (copy by CED Engineering)",
+    "read_on": "2026-11-12"
+  },
+  "price": null
+}

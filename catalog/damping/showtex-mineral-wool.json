@@ -1,0 +1,17 @@
+{
+  "id": "showtex-mineral-wool",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "damping",
+  "name": "Showtex acoustic filling, mineral wool 35 kg/m3",
+  "flow_resistivity_pa_s_m2": 10000.0,
+  "density_kg_m3": 35.0,
+  "note": "Airflow resistance at least 10 kPa*s/m2 (EN 29053), 100 % rockwool, 35 kg/m3; the record holds that minimum.",
+  "source": {
+    "url": "https://www.showtex.com/sites/default/files/attachments/8185-mineral-wool-tds-showtex_0.pdf",
+    "title": "Showtex technical data sheet, Acoustic filling: Mineral Wool",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}

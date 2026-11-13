@@ -25,6 +25,7 @@ use serde_json::{Map, Value};
 use std::f64::consts::PI;
 use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::laminate::{laminate, Layer};
 use crate::plate::{Edges, Plate, PlateModes};
 
 /// Polynomial degree of the plate basis along the panel's longer side.
@@ -63,6 +64,8 @@ pub struct DmlPanel {
     at_exciter: Vec<f64>,
     /// Integral of each mode shape over the panel.
     integrals: Vec<f64>,
+    /// What the layers' records left out and the lab assumed.
+    layer_notes: Vec<String>,
 }
 
 /// What one frequency's solution needs to place every mode.
@@ -81,16 +84,19 @@ struct Drive {
 }
 
 fn cached_modes(plate: Plate) -> Result<Arc<PlateModes>, String> {
-    type Key = [u64; 7];
+    type Key = [u64; 9];
     type Solved = Vec<(Key, Arc<PlateModes>)>;
     static CACHE: OnceLock<Mutex<Solved>> = OnceLock::new();
+    let s = plate.layup;
     let key: Key = [
         plate.width_m.to_bits(),
         plate.height_m.to_bits(),
-        plate.thickness_m.to_bits(),
-        plate.youngs_pa.to_bits(),
-        plate.density_kg_m3.to_bits(),
-        plate.poisson.to_bits(),
+        s.d11.to_bits(),
+        s.d22.to_bits(),
+        s.d12.to_bits(),
+        s.d66.to_bits(),
+        s.mass_per_area.to_bits(),
+        s.shear_per_width.to_bits(),
         plate.edges as u64,
     ];
     let cache = CACHE.get_or_init(|| Mutex::new(Vec::new()));
@@ -257,7 +263,7 @@ impl Radiator for DmlPanel {
     }
 
     fn notes(&self) -> Vec<String> {
-        vec![
+        let mut notes = vec![
             format!(
                 "The panel's {} resonances up to {:.0} Hz are modeled; above that its response \
                  is not, and reads low.",
@@ -270,7 +276,9 @@ impl Radiator for DmlPanel {
             "A panel's result depends on its material's stiffness and loss, which printing makes \
              uncertain."
                 .into(),
-        ]
+        ];
+        notes.extend(self.layer_notes.iter().cloned());
+        notes
     }
 }
 
@@ -310,28 +318,49 @@ pub fn parse_dml_panel(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>,
             .filter(|value| *value > 0.0)
             .ok_or_else(|| format!("The panel needs {key} above zero."))
     };
-    let material_id = panel
-        .get("material")
-        .and_then(Value::as_str)
-        .ok_or("The panel needs a material.")?;
-    let material = catalog::panel_material(material_id)
-        .ok_or_else(|| format!("Panel material {material_id} is not in the catalog."))?;
-    let property = |key: &str| -> Result<f64, String> {
-        material
-            .get(key)
-            .and_then(Value::as_f64)
-            .ok_or_else(|| format!("Panel material {material_id} has no {key}."))
+    // The panel is one material at the panel's thickness, or a stack of layers listed from
+    // the back face to the front (README section 5.9).
+    let layers: Vec<Layer> = match panel.get("layers").and_then(Value::as_array) {
+        Some(list) => list
+            .iter()
+            .map(|layer| {
+                let id = layer
+                    .get("material")
+                    .and_then(Value::as_str)
+                    .ok_or("Each panel layer needs a material.")?;
+                let thickness = layer
+                    .get("thickness_m")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
+                let turned = layer.get("turn_deg").and_then(Value::as_f64).unwrap_or(0.0);
+                if turned != 0.0 && (turned.abs() - 90.0).abs() > 1e-9 {
+                    return Err(format!(
+                        "A panel layer turns 0 or 90 degrees in the panel's plane, not {turned}."
+                    ));
+                }
+                Layer::from_catalog(id, thickness, turned != 0.0)
+            })
+            .collect::<Result<_, String>>()?,
+        None => {
+            let material_id = panel
+                .get("material")
+                .and_then(Value::as_str)
+                .ok_or("The panel needs a material, or layers.")?;
+            vec![Layer::from_catalog(
+                material_id,
+                size("thickness_m")?,
+                false,
+            )?]
+        }
     };
+    let stack = laminate(&layers)?;
     let edges_name = panel.get("edges").and_then(Value::as_str).unwrap_or("free");
     let edges = Edges::parse(edges_name)
         .ok_or_else(|| format!("Panel edges are free, supported, or clamped, not {edges_name}."))?;
     let plate = Plate {
         width_m: size("width_m")?,
         height_m: size("height_m")?,
-        thickness_m: size("thickness_m")?,
-        youngs_pa: property("youngs_pa")?,
-        density_kg_m3: property("density_kg_m3")?,
-        poisson: property("poisson")?,
+        layup: stack.stiffness,
         edges,
     };
     let cavity_m3 = match fields
@@ -392,7 +421,8 @@ pub fn parse_dml_panel(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>,
     }
     Ok(Box::new(DmlPanel {
         at_exciter: modes.shapes_at(exciter_at_m[0], exciter_at_m[1]),
-        loss_factor: property("loss_factor")?,
+        loss_factor: stack.loss_factor,
+        layer_notes: stack.notes,
         exciter,
         exciter_at_m,
         cavity_m3,

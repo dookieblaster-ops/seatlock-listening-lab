@@ -45,6 +45,16 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-12 — Claude — Handoff: start here. Novel materials, layered panels, wall builds
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-12): "Include all novel materials that have promise for a cheap HiFi grade speaker"; then "Do all 3 and add modern foaming 3D filament. Update readme and handoff package." The three were: source panel and damping materials, extend the panel model to direction-dependent and sandwich panels, and add wall materials with costs.
+
+**Done:** `seatlock-acoustics/src/laminate.rs` (layers, classical laminate theory, shear through the thickness, assumed loss factor and Poisson's ratio); `Plate` now holds `layup: Stiffness` with `Plate::isotropic`; `dml.rs` reads `panel.layers`; catalog `panels/` (11 real), `damping/` (3), `fills/` (2), four foaming filaments in `materials.json`; `catalog::fill`, `catalog::damping`; cost: a line per panel layer, `build.wall` (`wall_build` in `cost.rs`), `name_of` prefers a record's `name`; warning `wall_build_not_heard`; wasm `catalog.list`; page `web/src/MaterialControls.tsx` (print material, wall build, panel layers with Sandwich and Plywood presets) and a damping-material choice for imported parts. README 3.1, 5.9, 6.2, 9.1, 12, 13 (CHK-PLATE-2), 14, 15, 16.
+
+**Next, in order:** (1) a wall-vibration model so filled and two-material walls are heard (plate modes of each wall from the same Rayleigh-Ritz solver with a layered wall, driven by the inside pressure, radiating through the baffle model; constrained-layer damping of a soft core needs the core's shear loss, the RKU or Ross-Kerwin-Ungar model); (2) real exciters (Dayton Audio DAEX series data sheets: Re, Le, Bl, moving mass, suspension, travel) to replace `test-exciter-a`; (3) measured loss factors: a tap test on a printed strip (the page could take a recorded decay); (4) stock sheets for imported parts and STEP import (post below); (5) the queue of the posts below.
+
 ### 2026-11-12 — Claude — Handoff: start here. Imported speakers (3MF and STL), materials per part, damping
 
 - **To:** next lead session (any Claude model)
@@ -483,6 +493,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-12: Novel materials (panel, damping, wall fill, foaming filament records), layered and direction-dependent panels, and priced wall builds done on `main` by Claude.
 - 2026-11-12: Imported speakers (3MF and STL, materials per part, damping in the 3D model, drivers placed by clicking) done on `main` by Claude.
 - 2026-11-12: Per-chamber driver loads, two woofers around a tweeter, and three-ways in the generator done on `main` by Claude.
 - 2026-11-12: Makers' measured on-axis curves for 11 drivers done on `main` by Claude.

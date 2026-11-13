@@ -1,0 +1,18 @@
+{
+  "id": "airex-t92-60",
+  "status": "sourced",
+  "tier": "reference",
+  "kind": "panel_material",
+  "name": "Airex T92.60 PET foam (core only)",
+  "core_only": true,
+  "transverse_shear_pa": 14000000.0,
+  "density_kg_m3": 65.0,
+  "note": "Airex T92.60: density 65 kg/m3; shear modulus 15 N/mm2 parallel to the welding lines and 14 and 12 N/mm2 across them; the record holds 14. Its stiffness in its own plane is not published, so it is a core only.",
+  "source": {
+    "url": "https://www.knowde.com/stores/3a-core-materials/products/airex-t92-60",
+    "title": "Airex T92.60 technical data (Knowde copy of 3A Core Materials' data)",
+    "read_on": "2026-11-12",
+    "via": "other_listing"
+  },
+  "price": null
+}

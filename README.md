@@ -180,7 +180,7 @@ engine/            Rust workspace
     seatlock-wasm        C-ABI wrapper used by the workers
     seatlock-rt          C-ABI real-time kernel used by the AudioWorklet
 web/               TypeScript and React app
-catalog/           drivers/, exciters/, panels/, electronics/, printers/, stock/, materials.json
+catalog/           drivers/, exciters/, panels/, damping/, fills/, electronics/, printers/, stock/, materials.json
 targets/           quality targets
 designs/examples/  example designs used by checks and demos
 docs/              archives: older COMS.md threads and STATUS.md history
@@ -584,6 +584,21 @@ What validated it (CHK-PLATE-1 and the tests beside it):
 - The exciter on a large panel sees, on average over frequency, the mobility of an endless plate, `1 / (8*sqrt(D*m))`: the resistance the panel adds to the coil reads 0.187 ohm against 0.195 ohm.
 - A panel alone on a large flat surface radiates, from 700 Hz to 2.8 kHz, 0.15 dB below a point-driven endless plate, `W = RHO0 * F^2 / (2*pi*C0*m^2)`.
 
+**Layered and direction-dependent panels** (as built, Level 3; owner, 2026-11-12: "include all novel materials that have promise for a cheap HiFi grade speaker"). A panel is one material at the panel's thickness, or `layers` listed from its back face to its front:
+
+```jsonc
+"panel": { "width_m": 0.30, "height_m": 0.20, "edges": "free",
+           "layers": [ { "material": "pla-printed", "thickness_m": 0.0004 },
+                       { "material": "thermhex-pp-honeycomb", "thickness_m": 0.005 },
+                       { "material": "pla-printed", "thickness_m": 0.0004 } ] }   // a layer may take "turn_deg": 90
+```
+
+- **Stiffness.** Classical laminate theory: each layer is orthotropic in the panel's plane, its strong direction along `u` (or `v` when turned 90 degrees), `Q11 = E_u/(1 - nu_uv*nu_vu)`, `Q22 = E_v/(1 - nu_uv*nu_vu)`, `Q12 = nu_uv*Q22`, `Q66 = G_uv`, and `D_ij = sum of Q_ij * (z_top^3 - z_bottom^3)/3` about the stack's middle. The plate's strain energy is `(1/2) * integral of D11*w_xx^2 + 2*D12*w_xx*w_yy + D22*w_yy^2 + 4*D66*w_xy^2`, which for one isotropic layer is the formula above. Bending and stretching are uncoupled, exact for a stack that mirrors about its middle; another stack gets a label line.
+- **Shear through the thickness.** `S = (5/6)*G_t*h` for one layer, `S = d^2 / sum(t_k/G_t,k)` for several (`d` between the middles of the outer layers; for a sandwich, `G_core*d^2/t_core`). Each mode is lowered to `omega^2 = omega_bend^2 / (1 + D*k^2/S)`, with `D = sqrt(D11*D22)` and `k^2 = omega_bend*sqrt(m/D)`: exact for a simply supported Mindlin plate without rotary inertia, an estimate for free edges. A soft core matters: 0.4 mm PLA skins on 5 mm of XPS lower the first resonance of a 0.40 x 0.30 m panel by 10 % and mode (8, 8) by 75 %.
+- **Damping.** Each layer's loss factor weighted by its share of the bending stiffness. That leaves out the extra damping a soft core adds by shearing between stiff skins, and the label says so.
+- **Missing figures.** A record without a loss factor takes 0.02 and one without a Poisson's ratio 0.3, both lab assumptions named in the label; a record without an in-plane shear stiffness takes `sqrt(E_u*E_v)/(2*(1 + nu))`. A core (`core_only`) has no stiffness in its own plane and needs `transverse_shear_pa`; it cannot be a panel alone.
+- **Checks.** CHK-PLATE-2: an orthotropic plate with the Wood Handbook's balsa ratios, simply supported, against the closed form, 33 resonances up to 1.18 kHz within 0.05 %. One layer reproduces `D`, `nu*D`, and `(1 - nu)*D/2` exactly; a sandwich, a quarter turn, and three cross plies match hand calculations to 1e-12.
+
 Not modeled: the air's load on the panel (it moves as in a vacuum: the air's added mass and the damping from sending out sound are left out, so resonances read a little high in frequency and too sharp), an open back, different conditions on different edges, anything above the modal limit, the exciter's own footprint (it pushes at a point), and the frame.
 
 ### 5.10 Room estimate
@@ -656,6 +671,15 @@ The outside radius runs from the front's rim to the widest point, `widest_at` of
 The wall follows the outside everywhere: the inside of a rounded box is rounded by `edge_radius_m - wall_m`, a chamfer's inside leg is `chamfer_m - wall_m * (2 - sqrt 2)`, and a prism's inside outline is every side moved inward by `wall_m`. Rounded and chamfered boxes keep the six box faces, and a mount must sit on the flat part of its face. A sloped box's faces are `front` (the slope), `back`, `top`, `bottom`, `left`, and `right`. A prism's faces are `front`, `back`, and `side-1`, `side-2`, ... for the sides from the first outline corner onward. On any face, `[u, v]` is measured from the lower-left corner as seen from outside, with `v` running up the face; the top and bottom keep the box's convention.
 
 **Build method.** Each part of the cabinet is either printed or a stock part from `catalog/stock/`, such as a length of PVC pipe or a cut sheet. A hybrid build combines them: for example, a stock pipe for the body with printed end caps, baffle, and port. The outer-shape member `tube` (Level 2) is a stock pipe or tube cut to length, whose diameter and wall come from its stock record. The member `sheet_box` (Level 2) is a box cut from sheet stock such as MDF, plywood, or foam board, with a cut list. Printed parts and stock parts both feed the air network, the voxel grid, the cost, and the export: print files for printed parts, and a cut list for stock parts.
+
+**Wall builds** (as built, Level 3; owner, 2026-11-12). A printed cabinet's walls can be two thin skins with a core between them, in `build.wall`:
+
+```jsonc
+"wall": { "kind": "filled", "skin_m": 0.0016, "fill": "quikrete-play-sand" }          // poured: catalog/fills/
+"wall": { "kind": "two_material", "skin_m": 0.0016, "core": "varioshore_tpu" }       // a second filament
+```
+
+A filled wall is printed hollow and filled with sand or gypsum cement (the "sand-filled" and "dental plaster" DIY builds); a two-material wall prints its core in a second filament, soft or foaming, which damps the wall the way a rubber layer between two sheets does (constrained-layer damping). The core's volume is estimated as the print's solid times `1 - 2*skin_m/wall_m`; the cost prices it from the fill's `buy_kg_per_m3` or the filament's printed density, and a printed core counts toward the plastic and the print time. Wall vibration is not simulated (section 15), so a wall build changes the cost and the weight and not the sound, and the results say so (`wall_build_not_heard`).
 
 Printing is optional. A cabinet can be all stock, all printed, or a mix, and the lab prints a part only when that improves the sound or lowers the cost. When the same cabinet can be built more than one way, the lab shows the ways side by side, each with its cost and its results. Printing earns its place through geometry that stock parts cannot make, such as shaped ports, folds, and curved baffles. Wall stiffness also differs between materials, but wall vibration is not simulated (section 15), so the comparison says so.
 
@@ -781,7 +805,16 @@ Rules:
 
 Amplifiers and DSP devices in `catalog/electronics/` follow the same sourcing rules. An amplifier record holds channel count, power per channel at a rated load, and price. A DSP device record holds output channels, sample rates, filter capacity, and price. The synthetic amplifier `test-amp-a` has one channel of 50 W into 4 ohm.
 
-Exciters, from Level 3, are records like drivers, in `catalog/exciters/`. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint (`published`: `re_ohm`, `le_h`, `bl_tm`, `coil_mass_kg`, `magnet_mass_kg`, `suspension_n_per_m`, `suspension_ns_per_m`, `xmax_m`, `pe_w`). Panel materials, also from Level 3, in `catalog/panels/`, hold `youngs_pa`, `density_kg_m3`, `poisson`, and `loss_factor`, each with a source or a note of how it was measured, and a price per kilogram. So far both folders hold only synthetic test records; real exciters and panel materials are still to be sourced.
+**Novel materials** (owner, 2026-11-12). The catalog holds the cheap materials with promise for hi-fi parts, each from a source opened in the session:
+
+- `catalog/panels/`: panel materials. Isotropic records give `youngs_pa`; direction-dependent ones give `youngs_u_pa`, `youngs_v_pa`, `poisson_uv`, and `shear_pa` (wood, from the Wood Handbook's elastic ratios); cores give `core_only` and `transverse_shear_pa`. Each gives `density_kg_m3`, and `poisson` and `loss_factor` when published (section 5.9 says what the lab assumes otherwise). Present: XPS foam board, two foamed PVC sheets, polycarbonate, balsa sheet, end-grain balsa, birch veneer for plywood, polypropylene honeycomb, PET foam, solid printed PLA, and foamed LW-PLA.
+- `catalog/damping/`: fill for the inside of a cabinet, with `flow_resistivity_pa_s_m2` (a published minimum is stored as that minimum, and the note says so): mineral wool, glass wool, polyester wadding.
+- `catalog/fills/`: what a hollow printed wall is filled with: `density_kg_m3` as placed, `buy_kg_per_m3` (powder bought per volume, for a cast), and a price per kilogram: play sand, gypsum cement.
+- `catalog/materials.json`: print materials, including foaming filaments (`"foaming": true`): their `density_kg_m3` is the printed density at the stated setting, and `filament_density_kg_m3` the filament's own. Present: colorFabb LW-PLA, Bambu PLA Aero, colorFabb varioShore TPU, Siraya Tech Roamr TPU Air.
+
+A figure a source gives as a range is stored as the middle of the range, and one derived from a source (a foamed density from the flow setting, a wood density from its specific gravity) is marked as derived in the record's note.
+
+Exciters, from Level 3, are records like drivers, in `catalog/exciters/`. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint (`published`: `re_ohm`, `le_h`, `bl_tm`, `coil_mass_kg`, `magnet_mass_kg`, `suspension_n_per_m`, `suspension_ns_per_m`, `xmax_m`, `pe_w`). Panel materials, also from Level 3, in `catalog/panels/`, hold `youngs_pa`, `density_kg_m3`, `poisson`, and `loss_factor`, each with a source or a note of how it was measured, and a price per kilogram. Real panel materials are in (below); the exciters folder still holds only a synthetic test record, and real exciters are still to be sourced.
 
 `catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from a seller's page. The owner prints with any filament, so the default material is the cheapest one sourced.
 
@@ -929,8 +962,8 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 **Level 3, novel geometry and advanced correction.**
 
 - A: undo and redo; design history.
-- B: exciters and panel materials; stale-price warnings; alternative vendors per part.
-- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing; the `simple` room. CHK-PLATE-1, CHK-ROOM-1.
+- B: exciters and panel materials, damping materials, wall fills, and foaming filaments; stale-price warnings; alternative vendors per part.
+- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard. CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a boundary-element model of the air around (and then inside) the cabinet, joined to the driver network, giving every direction from one solve per frequency (section 2.6); a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.
@@ -993,6 +1026,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-RAD-4 | `exterior` solver, a box 0.2 x 0.16 x 0.24 m, 10 mm cells, one skin cell on its front, one point beside it and one behind it. | The reciprocity run and a plain radiation run the other way round agree within 7 % and 10 degrees at 50, 200, 500, 1000, 2000, and 3000 Hz. |
 | CHK-WIN-1 | `baffle` radiation with `listening_window`, test-woofer-a's piston at the middle of a 40 x 40 m surface, listener at 100 m, 41 frequencies from 3.0 to 3.6 kHz. | The window's level against the level straight ahead, averaged over the frequencies, equals the energy mean of the piston's directivity over the nine directions, within 0.05 dB. Under `point` radiation the window equals the level straight ahead within 0.02 dB. |
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |
+| CHK-PLATE-2 | An orthotropic plate 0.40 x 0.30 m, 4 mm thick, `E_u` 3.74 GPa, `E_v = 0.015*E_u`, `G = 0.037*E_u`, `nu_uv` 0.488, 179 kg/m^3, simply supported, shear through the thickness left out. | Every resonance below 95 % of the resolved limit matches `omega^2 = (D11*p^4 + 2*(D12 + 2*D66)*p^2*q^2 + D22*q^4)/m`, `p = i*pi/a`, `q = j*pi/b`, within 1 %, with at least 25 of them. |
 | CHK-ROOM-1 | `simple` room of 50 m^3 with rt60 0.4 s, no wall reflection, a source radiating 1 W equally in all directions. | A = 20.12 m^2. Diffuse level 113.12 dB. Direct level at 2.5 m 101.19 dB. Within 0.05 dB. |
 | CHK-E2E-1, 2, 3 | Section 12. | As stated there. |
 
@@ -1011,6 +1045,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
+- Materials are chosen from the catalog by name: the print material (foaming filaments marked), the wall build (solid, two skins filled with sand or gypsum cement, or two skins with a second filament), a panel's material or its layers (with Sandwich and Plywood presets), and an imported damping part's material.
 - "Import a speaker" reads a 3MF or STL assembly: a quarter-turn control for its front, a table of its parts (solid in a print material, or damping with its flow resistivity), and buttons that place each sound source or a port by clicking the 3D view, with tilt and turn.
 - A design is one file the owner can save, reopen, duplicate, and send to someone.
 - A part of a kind this build does not know is shown as unsupported. It is never dropped or hidden.
@@ -1019,7 +1054,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 
 Say so in the interface wherever it matters.
 
-- Cabinet wall vibration. Printed walls flex, and cheap stock materials such as cardboard and foam board flex more. Until this is modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness.
+- Cabinet wall vibration. Printed walls flex, and cheap stock materials such as cardboard and foam board flex more. Until this is modeled, the builder enforces minimum wall thickness, offers bracing, and warns more strongly for materials with low stiffness. Filled and two-material walls (section 6.2) are priced but not heard.
 - The listening room, beyond the simple estimate of section 5.10 that arrives at Level 3. Until then all results are for free space or a baffle.
 - For DML panels: the air's load on the panel, an open back, and anything above the frequency the label gives (section 5.9). A panel's result also depends on material numbers that printing makes uncertain.
 - Tweeter horns and waveguides, which need a different solver.
@@ -1051,5 +1086,8 @@ Say so in the interface wherever it matters.
 | Stock material | `catalog/stock/` | An off-the-shelf building material such as PVC pipe, a cardboard tube, foam board, or plywood. |
 | Hybrid build | Build method | A cabinet that combines stock parts with printed parts. |
 | Quick, Detailed, Full 3D | `lumped`, `waveguide`, `fdtd` | The three enclosure models, from fastest to most complete. |
+| Sandwich panel | `layers` in a panel | Two thin stiff skins on a light core: far stiffer for its weight than one sheet (section 5.9). |
+| Wall build | `build.wall` | How a printed wall is made: solid, two skins filled with sand or gypsum cement, or two skins with a second filament between them. |
+| Foaming filament | `"foaming": true` in `materials.json` | A filament that foams as it prints, so the part is lighter and less stiff than solid plastic. |
 | Independent measurement | `independent` in a driver record | What a respected tester measured on real samples, used in place of the maker's figure and shown beside it (section 9.1). |
 | Thiele–Small parameters | `fs_hz`, `qes`, `qms`, `qts`, `vas_m3`, `re_ohm`, `le_h`, `sd_m2`, `bl`, `mms`, `cms`, `rms` | The published numbers that describe a driver: resonance frequency, electrical, mechanical, and total Q, equivalent air volume, coil resistance and inductance, cone area, force factor, moving mass, suspension compliance, mechanical resistance. |

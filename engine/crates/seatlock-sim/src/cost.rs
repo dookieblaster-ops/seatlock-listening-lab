@@ -70,6 +70,11 @@ fn price_of(record: &Value) -> (Option<f64>, Option<String>, bool) {
 }
 
 fn name_of(record: &Value, id: &str) -> String {
+    if let Some(name) = record.get("name").and_then(Value::as_str) {
+        if record.get("model").is_none() {
+            return name.to_string();
+        }
+    }
     let maker = record.get("maker").and_then(Value::as_str).unwrap_or("");
     let model = record.get("model").and_then(Value::as_str).unwrap_or(id);
     format!("{maker} {model}").trim().to_string()
@@ -239,33 +244,60 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         let Some(panel) = radiator.fields.get("panel").and_then(Value::as_object) else {
             continue;
         };
-        let id = panel.get("material").and_then(Value::as_str).unwrap_or("");
         let size = |key: &str| panel.get(key).and_then(Value::as_f64).unwrap_or(0.0);
-        match catalog::panel_material(id) {
-            Some(record) => {
-                let density = record
-                    .get("density_kg_m3")
-                    .and_then(Value::as_f64)
-                    .unwrap_or(0.0);
-                let mass_kg =
-                    size("width_m") * size("height_m") * size("thickness_m") * density * n;
-                let per_kg = record.pointer("/price/per_kg").and_then(Value::as_f64);
-                let (_, read_on, via) = price_of(&record);
-                let name = record
-                    .get("name")
+        // One material at the panel's thickness, or each layer of a stack by its own.
+        let layers: Vec<(String, f64)> = match panel.get("layers").and_then(Value::as_array) {
+            Some(list) => list
+                .iter()
+                .map(|layer| {
+                    (
+                        layer
+                            .get("material")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string(),
+                        layer
+                            .get("thickness_m")
+                            .and_then(Value::as_f64)
+                            .unwrap_or(0.0),
+                    )
+                })
+                .collect(),
+            None => vec![(
+                panel
+                    .get("material")
                     .and_then(Value::as_str)
-                    .unwrap_or(id)
-                    .to_string();
-                lines.push(line(
-                    format!("Panel, {name}"),
-                    mass_kg,
-                    "kg",
-                    per_kg,
-                    read_on,
-                    via,
-                ));
+                    .unwrap_or("")
+                    .to_string(),
+                size("thickness_m"),
+            )],
+        };
+        for (id, thickness) in layers {
+            match catalog::panel_material(&id) {
+                Some(record) => {
+                    let density = record
+                        .get("density_kg_m3")
+                        .and_then(Value::as_f64)
+                        .unwrap_or(0.0);
+                    let mass_kg = size("width_m") * size("height_m") * thickness * density * n;
+                    let per_kg = record.pointer("/price/per_kg").and_then(Value::as_f64);
+                    let (_, read_on, via) = price_of(&record);
+                    let name = record
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or(&id)
+                        .to_string();
+                    lines.push(line(
+                        format!("Panel, {name}"),
+                        mass_kg,
+                        "kg",
+                        per_kg,
+                        read_on,
+                        via,
+                    ));
+                }
+                None => problems.push(format!("Panel material {id} is not in the catalog.")),
             }
-            None => problems.push(format!("Panel material {id} is not in the catalog.")),
         }
     }
 
@@ -355,10 +387,28 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         .and_then(|record| record.get("density_kg_m3").and_then(Value::as_f64));
     if !solid_parts.is_empty() {
         // Priced part by part above.
-    } else if let Some(solid) = parts.print_solid_m3.filter(|solid| *solid > 0.0) {
+    } else if let Some(whole) = parts.print_solid_m3.filter(|solid| *solid > 0.0) {
+        // A wall build (README section 6.2): two thin printed skins with a core between them,
+        // poured (sand, gypsum cement) or printed in a second filament. The core's share of
+        // the print is estimated from the wall thickness.
+        let wall = wall_build(design, whole, &mut problems);
+        let solid = whole - wall.as_ref().map_or(0.0, |w| w.core_m3);
+        if let Some(wall) = &wall {
+            lines.push(line(
+                wall.name.clone(),
+                wall.core_m3 * wall.kg_per_m3 * n,
+                "kg",
+                wall.per_kg,
+                wall.read_on.clone(),
+                wall.via,
+            ));
+            if wall.printed {
+                print_mass_kg += wall.core_m3 * wall.kg_per_m3 * n;
+            }
+        }
         match density {
             Some(density) => {
-                print_mass_kg = solid * density * design.build.infill_fraction * n;
+                print_mass_kg += solid * density * design.build.infill_fraction * n;
                 let per_kg = material
                     .as_ref()
                     .and_then(|record| record.get("price_per_kg").and_then(Value::as_f64));
@@ -369,7 +419,7 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
                     .map(str::to_string);
                 lines.push(line(
                     format!("Printed {}", design.build.material.to_uppercase()),
-                    print_mass_kg,
+                    solid * density * design.build.infill_fraction * n,
                     "kg",
                     per_kg,
                     read_on,
@@ -377,8 +427,13 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
                 ));
                 let flow = catalog::printer(None)
                     .and_then(|record| record.get("max_flow_m3_per_s").and_then(Value::as_f64));
+                let printed_m3 = solid
+                    + wall
+                        .as_ref()
+                        .filter(|w| w.printed)
+                        .map_or(0.0, |w| w.core_m3);
                 print_time_h_at_least =
-                    flow.map(|flow| solid * design.build.infill_fraction * n / flow / 3600.0);
+                    flow.map(|flow| printed_m3 * design.build.infill_fraction * n / flow / 3600.0);
             }
             None => problems.push(format!(
                 "Print material {} has no density in the catalog.",
@@ -620,5 +675,115 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         cut_list,
         print_mass_kg,
         print_time_h_at_least,
+    }
+}
+
+/// The core of a wall build, for one speaker.
+struct WallCore {
+    name: String,
+    core_m3: f64,
+    /// Mass bought or printed per cubic meter of core.
+    kg_per_m3: f64,
+    per_kg: Option<f64>,
+    read_on: Option<String>,
+    via: bool,
+    /// Printed in a second filament (counts as printed plastic and print time).
+    printed: bool,
+}
+
+/// `build.wall`: `{ "kind": "filled", "skin_m": 0.0016, "fill": "<catalog/fills id>" }` or
+/// `{ "kind": "two_material", "skin_m": 0.0016, "core": "<print material id>" }`.
+fn wall_build(design: &DesignFile, solid_m3: f64, problems: &mut Vec<String>) -> Option<WallCore> {
+    let wall = design.build.extra.get("wall")?.as_object()?;
+    let kind = wall.get("kind").and_then(Value::as_str).unwrap_or("solid");
+    if kind == "solid" {
+        return None;
+    }
+    let skin = wall.get("skin_m").and_then(Value::as_f64).unwrap_or(0.0016);
+    let Some(wall_m) = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("wall_m")
+        .and_then(Value::as_f64)
+    else {
+        problems
+            .push("A wall build needs a printed cabinet with a wall thickness (wall_m).".into());
+        return None;
+    };
+    if !(skin > 0.0 && 2.0 * skin < wall_m) {
+        problems.push(format!(
+            "The wall build's two {:.1} mm skins leave no room inside a {:.1} mm wall.",
+            skin * 1000.0,
+            wall_m * 1000.0
+        ));
+        return None;
+    }
+    let core_m3 = solid_m3 * (1.0 - 2.0 * skin / wall_m);
+    let text = |record: &Value, key: &str| {
+        record
+            .pointer(key)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    match kind {
+        "filled" => {
+            let id = wall.get("fill").and_then(Value::as_str).unwrap_or("");
+            let Some(record) = catalog::fill(id) else {
+                problems.push(format!("Wall fill {id} is not in the catalog."));
+                return None;
+            };
+            let kg_per_m3 = record
+                .get("buy_kg_per_m3")
+                .or_else(|| record.get("density_kg_m3"))
+                .and_then(Value::as_f64)?;
+            Some(WallCore {
+                name: format!(
+                    "Wall fill, {} (between {:.1} mm skins; volume estimated from the wall)",
+                    name_of(&record, id),
+                    skin * 1000.0
+                ),
+                core_m3,
+                kg_per_m3,
+                per_kg: record.pointer("/price/per_kg").and_then(Value::as_f64),
+                read_on: text(&record, "/price/read_on"),
+                via: record.pointer("/price/via").is_some(),
+                printed: false,
+            })
+        }
+        "two_material" => {
+            let id = wall.get("core").and_then(Value::as_str).unwrap_or("");
+            let Some(record) = catalog::material(id) else {
+                problems.push(format!(
+                    "Wall core {id} is not a print material in the catalog."
+                ));
+                return None;
+            };
+            let kg_per_m3 = record.get("density_kg_m3").and_then(Value::as_f64)?;
+            let name = record
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or(id)
+                .to_string();
+            Some(WallCore {
+                name: format!(
+                    "Printed wall core, {name} (between {:.1} mm skins; volume estimated from the wall)",
+                    skin * 1000.0
+                ),
+                core_m3,
+                kg_per_m3: kg_per_m3 * design.build.infill_fraction,
+                per_kg: record.get("price_per_kg").and_then(Value::as_f64),
+                read_on: text(&record, "/price_source/read_on"),
+                via: record.pointer("/price_source/via").is_some(),
+                printed: true,
+            })
+        }
+        other => {
+            problems.push(format!(
+                "A wall build is solid, filled, or two_material, not {other}."
+            ));
+            None
+        }
     }
 }

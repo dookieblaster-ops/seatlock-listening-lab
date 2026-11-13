@@ -1,3 +1,5 @@
+import { PanelBuildField, PrintMaterialField, WallBuildField } from "./MaterialControls";
+import type { Catalogs } from "./ImportedCabinet";
 import { useEffect, useRef, useState } from "react";
 
 import { CabinetView } from "./CabinetView";
@@ -66,7 +68,16 @@ function fidelityText(label: SimulateResult["fidelity"]) {
 }
 
 export default function App() {
-  const { version, ready, error: engineError, designCheck, simulate, geometry, correct, listen, driverRecord } = useEngine();
+  const { version, ready, error: engineError, designCheck, simulate, geometry, correct, listen, driverRecord, catalogList } = useEngine();
+  const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    void Promise.all([catalogList("panels"), catalogList("damping"), catalogList("fills"), catalogList("materials")])
+      .then(([panels, damping, fills, materials]) => setCatalogs({ panels, damping, fills, materials }))
+      .catch(() => setCatalogs(null));
+  }, [ready, catalogList]);
   const playback = useListen();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioFileRef = useRef<HTMLInputElement>(null);
@@ -339,6 +350,7 @@ export default function App() {
             publish={(next) => void publish(next, designName)}
             picking={picking}
             setPicking={setPicking}
+            catalogs={catalogs ?? undefined}
           />
           <h3>Room</h3>
           <label title="Adds the wall behind the speaker and the room's reverberant sound to the results. It is an estimate for comparing designs, not a room simulation.">
@@ -417,7 +429,7 @@ export default function App() {
           </div>
           {design.speaker.radiators.map((item, index) =>
             item.kind === "dml_panel" ? (
-              <PanelSource key={`panel-${index}`} item={item} index={index} onChange={(change) => {
+              <PanelSource key={`panel-${index}`} item={item} index={index} catalogs={catalogs} onChange={(change) => {
                 const next = structuredClone(design);
                 change(next.speaker.radiators[index]);
                 void publish(next, designName);
@@ -523,7 +535,7 @@ export default function App() {
               next.electronics.dsp_device = value === "" ? null : value;
               void publish(next, designName);
             }} />
-            <TextField label="Material" value={design.build.material} onChange={(value) => {
+            <PrintMaterialField value={design.build.material} catalogs={catalogs} onChange={(value) => {
               const next = structuredClone(design);
               next.build.material = value;
               void publish(next, designName);
@@ -536,6 +548,20 @@ export default function App() {
               void publish(next, designName);
             }} />
           </div>
+          <WallBuildField
+            wall={(design.build as Record<string, unknown>).wall as never}
+            catalogs={catalogs}
+            onChange={(wall) => {
+              const next = structuredClone(design);
+              const build = next.build as Record<string, unknown>;
+              if (wall) {
+                build.wall = wall;
+              } else {
+                delete build.wall;
+              }
+              void publish(next, designName);
+            }}
+          />
           <label className="check">
             <input type="checkbox" checked={design.build.stereo_pair} onChange={(event) => {
               const next = structuredClone(design);
@@ -1467,10 +1493,12 @@ function InsideEditor({
 function PanelSource({
   item,
   index,
+  catalogs,
   onChange,
 }: {
   item: Record<string, unknown>;
   index: number;
+  catalogs: Catalogs | null;
   onChange: (change: (radiator: Record<string, unknown>) => void) => void;
 }) {
   const panel = (item.panel ?? {}) as Record<string, unknown>;
@@ -1490,10 +1518,11 @@ function PanelSource({
         <TextField label="Exciter catalog id" value={String(item.exciter_id ?? "")} onChange={(value) => onChange((radiator) => {
           radiator.exciter_id = value;
         })} />
-        <TextField label="Panel material" value={String(panel.material ?? "")} onChange={(value) => setPanel("material", value)} />
         <NumberField label="Panel width (mm)" value={mm(Number(panel.width_m))} onChange={(value) => setPanel("width_m", value / 1000)} />
         <NumberField label="Panel height (mm)" value={mm(Number(panel.height_m))} onChange={(value) => setPanel("height_m", value / 1000)} />
-        <NumberField label="Panel thickness (mm)" value={mm(Number(panel.thickness_m))} onChange={(value) => setPanel("thickness_m", value / 1000)} />
+        {Array.isArray(panel.layers) ? null : (
+          <NumberField label="Panel thickness (mm)" value={mm(Number(panel.thickness_m))} onChange={(value) => setPanel("thickness_m", value / 1000)} />
+        )}
         <label title="How the panel is held at its rim: free (resting on soft foam), supported (hinged), or clamped.">
           Panel edges
           <select value={String(panel.edges ?? "free")} onChange={(event) => setPanel("edges", event.target.value)}>
@@ -1512,6 +1541,18 @@ function PanelSource({
           radiator.cavity_depth_m = value / 1000;
         })} />
       </div>
+      <PanelBuildField
+        panel={panel}
+        index={index}
+        catalogs={catalogs}
+        setPanel={(change) =>
+          onChange((radiator) => {
+            const next = { ...((radiator.panel ?? {}) as Record<string, unknown>) };
+            change(next);
+            radiator.panel = next;
+          })
+        }
+      />
     </div>
   );
 }

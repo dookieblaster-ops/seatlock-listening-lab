@@ -1,0 +1,16 @@
+{
+  "id": "isover-akustic-ssp2",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "damping",
+  "name": "Isover Akustic SSP2 glass wool slab",
+  "flow_resistivity_pa_s_m2": 11000.0,
+  "note": "Specific air flow resistivity 11 kPa*s/m2 (EN ISO 9053-1); declared level AFr11.",
+  "source": {
+    "url": "https://www.isover.cz/en/documents/technicke-listy/tl-isover-akustic-ssp2-en.pdf",
+    "title": "Isover Akustic SSP2 technical data sheet",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}

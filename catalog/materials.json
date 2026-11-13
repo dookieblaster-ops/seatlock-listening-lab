@@ -2,8 +2,8 @@
   "pla": {
     "density_kg_m3": 1240.0,
     "price_per_kg": 13.49,
-    "youngs_modulus_xy_pa": 2.68e9,
-    "youngs_modulus_z_pa": 2.16e9,
+    "youngs_modulus_xy_pa": 2680000000.0,
+    "youngs_modulus_z_pa": 2160000000.0,
     "note": "Price: Elegoo PLA Basic, 1 kg refill, $13.49 (its 10 kg pack is $99.99). Density and stiffness: Bambu Lab PLA Basic data sheet (ISO 1183, 1.24 g/cm3; ISO 527, 2680 MPa along the layers and 2160 MPa across them). The two sheets are different brands of the same plastic.",
     "price_source": {
       "url": "https://us.elegoo.com/products/pla-basic-filament-1-75mm-colored-1kg",
@@ -20,5 +20,74 @@
     "density_kg_m3": 1270.0,
     "price_per_kg": null,
     "note": "Typical density. Confirm against the filament data sheet. No price sourced yet."
+  },
+  "lw_pla": {
+    "name": "colorFabb LW-PLA (foaming)",
+    "foaming": true,
+    "density_kg_m3": 540.0,
+    "filament_density_kg_m3": 1200.0,
+    "price_per_kg": 40.74,
+    "youngs_modulus_xy_pa": 860000000.0,
+    "note": "Foams in the nozzle above about 230 C. Data sheet: Young's modulus 3350 MPa unfoamed (200 C, 100 % flow) and 860 MPa foamed (250 C, 45 % flow); unfoamed density 1.2 g/cm3. The printed density 0.54 g/cm3 is derived for 45 % flow. Price $30.55 for 750 g, excluding VAT.",
+    "price_source": {
+      "url": "https://www.3djake.com/colorfabb/lw-pla-natural",
+      "title": "3DJake: colorFabb LW-PLA Natural, 750 g",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    },
+    "data_source": {
+      "url": "https://3ddruckshopnord.de/mediafiles/Datenbl%C3%A4tter/Colorfabb/TDS_E%20ColorFabb%20LW-PLA.pdf",
+      "title": "colorFabb LW-PLA technical datasheet v1.0 (2023)",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    }
+  },
+  "pla_aero": {
+    "name": "Bambu Lab PLA Aero (foaming)",
+    "foaming": true,
+    "density_kg_m3": 786.0,
+    "filament_density_kg_m3": 1210.0,
+    "price_per_kg": 44.99,
+    "bending_modulus_xy_pa": 1690000000.0,
+    "note": "Bambu: filament density 1.21 g/cm3, prints 50 % to 80 % as dense; the record holds the middle, 65 %. Bending modulus 1690 MPa along the layers (ISO 178) on specimens printed at 210 C, which foams little; the stiffness of a fully foamed print is not published.",
+    "price_source": {
+      "url": "https://stemfinity.com/products/bambu-lab-pla-aero",
+      "title": "Stemfinity: Bambu Lab PLA Aero, 1 kg",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    },
+    "data_source": {
+      "url": "https://cdn.shopify.com/s/files/1/0574/3116/2995/files/Bambu_PLA_Aero_Technical_Data_Sheet.pdf",
+      "title": "Bambu PLA Aero Technical Data Sheet V4.0",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    }
+  },
+  "varioshore_tpu": {
+    "name": "colorFabb varioShore TPU (foaming, soft)",
+    "foaming": true,
+    "density_kg_m3": 813.0,
+    "filament_density_kg_m3": 1220.0,
+    "price_per_kg": null,
+    "note": "Shore 92A TPU that foams above about 230 C and grows 1.4 to 1.6 times; density 1.22 g/cm3 unfoamed (ASTM D-792). The printed density is derived for 1.5 times. A soft core between two PLA skins damps a wall (constrained-layer damping). No price sourced yet.",
+    "data_source": {
+      "url": "https://matterhackers.com/r/aYWo1o",
+      "title": "colorFabb varioShore TPU technical datasheet v1.0 (2019)",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    }
+  },
+  "roamr_tpu_air_85a": {
+    "name": "Siraya Tech Roamr TPU Air HR 85A (foaming, soft)",
+    "foaming": true,
+    "density_kg_m3": 550.0,
+    "price_per_kg": null,
+    "note": "Maker's table of printed part density (ISO 845): 0.84 g/cm3 at 220 C down to 0.55 g/cm3 at 250 C, Shore 85A to 68A; the record holds the 250 C print. A soft wall core for constrained-layer damping. No price sourced yet.",
+    "data_source": {
+      "url": "https://siraya.tech/ja/pages/roamr-tpu-air-hr-85a-user-guide",
+      "title": "Siraya Tech Roamr TPU Air HR 85A user guide",
+      "read_on": "2026-11-12",
+      "via": "search_extract"
+    }
   }
 }

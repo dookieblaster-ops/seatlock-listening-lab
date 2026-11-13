@@ -3,6 +3,7 @@
 mod baffle;
 mod cone;
 pub mod dml;
+pub mod laminate;
 pub mod network;
 pub mod plate;
 mod point;

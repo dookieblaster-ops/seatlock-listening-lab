@@ -283,6 +283,28 @@ pub fn simulate_with_progress(
     }
 
     issues.extend(breakup_warnings(design));
+    if let Some(kind) = design
+        .build
+        .extra
+        .get("wall")
+        .and_then(|wall| wall.get("kind"))
+        .and_then(Value::as_str)
+        .filter(|kind| *kind != "solid")
+    {
+        issues.push(Issue::warning(
+            "wall_build_not_heard",
+            format!(
+                "The {} wall build changes the cost and the weight; the sound does not show it \
+                 yet, because cabinet walls are simulated as rigid (README section 15).",
+                if kind == "filled" {
+                    "filled"
+                } else {
+                    "two-material"
+                }
+            ),
+            "build.wall",
+        ));
+    }
 
     let mut fidelity = Fidelity {
         enclosure: request.enclosure.clone(),

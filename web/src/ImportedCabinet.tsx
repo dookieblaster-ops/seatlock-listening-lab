@@ -1,3 +1,4 @@
+import type { CatalogEntry } from "./useEngine";
 import { useState } from "react";
 import { fromField, partField, quarterTurn, readSpeakerFiles, type PartField } from "./importMesh";
 
@@ -68,11 +69,13 @@ export function ImportedCabinet({
   publish,
   picking,
   setPicking,
+  catalogs,
 }: {
   design: AnyDesign;
   publish: (next: AnyDesign) => void;
   picking: PickTarget;
   setPicking: (target: PickTarget) => void;
+  catalogs?: Catalogs;
 }) {
   const [message, setMessage] = useState("");
   const outer = design.speaker.enclosure.outer;
@@ -119,13 +122,16 @@ export function ImportedCabinet({
     setMessage("Turned. Mounting points and ports were cleared; place them again.");
   }
 
+  const printMaterials = catalogs && catalogs.materials.length > 0 ? catalogs.materials.map((m) => m.id) : PRINT_MATERIALS;
+  const printName = (id: string) => catalogs?.materials.find((m) => m.id === id)?.name ?? id.toUpperCase();
+
   function setPart(index: number, change: Partial<PartField>) {
     const next = structuredClone(design);
     const part = next.speaker.enclosure.outer.parts[index];
     Object.assign(part, change);
     if (change.role === "damping") {
       part.material = "";
-    } else if (change.role === "solid" && !PRINT_MATERIALS.includes(part.material)) {
+    } else if (change.role === "solid" && !printMaterials.includes(part.material)) {
       part.material = "pla";
       delete part.flow_resistivity_pa_s_m2;
     }
@@ -184,20 +190,45 @@ export function ImportedCabinet({
                   </td>
                   <td>
                     {part.role === "damping" ? (
-                      <label title="The material's flow resistivity from its data sheet: how hard it is to push air through it. Fiber fill is often a few thousand, dense wool tens of thousands.">
-                        Air resistance (Pa·s/m²)
-                        <input
-                          data-testid={`part-resistivity-${index}`}
-                          type="number"
-                          value={part.flow_resistivity_pa_s_m2 ?? ""}
-                          onChange={(event) => setPart(index, { flow_resistivity_pa_s_m2: Number(event.target.value) })}
-                        />
-                      </label>
+                      <>
+                        <label title="A damping material from the catalog, with its published air resistance, or your own figure.">
+                          Damping material
+                          <select
+                            data-testid={`part-damping-${index}`}
+                            value={part.flow_resistivity_pa_s_m2 !== undefined || !part.material ? "" : part.material}
+                            onChange={(event) => {
+                              const next = structuredClone(design);
+                              const target = next.speaker.enclosure.outer.parts[index];
+                              target.material = event.target.value;
+                              if (event.target.value) {
+                                delete target.flow_resistivity_pa_s_m2;
+                              }
+                              publish(next);
+                            }}
+                          >
+                            <option value="">Typed in below</option>
+                            {(catalogs?.damping ?? []).map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name ?? m.id} ({Number(m.flow_resistivity_pa_s_m2 ?? 0).toFixed(0)} Pa·s/m²)
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label title="The material's flow resistivity from its data sheet: how hard it is to push air through it. Fiber fill is often a few thousand, dense wool tens of thousands.">
+                          Air resistance (Pa·s/m²)
+                          <input
+                            data-testid={`part-resistivity-${index}`}
+                            type="number"
+                            value={part.flow_resistivity_pa_s_m2 ?? ""}
+                            onChange={(event) => setPart(index, { flow_resistivity_pa_s_m2: Number(event.target.value) })}
+                          />
+                        </label>
+                      </>
                     ) : (
                       <select value={part.material} onChange={(event) => setPart(index, { material: event.target.value })}>
-                        {PRINT_MATERIALS.map((m) => (
+                        {printMaterials.map((m) => (
                           <option key={m} value={m}>
-                            {m.toUpperCase()}
+                            {printName(m)}
                           </option>
                         ))}
                       </select>
@@ -248,3 +279,10 @@ export function ImportedCabinet({
     </div>
   );
 }
+
+export type Catalogs = {
+  panels: CatalogEntry[];
+  damping: CatalogEntry[];
+  fills: CatalogEntry[];
+  materials: CatalogEntry[];
+};

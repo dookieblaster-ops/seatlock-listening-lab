@@ -1,0 +1,23 @@
+{
+  "id": "komatex-foam-pvc",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "Komatex foamed PVC board (3 mm project board)",
+  "youngs_pa": 975000000.0,
+  "density_kg_m3": 600.0,
+  "note": "Kommerling's Komatex data sheet: apparent density 0.55 to 0.65 g/cm3, modulus of elasticity 850 to 1100 N/mm2; the record holds the middle of each range. Price per kilogram derived from the Home Depot 5-pack of 24 x 36 x 0.118 in. boards ($57.34) at that density.",
+  "source": {
+    "url": "https://piedmontplastics.com/resources/literatures/kommerlingR-komatexR-data-sheet",
+    "title": "Kommerling Komatex Data Sheet (Kommerling USA)",
+    "read_on": "2026-11-10"
+  },
+  "price": {
+    "per_kg": 11.44,
+    "currency": "USD",
+    "vendor": "Home Depot",
+    "url": "https://www.homedepot.com/p/Komatex-24-in-x-36-in-x-0-118-in-White-Foam-Project-Board-5-Pack-41656106/310981486",
+    "read_on": "2026-11-10",
+    "note": "Derived: $57.34 for five boards of 1.67 L each at 600 kg/m3."
+  }
+}

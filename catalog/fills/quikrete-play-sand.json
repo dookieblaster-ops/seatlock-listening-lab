@@ -1,0 +1,25 @@
+{
+  "id": "quikrete-play-sand",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "fill",
+  "name": "Quikrete Premium Play Sand (50 lb bag)",
+  "density_kg_m3": 1602.0,
+  "buy_kg_per_m3": 1602.0,
+  "note": "Dry sand poured into the gap between two printed walls. Density derived from a retailer's line that a 50 lb bag fills about 1/2 cubic foot. Sand settles under vibration and needs a dry fill; top it up and seal the opening.",
+  "source": {
+    "url": "https://www.townandcountryhardware.com/2731153/Product/quikrete-1113-51",
+    "title": "Town & Country Hardware listing, Quikrete 1113-51 Play Sand 50 lb",
+    "read_on": "2026-11-12",
+    "via": "other_listing"
+  },
+  "price": {
+    "per_kg": 0.2862,
+    "currency": "USD",
+    "vendor": "Orgill storefront",
+    "read_on": "2026-11-12",
+    "via": "search_extract",
+    "url": "https://133.orgill-prodsbnt1.us-central1.gcp.storefrontcloud.io/p/d9db42c1-2156-4ca0-91fd-dddc9a747886/6113534",
+    "note": "$6.49 for a 50 lb bag."
+  }
+}

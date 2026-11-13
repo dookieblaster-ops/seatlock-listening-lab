@@ -1,0 +1,25 @@
+{
+  "id": "lw-pla-foamed",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "colorFabb LW-PLA, printed foamed (250 C, 45 % flow)",
+  "youngs_pa": 860000000.0,
+  "density_kg_m3": 540.0,
+  "note": "colorFabb LW-PLA data sheet (2023): Young's modulus 3350 MPa printed unfoamed at 200 C and 100 % flow, 860 MPa foamed at 250 C and 45 % flow (ISO 527-1A); unfoamed density 1.2 g/cm3. The foamed density is derived: 45 % of the plastic in the same volume, 0.54 g/cm3. Foaming depends on the printer, speed, and temperature; print and weigh a test strip to confirm.",
+  "source": {
+    "url": "https://3ddruckshopnord.de/mediafiles/Datenbl%C3%A4tter/Colorfabb/TDS_E%20ColorFabb%20LW-PLA.pdf",
+    "title": "colorFabb Light Weight PLA (LW-PLA) technical datasheet v1.0, 2023 (reseller copy)",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": {
+    "per_kg": 40.74,
+    "currency": "USD",
+    "vendor": "3DJake",
+    "url": "https://www.3djake.com/colorfabb/lw-pla-natural",
+    "read_on": "2026-11-12",
+    "via": "search_extract",
+    "note": "$30.55 for 750 g, excluding VAT."
+  }
+}

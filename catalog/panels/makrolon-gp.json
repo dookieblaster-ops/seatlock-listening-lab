@@ -1,0 +1,19 @@
+{
+  "id": "makrolon-gp",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "Makrolon GP polycarbonate sheet",
+  "youngs_pa": 2344217380,
+  "poisson": 0.38,
+  "shear_pa": 786000000.0,
+  "density_kg_m3": 1200.0,
+  "note": "Tensile modulus 340,000 psi (ASTM D638) and Poisson's ratio 0.38 (ASTM E132) from the Makrolon GP sheet data; density 1.2 g/cm3 (ASTM D792, Boedeker's listing of the same sheet); shear modulus 786 MPa (ASTM D732) from a copy of Covestro's Makrolon sheet data.",
+  "source": {
+    "url": "https://www.aircraftspruce.com/catalog/pdf/lexandatasheet.pdf",
+    "title": "Makrolon GP sheet data sheet (Aircraft Spruce copy)",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}

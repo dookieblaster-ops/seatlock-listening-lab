@@ -19,8 +19,8 @@ export function CostPanel({ cost, printNote }: { cost: CostReport; printNote?: s
       </p>
       <table className="cost-lines">
         <tbody>
-          {cost.lines.map((line) => (
-            <tr key={line.item}>
+          {cost.lines.map((line, index) => (
+            <tr key={`${index}-${line.item}`}>
               <td>{line.item}</td>
               <td>{amount(line.quantity, line.unit)}</td>
               <td>

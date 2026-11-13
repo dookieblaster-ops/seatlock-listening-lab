@@ -2,10 +2,14 @@
 //! by the Rayleigh-Ritz method with a polynomial basis.
 //!
 //! ```text
-//! D = E*h^3 / (12*(1 - nu^2)),   m = rho*h
-//! strain energy   (D/2) * integral of w_xx^2 + w_yy^2 + 2*nu*w_xx*w_yy + 2*(1 - nu)*w_xy^2
+//! strain energy   (1/2) * integral of D11*w_xx^2 + 2*D12*w_xx*w_yy + D22*w_yy^2 + 4*D66*w_xy^2
 //! kinetic energy  (m/2) * omega^2 * integral of w^2
 //! ```
+//!
+//! For an isotropic plate `D11 = D22 = D = E*h^3 / (12*(1 - nu^2))`, `D12 = nu*D`, and
+//! `4*D66 = 2*(1 - nu)*D`. A layered or direction-dependent panel gives its own four numbers
+//! (`laminate.rs`). Shear through the thickness then lowers each resonance by
+//! `omega^2 = omega_bend^2 / (1 + D*k^2/S)`, with `k` the mode's bending wavenumber.
 //!
 //! The basis is `X_i(xi) * Y_j(eta)` on the square `[-1, 1]^2`, with
 //! `X_i = (1 - xi^2)^q * P_i(xi)`: Legendre polynomials times a factor that makes every basis
@@ -18,6 +22,8 @@
 #![allow(clippy::needless_range_loop)]
 
 use std::f64::consts::PI;
+
+pub use crate::laminate::Stiffness;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Edges {
@@ -51,29 +57,67 @@ pub struct Plate {
     pub width_m: f64,
     /// Size along the surface's `v` direction, in m.
     pub height_m: f64,
-    pub thickness_m: f64,
-    pub youngs_pa: f64,
-    pub density_kg_m3: f64,
-    pub poisson: f64,
+    /// Bending stiffnesses, shear stiffness, and mass per area.
+    pub layup: Stiffness,
     pub edges: Edges,
 }
 
 impl Plate {
-    /// Bending stiffness `D`, in N*m.
+    /// A plate of one isotropic material, with shear through its thickness left out.
+    #[allow(clippy::too_many_arguments)]
+    pub fn isotropic(
+        width_m: f64,
+        height_m: f64,
+        thickness_m: f64,
+        youngs_pa: f64,
+        density_kg_m3: f64,
+        poisson: f64,
+        edges: Edges,
+    ) -> Plate {
+        let d = youngs_pa * thickness_m.powi(3) / (12.0 * (1.0 - poisson * poisson));
+        Plate {
+            width_m,
+            height_m,
+            layup: Stiffness {
+                d11: d,
+                d22: d,
+                d12: poisson * d,
+                d66: (1.0 - poisson) * d / 2.0,
+                mass_per_area: density_kg_m3 * thickness_m,
+                shear_per_width: f64::INFINITY,
+                thickness_m,
+            },
+            edges,
+        }
+    }
+
+    /// Bending stiffness `D`, in N*m: the geometric mean of the two directions' stiffnesses.
     pub fn stiffness(&self) -> f64 {
-        self.youngs_pa * self.thickness_m.powi(3) / (12.0 * (1.0 - self.poisson * self.poisson))
+        (self.layup.d11 * self.layup.d22).sqrt()
     }
 
     /// Mass per area, in kg/m^2.
     pub fn mass_per_area(&self) -> f64 {
-        self.density_kg_m3 * self.thickness_m
+        self.layup.mass_per_area
     }
 
-    /// Resonance `(i, j)` of the simply supported plate, in closed form.
+    /// `omega^2` after shear through the thickness, from `omega^2` in pure bending.
+    pub fn with_shear(&self, lambda_bend: f64) -> f64 {
+        let d = self.stiffness();
+        let k2 = (lambda_bend.max(0.0) * self.mass_per_area() / d).sqrt();
+        lambda_bend / (1.0 + d * k2 / self.layup.shear_per_width)
+    }
+
+    /// Resonance `(i, j)` of the simply supported plate, in closed form (orthotropic plate,
+    /// Lekhnitskii; shear through the thickness as for a Mindlin plate without rotary inertia).
     pub fn supported_mode_hz(&self, i: usize, j: usize) -> f64 {
-        PI / 2.0
-            * (self.stiffness() / self.mass_per_area()).sqrt()
-            * ((i as f64 / self.width_m).powi(2) + (j as f64 / self.height_m).powi(2))
+        let (p, q) = (PI * i as f64 / self.width_m, PI * j as f64 / self.height_m);
+        let s = &self.layup;
+        let bend =
+            (s.d11 * p.powi(4) + 2.0 * (s.d12 + 2.0 * s.d66) * p * p * q * q + s.d22 * q.powi(4))
+                / s.mass_per_area;
+        let lambda = bend / (1.0 + self.stiffness() * (p * p + q * q) / s.shear_per_width);
+        lambda.sqrt() / (2.0 * PI)
     }
 }
 
@@ -320,16 +364,20 @@ impl PlateModes {
     /// Resonances and shapes with polynomials up to degree `degree - 1` along the longer side
     /// and in proportion along the shorter one.
     pub fn solve(plate: Plate, degree: usize) -> Result<Self, String> {
+        let s = plate.layup;
         if !(plate.width_m > 0.0
             && plate.height_m > 0.0
-            && plate.thickness_m > 0.0
-            && plate.youngs_pa > 0.0
-            && plate.density_kg_m3 > 0.0
-            && (0.0..0.5).contains(&plate.poisson))
+            && s.d11 > 0.0
+            && s.d22 > 0.0
+            && s.d66 > 0.0
+            && s.d12 >= 0.0
+            && s.d12 * s.d12 < s.d11 * s.d22
+            && s.mass_per_area > 0.0
+            && s.shear_per_width > 0.0)
         {
             return Err(
-                "the panel needs a size, a thickness, a stiffness, a density, and a \
-                        Poisson's ratio between 0 and 0.5."
+                "the panel needs a size, a stiffness that is positive in every direction, \
+                        and a mass."
                     .into(),
             );
         }
@@ -339,7 +387,6 @@ impl PlateModes {
         let (count_u, count_v) = (count(a), count(b));
         let q = plate.edges.power();
         let (line_u, line_v) = (line(count_u, q), line(count_v, q));
-        let d = plate.stiffness();
         let mass = plate.mass_per_area();
         let area = a * b / 4.0;
         let (su, sv) = (2.0 / a, 2.0 / b);
@@ -347,8 +394,11 @@ impl PlateModes {
         // Polynomials up to degree n resolve about 0.6 * n half-waves across a side within 1 %
         // (found against the simply supported closed form; the tests hold it there).
         let half_waves = |count: usize| ((count + q) as f64 * 0.6 - 1.2).max(1.0);
-        let wave = ((half_waves(count_u) / a).min(half_waves(count_v) / b)).powi(2);
-        let resolved_up_to_hz = PI / 2.0 * (d / mass).sqrt() * wave;
+        // The lowest frequency at which either side runs out of half-waves, in pure bending.
+        let limit = |d: f64, half: f64, side: f64| d / mass * (PI * half / side).powi(4);
+        let lambda_limit =
+            limit(s.d11, half_waves(count_u), a).min(limit(s.d22, half_waves(count_v), b));
+        let resolved_up_to_hz = plate.with_shear(lambda_limit).sqrt() / (2.0 * PI);
         for parity_u in 0..2 {
             for parity_v in 0..2 {
                 let degrees_u: Vec<usize> = (0..count_u).filter(|i| i % 2 == parity_u).collect();
@@ -362,8 +412,8 @@ impl PlateModes {
                         for (ib, &p) in degrees_u.iter().enumerate() {
                             for (jb, &r) in degrees_v.iter().enumerate() {
                                 let col = ib * degrees_v.len() + jb;
-                                let bend = su.powi(4) * line_u.a2[i][p] * line_v.a0[j][r]
-                                    + sv.powi(4) * line_u.a0[i][p] * line_v.a2[j][r];
+                                let bend_u = su.powi(4) * line_u.a2[i][p] * line_v.a0[j][r];
+                                let bend_v = sv.powi(4) * line_u.a0[i][p] * line_v.a2[j][r];
                                 let cross = su
                                     * su
                                     * sv
@@ -371,18 +421,18 @@ impl PlateModes {
                                     * (line_u.b[i][p] * line_v.b[r][j]
                                         + line_u.b[p][i] * line_v.b[j][r]);
                                 let twist = su * su * sv * sv * line_u.a1[i][p] * line_v.a1[j][r];
-                                k[row][col] = d
-                                    * area
-                                    * (bend
-                                        + plate.poisson * cross
-                                        + 2.0 * (1.0 - plate.poisson) * twist);
+                                k[row][col] = area
+                                    * (s.d11 * bend_u
+                                        + s.d22 * bend_v
+                                        + s.d12 * cross
+                                        + 4.0 * s.d66 * twist);
                                 m[row][col] = mass * area * line_u.a0[i][p] * line_v.a0[j][r];
                             }
                         }
                     }
                 }
                 for (lambda, coefficients) in generalized_eigen(&k, &m)? {
-                    let freq_hz = lambda.max(0.0).sqrt() / (2.0 * PI);
+                    let freq_hz = plate.with_shear(lambda.max(0.0)).sqrt() / (2.0 * PI);
                     if freq_hz <= resolved_up_to_hz {
                         modes.push(Mode {
                             freq_hz,

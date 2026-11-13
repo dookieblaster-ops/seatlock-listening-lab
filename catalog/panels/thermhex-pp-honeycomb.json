@@ -1,0 +1,18 @@
+{
+  "id": "thermhex-pp-honeycomb",
+  "status": "sourced",
+  "tier": "budget",
+  "kind": "panel_material",
+  "name": "ThermHex polypropylene honeycomb (core only)",
+  "core_only": true,
+  "transverse_shear_pa": 9486833,
+  "density_kg_m3": 80.0,
+  "note": "ThermHex brochure: nominal density 80 kg/m3, shear modulus 6 MPa (L) and 15 MPa (W) by ASTM C273, compression modulus 40 MPa. A honeycomb has almost no stiffness in its own plane, so it is a sandwich core only; the shear through it is the geometric mean of L and W, a lab estimate.",
+  "source": {
+    "url": "https://thermhex.com/wp-content/uploads/2017/04/ThermHex_Brochure_English.pdf",
+    "title": "ThermHex honeycomb cores brochure",
+    "read_on": "2026-11-12",
+    "via": "search_extract"
+  },
+  "price": null
+}
