@@ -130,13 +130,19 @@ fn exterior_block_doubling_moves_resonance_and_off_resonance_values_under_one_pe
     let mag = |index: usize| small.z_real[index].hypot(small.z_imag[index]);
     let mut resonances = vec![f_small];
     let count = small.frequencies_hz.len();
-    for index in 8..count.saturating_sub(8) {
+    for (index, &freq) in small
+        .frequencies_hz
+        .iter()
+        .enumerate()
+        .take(count.saturating_sub(8))
+        .skip(8)
+    {
         let here = mag(index);
         let window = (index - 8..=index + 8).filter(|other| *other != index);
         if window.clone().all(|other| mag(other) > here)
             || window.clone().all(|other| mag(other) < here)
         {
-            resonances.push(small.frequencies_hz[index]);
+            resonances.push(freq);
         }
     }
     eprintln!("RESONANCES {resonances:?}");

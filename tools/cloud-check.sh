@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# The same steps as ./check.sh, for Claude's cloud workspace, where rustup cannot download
-# the wasm32 target and Playwright cannot download its browser. The owner never runs this.
+# The same steps as ./check.sh, for cloud workspaces where the pinned Rust or Playwright
+# browser setup differs from a laptop. The owner never runs this; use ./check.sh there.
 #
 # Workarounds, all local to the workspace:
-#   - Rust: the installed stable toolchain, not the pinned one (rustup cannot download it).
-#   - wasm32: the standard library is built from source (-Zbuild-std). The sources for the
-#     exact compiler commit are fetched once from GitHub, which the workspace can reach.
-#   - Browser: the preinstalled Chromium under /opt/pw-browsers, linked under the build
-#     number this project's Playwright expects.
+#   - Rust: the installed stable toolchain by default (set RUSTUP_TOOLCHAIN to override).
+#   - wasm32: if the prebuilt std is missing, the standard library is built from source
+#     (-Zbuild-std). The sources for the exact compiler commit are fetched once from GitHub.
+#   - Browser: if /opt/pw-browsers has a Chromium (Claude's cloud), link it under the build
+#     number this project's Playwright expects. Otherwise install Chromium with Playwright
+#     (Cursor cloud and similar).
 #
 # Usage: tools/cloud-check.sh [repo-root]
 set -euo pipefail
@@ -37,17 +38,22 @@ if [[ ! -f "$SRC/std/Cargo.toml" || ! -f "$SRC/backtrace/Cargo.toml" ]]; then
   ln -sfn "$LIB/library" "$SRC"
 fi
 
-# 2. Chromium under the build number Playwright expects.
+# 2. Chromium: reuse a preinstalled tree when present, otherwise let Playwright install.
 link_chromium() {
   local want have pw="$CACHE/pw"
-  want="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print([b['revision'] for b in d['browsers'] if b['name']=='chromium'][0])" \
-    "$ROOT/web/node_modules/playwright-core/browsers.json")"
-  have="$(ls -d /opt/pw-browsers/chromium-* | sed 's/.*chromium-//' | sort -n | tail -1)"
-  mkdir -p "$pw"
-  ln -sfn "/opt/pw-browsers/chromium-$have" "$pw/chromium-$want"
-  ln -sfn "/opt/pw-browsers/chromium_headless_shell-$have" "$pw/chromium_headless_shell-$want"
-  for f in /opt/pw-browsers/ffmpeg-*; do ln -sfn "$f" "$pw/$(basename "$f")"; done
-  export PLAYWRIGHT_BROWSERS_PATH="$pw"
+  if ls -d /opt/pw-browsers/chromium-* >/dev/null 2>&1; then
+    want="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print([b['revision'] for b in d['browsers'] if b['name']=='chromium'][0])" \
+      "$ROOT/web/node_modules/playwright-core/browsers.json")"
+    have="$(ls -d /opt/pw-browsers/chromium-* | sed 's/.*chromium-//' | sort -n | tail -1)"
+    mkdir -p "$pw"
+    ln -sfn "/opt/pw-browsers/chromium-$have" "$pw/chromium-$want"
+    ln -sfn "/opt/pw-browsers/chromium_headless_shell-$have" "$pw/chromium_headless_shell-$want"
+    for f in /opt/pw-browsers/ffmpeg-*; do ln -sfn "$f" "$pw/$(basename "$f")"; done
+    export PLAYWRIGHT_BROWSERS_PATH="$pw"
+  else
+    unset PLAYWRIGHT_BROWSERS_PATH || true
+    npx playwright install chromium
+  fi
 }
 
 cd "$ROOT/engine"

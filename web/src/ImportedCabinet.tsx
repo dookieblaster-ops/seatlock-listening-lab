@@ -5,10 +5,22 @@ import { fromField, partField, quarterTurn, readSpeakerFiles, type PartField } f
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyDesign = any;
 
-/** What a click on the 3D view places: a sound source's mount, or a new port. */
-export type PickTarget = { mount: string } | { port: true } | null;
+/** What a click on the 3D view places: a sound source's mount, a built port, or a hole mark. */
+export type PickTarget =
+  | { mount: string; asHole?: boolean }
+  | { port: true }
+  | { hole: "seal" | "opening" }
+  | null;
 
-type Point = { id: string; point_m: number[]; normal: number[]; base_normal?: number[]; tilt_deg?: number; turn_deg?: number };
+type Point = {
+  id: string;
+  point_m: number[];
+  normal: number[];
+  base_normal?: number[];
+  tilt_deg?: number;
+  turn_deg?: number;
+  hole?: "seal" | "opening";
+};
 
 const PRINT_MATERIALS = ["pla", "petg"];
 
@@ -23,7 +35,15 @@ function unit(v: number[]): number[] {
   return v.map((x) => x / n);
 }
 
-/** The design with a source's mount, or a new port, at a point the user clicked. */
+function nextId(points: Point[], prefix: string): string {
+  let k = 1;
+  while (points.some((p) => p.id === `${prefix}-${k}`)) {
+    k += 1;
+  }
+  return `${prefix}-${k}`;
+}
+
+/** The design with a source's mount, a new port, or a hole mark at a point the user clicked. */
 export function placeAt(design: AnyDesign, target: PickTarget, point: number[], normal: number[]): AnyDesign {
   if (!target) {
     return design;
@@ -35,7 +55,11 @@ export function placeAt(design: AnyDesign, target: PickTarget, point: number[], 
   if ("mount" in target) {
     const id = `at-${target.mount}`;
     const kept = points.filter((p) => p.id !== id);
-    kept.push({ id, point_m: point, normal: n, base_normal: n, tilt_deg: 0, turn_deg: 0 });
+    const placed: Point = { id, point_m: point, normal: n, base_normal: n, tilt_deg: 0, turn_deg: 0 };
+    if (target.asHole) {
+      placed.hole = "seal";
+    }
+    kept.push(placed);
     outer.points = kept;
     const mount = next.speaker.enclosure.mounts.find((m: any) => m.id === target.mount);
     if (mount) {
@@ -43,6 +67,11 @@ export function placeAt(design: AnyDesign, target: PickTarget, point: number[], 
       mount.at_m = [0, 0];
       mount.rear_into = mount.rear_into || "main";
     }
+    return next;
+  }
+  if ("hole" in target) {
+    const id = nextId(points, target.hole === "opening" ? "mouth" : "hole");
+    outer.points = [...points, { id, point_m: point, normal: n, base_normal: n, tilt_deg: 0, turn_deg: 0, hole: target.hole }];
     return next;
   }
   // A round port 40 mm across and 100 mm long, straight in from the surface.
@@ -78,10 +107,13 @@ export function ImportedCabinet({
   catalogs?: Catalogs;
 }) {
   const [message, setMessage] = useState("");
+  const [placeAsHole, setPlaceAsHole] = useState(false);
   const outer = design.speaker.enclosure.outer;
   const imported = outer.kind === "mesh";
   const parts: PartField[] = imported ? outer.parts ?? [] : [];
   const points: Point[] = imported ? outer.points ?? [] : [];
+  const mountSurfaces = new Set(design.speaker.enclosure.mounts.map((m: any) => m.surface));
+  const freeHoles = points.filter((p) => p.hole && !mountSurfaces.has(p.id));
 
   async function load(files: FileList | null) {
     if (!files || files.length === 0) {
@@ -102,7 +134,7 @@ export function ImportedCabinet({
       }
       publish(next);
       setMessage(
-        `Imported ${read.length} part${read.length === 1 ? "" : "s"}. Turn the model if the front is not toward you, then place each sound source.`,
+        `Imported ${read.length} part${read.length === 1 ? "" : "s"}. Turn the model if the front is not toward you, then place each sound source. Mark holes the model already has (driver cut-outs, wire holes, moulded port mouths).`,
       );
     } catch (error) {
       setMessage(`Could not read that file: ${error instanceof Error ? error.message : String(error)}`);
@@ -149,6 +181,29 @@ export function ImportedCabinet({
     point.normal = turned(point.base_normal, point.tilt_deg ?? 0, point.turn_deg ?? 0);
     publish(next);
   }
+
+  function setHole(id: string, hole: "seal" | "opening" | "") {
+    const next = structuredClone(design);
+    const point = next.speaker.enclosure.outer.points.find((p: Point) => p.id === id);
+    if (!point) {
+      return;
+    }
+    if (hole) {
+      point.hole = hole;
+    } else {
+      delete point.hole;
+    }
+    publish(next);
+  }
+
+  function removePoint(id: string) {
+    const next = structuredClone(design);
+    next.speaker.enclosure.outer.points = (next.speaker.enclosure.outer.points as Point[]).filter((p) => p.id !== id);
+    publish(next);
+  }
+
+  const holeLabel = (hole?: "seal" | "opening") =>
+    hole === "seal" ? "fills a hole in the model" : hole === "opening" ? "moulded port mouth" : "no hole mark";
 
   return (
     <div data-testid="imported-cabinet">
@@ -240,6 +295,23 @@ export function ImportedCabinet({
           </table>
           <h3>Place sound sources and ports</h3>
           <p>Choose what to place, then click the model in the 3D view where it goes. It faces straight out from that spot; tilt or turn it below.</p>
+          <label
+            data-testid="place-as-hole"
+            title="Turn this on when the model already has the cut-out, wire hole, or moulded mouth. The lab then holds that hole closed while it finds the air inside, instead of cutting a new one."
+          >
+            <input
+              type="checkbox"
+              checked={placeAsHole}
+              onChange={(event) => {
+                const on = event.target.checked;
+                setPlaceAsHole(on);
+                if (picking && "mount" in picking) {
+                  setPicking({ mount: picking.mount, asHole: on });
+                }
+              }}
+            />
+            The model already has this hole
+          </label>
           <ul>
             {design.speaker.enclosure.mounts.map((mount: any, index: number) => {
               const point = points.find((p) => p.id === mount.surface);
@@ -247,8 +319,12 @@ export function ImportedCabinet({
               return (
                 <li key={mount.id}>
                   Sound source {index + 1} ({design.speaker.radiators[index]?.driver_id ?? design.speaker.radiators[index]?.kind}):{" "}
-                  {point ? `at ${point.point_m.map((x) => (x * 1000).toFixed(0)).join(", ")} mm` : "not placed"}{" "}
-                  <button data-testid={`place-mount-${index}`} onClick={() => setPicking(active ? null : { mount: mount.id })}>
+                  {point ? `at ${point.point_m.map((x) => (x * 1000).toFixed(0)).join(", ")} mm` : "not placed"}
+                  {point?.hole ? ` (${holeLabel(point.hole)})` : ""}{" "}
+                  <button
+                    data-testid={`place-mount-${index}`}
+                    onClick={() => setPicking(active ? null : { mount: mount.id, asHole: placeAsHole })}
+                  >
                     {active ? "Click the model…" : "Place on model"}
                   </button>
                   {point && (
@@ -261,6 +337,18 @@ export function ImportedCabinet({
                       <label title="Turns the source left or right from straight out.">
                         Turn (°)
                         <input type="number" value={point.turn_deg ?? 0} onChange={(event) => setAngle(point.id, "turn_deg", Number(event.target.value))} />
+                      </label>{" "}
+                      <label title="Mark whether this point is a hole already in the model: sealed by what is mounted here, or the mouth of a moulded duct.">
+                        Hole in model
+                        <select
+                          data-testid={`mount-hole-${index}`}
+                          value={point.hole ?? ""}
+                          onChange={(event) => setHole(point.id, event.target.value as "seal" | "opening" | "")}
+                        >
+                          <option value="">None (lab cuts it)</option>
+                          <option value="seal">Fills a hole (seal)</option>
+                          <option value="opening">Moulded mouth</option>
+                        </select>
                       </label>
                     </>
                   )}
@@ -273,7 +361,48 @@ export function ImportedCabinet({
               </button>{" "}
               {design.speaker.enclosure.ducts.length} port{design.speaker.enclosure.ducts.length === 1 ? "" : "s"}; edit their size and length under the inside.
             </li>
+            <li>
+              <button
+                data-testid="place-seal-hole"
+                onClick={() => setPicking(picking && "hole" in picking && picking.hole === "seal" ? null : { hole: "seal" })}
+              >
+                {picking && "hole" in picking && picking.hole === "seal" ? "Click the model…" : "Mark a sealed hole"}
+              </button>{" "}
+              <button
+                data-testid="place-opening-hole"
+                onClick={() => setPicking(picking && "hole" in picking && picking.hole === "opening" ? null : { hole: "opening" })}
+              >
+                {picking && "hole" in picking && picking.hole === "opening" ? "Click the model…" : "Mark a moulded port mouth"}
+              </button>
+              <span title="Sealed holes are wire holes or cut-outs filled by a driver. A moulded port mouth is open to the outside and measured from the model's air; do not also add a built port for it.">
+                {" "}
+                For holes the model already has that are not a sound source above.
+              </span>
+            </li>
           </ul>
+          {freeHoles.length > 0 && (
+            <ul data-testid="marked-holes">
+              {freeHoles.map((point) => (
+                <li key={point.id}>
+                  {holeLabel(point.hole)} at {point.point_m.map((x) => (x * 1000).toFixed(0)).join(", ")} mm{" "}
+                  <label>
+                    Kind
+                    <select
+                      data-testid={`free-hole-${point.id}`}
+                      value={point.hole ?? "seal"}
+                      onChange={(event) => setHole(point.id, event.target.value as "seal" | "opening")}
+                    >
+                      <option value="seal">Sealed hole</option>
+                      <option value="opening">Moulded mouth</option>
+                    </select>
+                  </label>{" "}
+                  <button data-testid={`remove-hole-${point.id}`} onClick={() => removePoint(point.id)}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </div>

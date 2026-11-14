@@ -188,14 +188,18 @@ fn parse_part(raw: &Value, index: usize) -> Result<Part, String> {
             .ok_or(format!("{name} has no triangles."))?,
     )?;
     let vertices: Vec<[f64; 3]> = floats
-        .chunks_exact(12)
+        .as_chunks::<12>()
+        .0
+        .iter()
         .map(|c| {
             let f = |i: usize| f32::from_le_bytes([c[i], c[i + 1], c[i + 2], c[i + 3]]) as f64;
             [f(0), f(4), f(8)]
         })
         .collect();
     let triangles: Vec<[u32; 3]> = ints
-        .chunks_exact(12)
+        .as_chunks::<12>()
+        .0
+        .iter()
         .map(|c| {
             let u = |i: usize| u32::from_le_bytes([c[i], c[i + 1], c[i + 2], c[i + 3]]);
             [u(0), u(4), u(8)]
@@ -297,7 +301,7 @@ fn columns(parts: &[Part], origin: [f64; 2], dx: f64, nx: usize, ny: usize) -> C
                 if zs.len() % 2 == 1 {
                     open_parts[part as usize] = true;
                 }
-                for pair in zs.chunks_exact(2) {
+                for pair in zs.as_chunks::<2>().0 {
                     out.push((part, pair[0], pair[1]));
                 }
                 k = end;

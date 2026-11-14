@@ -131,6 +131,41 @@ function meshXml(boxes: Array<{ lo: number[]; hi: number[]; out: boolean }>): st
   return `<mesh><vertices>${vertices}</vertices><triangles>${triangles}</triangles></mesh>`;
 }
 
+test("marking a hole on an imported model stores the seal on the placed point", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByTestId("engine-version")).toContainText("0.1.0", { timeout: 15_000 });
+  const example = path.resolve(import.meta.dirname, "../../designs/examples/sealed-test.seatlock.json");
+  await page.getByTestId("open-design-input").setInputFiles(example);
+  await expect(page.getByTestId("response-graph")).toBeVisible({ timeout: 30_000 });
+
+  const shell = stl([
+    { lo: [0, 0, 0], hi: [160, 180, 250], out: true },
+    { lo: [8, 8, 8], hi: [152, 172, 242], out: false },
+  ]);
+  await page.getByTestId("import-file").setInputFiles([{ name: "shell.stl", mimeType: "model/stl", buffer: shell }]);
+  await expect(page.getByTestId("import-message")).toContainText("Imported 1 part");
+  await expect(page.getByTestId("place-as-hole")).toBeVisible();
+  // Place the driver as a lab-cut hole first (this shell has no cut-out), then mark it.
+  await page.getByTestId("place-mount-0").click();
+  const view = page.getByTestId("cabinet-view").locator("canvas");
+  const box = (await view.boundingBox())!;
+  await view.click({ position: { x: box.width * 0.45, y: box.height * 0.55 } });
+  await expect(page.getByTestId("imported-cabinet")).toContainText("Sound source 1 (test-woofer-a): at", { timeout: 15_000 });
+  await page.getByTestId("mount-hole-0").selectOption("seal");
+  await expect(page.getByTestId("imported-cabinet")).toContainText("fills a hole in the model");
+  await expect(page.getByTestId("mount-hole-0")).toHaveValue("seal");
+
+  // Free marks: wait for the place mode, then click near the middle of the view.
+  await page.getByTestId("place-seal-hole").click();
+  await expect(page.getByTestId("place-seal-hole")).toHaveText("Click the model…");
+  await view.click({ position: { x: box.width * 0.5, y: box.height * 0.5 } });
+  await expect(page.getByTestId("marked-holes")).toContainText("fills a hole in the model", { timeout: 15_000 });
+  await page.getByTestId("place-opening-hole").click();
+  await expect(page.getByTestId("place-opening-hole")).toHaveText("Click the model…");
+  await view.click({ position: { x: box.width * 0.48, y: box.height * 0.58 } });
+  await expect(page.getByTestId("marked-holes")).toContainText("moulded port mouth", { timeout: 15_000 });
+});
+
 test("a 3MF assembly in centimeters, with a component and moved items, imports as its parts", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("engine-version")).toContainText("0.1.0", { timeout: 15_000 });

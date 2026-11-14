@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-13 — Claude — Handoff: start here. The LCM Nearfield Monitor, imported exactly
+### 2026-11-14 — Cursor — Handoff: start here. Hole marks on the page; Erin's curves next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued the LCM queue from the post below. Owner started this session with Check COMS.md in Cursor cloud.
+
+**Done this session:** (1) Full check on the LCM commit that the previous handoff left unfinished: rustfmt, clippy, 209 engine tests, bindings, both wasm modules, type check, vitest, build, 37 of 37 browser tests (generator finished in 240 s). (2) Clippy on stable 1.100.0: `as_chunks` in `seatlock-geom/src/mesh.rs`, enumerate in `seatlock-fdtd/tests/checks.rs`. (3) `tools/cloud-check.sh` installs Chromium with Playwright when `/opt/pw-browsers` is missing (Cursor cloud). (4) Page control to mark holes on imported models: checkbox "The model already has this hole" when placing a source, "Mark a sealed hole", "Mark a moulded port mouth", edit/remove; README 6.2; browser test in `e2e/import.spec.ts`.
+
+**Last full check:** engine 209 / 0; after hole UI, `e2e/import.spec.ts` 3 of 3 (38 browser tests with the new one). Re-run `tools/cloud-check.sh` after pulling if anything else landed.
+
+**Open, in order:** (1) Erin's measured curves for the LCM (STATUS question 11; spinorama GitHub, CC BY-NC-SA) against the lab's: on axis, listening window, early reflections, power; then place the 3 dB bass-to-midrange difference. **Asked again this session; waiting on the owner's yes.** (2) A measured response file for the TEBM35C10-4 (maker's sheet has graphs only). (3) The 3D self-check's 249 % at low frequency on the LCM. (4) Then the standing queue of the posts below (MDF/plywood figures, braces, CTA-2034 score, boundary elements, …).
+
+**Pitfalls:** as below. On Cursor cloud use `tools/cloud-check.sh` (it now installs Playwright Chromium); do not assume `/opt/pw-browsers`. A hole mark on a face with no actual hole in the mesh fails with "there is no hole under it" (expected). LCM designs stay out of `designs/examples`.
+
+**Next step:** read the owner's answer to question 11; if yes, fetch Erin's spinorama curves and compare. If no answer yet, item 2 (TEBM35C10-4 measured response) or the wall/material queue below.
+
+### 2026-11-13 — Claude — Handoff: The LCM Nearfield Monitor, imported exactly
 
 - **To:** next lead session (any Claude model)
 - **Status:** handoff
@@ -53,13 +69,13 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Done:** catalog `tangband-w3-1876s`, `tectonic-tebm35c10-4` (makers' sheets; mounting from Parts Express). `designs/imports/lcm/`: the designer's STL halves (EVO and 2021), SigmaStudio project, `build_designs.py`, `lcm-evo` and `lcm-2021` designs, and a README with credits and licenses (CC BY-NC). Engine: `hole` on mesh points (`seal`, `opening`), voted grid cells, enclosed air spaces (`OuterShape::air_regions`, `region_behind`), moulded ducts (`moulded_openings`, `MouldedOpening`, measured in `seatlock-geom/src/mesh.rs` `measure_opening`), `chambers::for_simulation` (space chambers), moulded ducts in the quick and detailed networks (`AirNetwork.moulded`, sliced in `waveguide_network`), in radiation (`port_poses`), and in the 3D grid (`ports::moulded_mouths`, `Bore.moulded`). Fixed `design_ports` (slot ports in one-chamber cabinets). README 6.2; numbers in STATUS.
 
-**Last check on this commit:** `tools/cloud-check.sh`: rustfmt, clippy, 209 engine tests passed, 0 failed; the run then stopped (the workspace restarted) before the wasm build, type check, vitest, and browser tests. **First step next session: run `tools/cloud-check.sh` in full**; the browser tests have not run on this commit (the generator's family test is the one most likely to move, since two drivers joined the catalog and the generator's schedule changed).
+**Last check on this commit:** incomplete at the time (engine tests only); completed 2026-11-14 (see handoff above).
 
 **Also changed:** the generator's search schedule (three of every five candidates random, two refine, independent of the budget; README 11.4), after `searching_longer_does_not_make_the_best_worse` failed by luck.
 
 **Tests:** `seatlock-sim/tests/lcm.rs` (designer's volumes and port; bass extension against Erin's measured 33.7 Hz; full 3D at 5 mm against the detailed model, on request, about 8 minutes); `imported.rs` known-answer moulded slot.
 
-**Open, in order:** (1) Erin's measured curves (STATUS question 11; spinorama's GitHub data, CC BY-NC-SA, needs the owner's yes) against the lab's: on axis, listening window, early reflections, power; then place the 3 dB bass-to-midrange difference (driver sensitivities, BMR above its piston range, amplifier channel gains). (2) A control on the page to mark a hole when placing a point on an imported model. (3) A measured response file for the TEBM35C10-4 (the maker's sheet has graphs only). (4) The 3D self-check's 249 % at low frequency on the LCM. (5) Then the standing queue of the posts below.
+**Open at the time:** see the 2026-11-14 handoff above (hole marking done; Erin's curves still open).
 
 **Pitfalls:** the LCM designs are 2.3 to 2.7 MB; they are not in `designs/examples` on purpose (the browser checks run every example). A hole must be on a face that faces along a model axis. The importer is built several times per simulation (about 0.3 s each for the LCM in release); cache it if it shows up in the page.
 
@@ -545,6 +561,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-14: Full check completed on the LCM commit; Clippy for stable 1.100 fixed; cloud-check installs Playwright Chromium on Cursor; hole-marking controls on the page for imported models, done on `main` by Cursor.
 - 2026-11-13: The LCM Nearfield Monitor imported from its designer's files, with holes, air spaces, and moulded ducts in the importer, done on `main` by Claude.
 - 2026-11-13: Walls for cabinets divided into chambers, foam-board sheet boxes, and tube end caps done on `main` by Claude.
 - 2026-11-13: Wall vibration (sand-filled, plaster-filled, and two-filament walls heard) done on `main` by Claude.
