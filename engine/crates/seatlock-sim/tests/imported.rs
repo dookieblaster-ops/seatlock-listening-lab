@@ -294,3 +294,108 @@ fn a_freshly_imported_cabinet_with_nothing_placed_still_shows_and_says_what_to_d
     eprintln!("{text}");
     assert!(text.contains("not placed"), "{text}");
 }
+
+/// `sealed-test`'s box built from wall slabs, with a 60 mm square hole for the driver and a
+/// 60 x 10 mm slot port 100 mm long moulded in (its walls 3 mm, like a printed tube), the holes
+/// marked on the model (README 6.2): the port opens on the front, its far end into the box.
+fn moulded_port_box() -> Value {
+    let slab = |lo: [f64; 3], hi: [f64; 3]| box_mesh(lo, hi, true);
+    let (w, d, h, t) = (0.16, 0.18, 0.25, 0.008);
+    let walls = [
+        // Back, sides, bottom, top.
+        slab([0.0, d - t, 0.0], [w, d, h]),
+        slab([0.0, 0.0, 0.0], [t, d, h]),
+        slab([w - t, 0.0, 0.0], [w, d, h]),
+        slab([0.0, 0.0, 0.0], [w, d, t]),
+        slab([0.0, 0.0, h - t], [w, d, h]),
+        // The front around the port slot (x 0.05 to 0.11, z 0.025 to 0.035) and the driver's
+        // hole (x 0.05 to 0.11, z 0.12 to 0.18).
+        slab([0.0, 0.0, 0.0], [w, t, 0.025]),
+        slab([0.0, 0.0, 0.025], [0.05, t, 0.035]),
+        slab([0.11, 0.0, 0.025], [w, t, 0.035]),
+        slab([0.0, 0.0, 0.035], [w, t, 0.12]),
+        slab([0.0, 0.0, 0.12], [0.05, t, 0.18]),
+        slab([0.11, 0.0, 0.12], [w, t, 0.18]),
+        slab([0.0, 0.0, 0.18], [w, t, h]),
+        // The port's walls, from the front wall to 0.10 m back.
+        slab([0.047, t, 0.022], [0.113, 0.1, 0.025]),
+        slab([0.047, t, 0.035], [0.113, 0.1, 0.038]),
+        slab([0.047, t, 0.025], [0.05, 0.1, 0.035]),
+        slab([0.11, t, 0.025], [0.113, 0.1, 0.035]),
+    ];
+    let mut design = example();
+    let normal = json!([0.0, -1.0, 0.0]);
+    design["speaker"]["enclosure"]["outer"] = json!({ "kind": "mesh",
+        "parts": [part("shell", "solid", &walls)],
+        "points": [
+            { "id": "driver-hole", "point_m": [0.08, 0.0, 0.15], "normal": normal, "hole": "seal" },
+            { "id": "port-mouth", "point_m": [0.08, 0.0, 0.03], "normal": normal, "hole": "opening" }
+        ] });
+    design["speaker"]["enclosure"]["mounts"][0]["surface"] = json!("driver-hole");
+    design["speaker"]["enclosure"]["mounts"][0]["at_m"] = json!([0.0, 0.0]);
+    design
+}
+
+#[test]
+fn a_port_moulded_into_an_imported_model_tunes_like_the_same_port_built_by_the_lab() {
+    let registry = builtin();
+    let imported: seatlock_core::DesignFile = serde_json::from_value(moulded_port_box()).unwrap();
+    let outer = registry
+        .create_outer("mesh", &imported.speaker.enclosure.outer.fields)
+        .unwrap();
+    let port = &outer.moulded_openings()[0];
+    eprintln!(
+        "moulded port: {:.1} mm long, {:.3} cm^2 at the mouth, {:.3} cm^2 on average",
+        port.length_m() * 1e3,
+        port.mouth_area_m2() * 1e4,
+        port.length_m() / port.length_over_area() * 1e4
+    );
+    assert!((port.length_m() - 0.1).abs() < 0.003, "{}", port.length_m());
+    assert!((port.length_m() / port.length_over_area() - 6e-4).abs() < 0.03 * 6e-4);
+    // The same slot as the lab's own printed port in sealed-test's box.
+    let mut plain = example();
+    plain["speaker"]["enclosure"]["ducts"] = json!([{ "id": "port", "from": "main",
+        "to": "outside", "path_m": [[0.08, 0.1, 0.03], [0.08, 0.0, 0.03]],
+        "section": { "shape": "rect", "start_m": [0.06, 0.01], "end_m": [0.06, 0.01] } }]);
+    let plain: seatlock_core::DesignFile = serde_json::from_value(plain).unwrap();
+    let tuning = |r: &seatlock_sim::SimulateResult| {
+        // The impedance minimum between the two peaks.
+        r.frequencies_hz
+            .iter()
+            .zip(&r.radiators[0].impedance_ohm)
+            .filter(|(f, _)| **f > 20.0 && **f < 120.0)
+            .min_by(|a, b| a.1.total_cmp(b.1))
+            .map(|(f, _)| *f)
+            .unwrap()
+    };
+    for enclosure in ["waveguide", "lumped"] {
+        let request = SimulateRequest {
+            enclosure: enclosure.into(),
+            radiation: "baffle".into(),
+            ..Default::default()
+        };
+        let a = simulate(&plain, &request, &registry);
+        let b = simulate(&imported, &request, &registry);
+        assert!(
+            b.issues
+                .iter()
+                .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+            "{:?}",
+            b.issues
+        );
+        let worst = a
+            .frequencies_hz
+            .iter()
+            .zip(a.summed_spl_db.iter().zip(&b.summed_spl_db))
+            .filter(|(f, _)| **f <= 200.0)
+            .map(|(_, (x, y))| (x - y).abs())
+            .fold(0.0, f64::max);
+        eprintln!(
+            "{enclosure}: tuning {:.2} Hz built, {:.2} Hz moulded; level within {worst:.3} dB to 200 Hz",
+            tuning(&a),
+            tuning(&b)
+        );
+        assert!((tuning(&a) - tuning(&b)).abs() < 0.02 * tuning(&a));
+        assert!(worst < 0.3, "{enclosure}: {worst} dB");
+    }
+}

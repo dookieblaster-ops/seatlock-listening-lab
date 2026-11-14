@@ -3,7 +3,7 @@
 //! A candidate is a complete design: an outer form and its proportions, an inside layout, a
 //! driver from the catalog, the face it sits on, and where on that face. Candidates are
 //! grouped into families (one outer form, one inside layout, one facing); each family is
-//! searched with a seeded random search and then by refining its best, every candidate
+//! searched with a seeded random search interleaved with refining its best, every candidate
 //! corrected and scored like any design. What the builder cannot make or print is thrown out.
 
 use seatlock_core::catalog;
@@ -745,7 +745,6 @@ pub fn generate_family(
     let mut random =
         SplitMix(request.seed ^ (request.family as u64 + 1).wrapping_mul(0x5851_F42D_4C95_7F2D));
     let budget = request.evaluations.max(4);
-    let explore = (budget * 3).div_ceil(5);
     let mut points = Vec::new();
     let mut best: Vec<(f64, [f64; VARIABLES], Generated)> = Vec::new();
     let mut scored = 0usize;
@@ -757,16 +756,16 @@ pub fn generate_family(
     let mut tries = 0usize;
     while scored < budget && tries < budget * 40 {
         tries += 1;
-        let x: [f64; VARIABLES] = if scored < explore || best.is_empty() {
+        // Three of every five candidates are random and two refine the best so far. Nothing
+        // depends on the budget, so a longer search begins with the shorter one's candidates
+        // and its best is never worse.
+        let x: [f64; VARIABLES] = if scored % 5 < 3 || best.is_empty() {
             std::array::from_fn(|_| random.next())
         } else {
-            // Refine one of the best: small moves, and now and then another driver.
+            // Refine one of the best: small moves, smaller as the search goes on, and now and
+            // then another driver.
             let from = &best[(random.next() * best.len().min(2) as f64) as usize].1;
-            let spread = lerp(
-                0.18,
-                0.05,
-                (scored - explore) as f64 / (budget - explore) as f64,
-            );
+            let spread = lerp(0.18, 0.05, (scored as f64 / 40.0).min(1.0));
             std::array::from_fn(|index| {
                 if CHOICES.contains(&index) {
                     if random.next() < 0.2 {

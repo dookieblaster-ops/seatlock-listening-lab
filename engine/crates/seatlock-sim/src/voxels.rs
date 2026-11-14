@@ -285,6 +285,9 @@ pub fn cabinet_grid(
                 }
             }
         }
+        if bore.moulded {
+            continue;
+        }
         for cell in 0..cells {
             if duct_of[cell] != NO_DUCT {
                 continue;
@@ -400,6 +403,9 @@ pub fn cabinet_grid(
             continue;
         }
         let bore = &bores[duct as usize];
+        if bore.moulded {
+            continue;
+        }
         for (other, _, _) in neighbors(cell).iter().flatten() {
             if kind[*other] != INSIDE || duct_of[*other] != NO_DUCT {
                 continue;

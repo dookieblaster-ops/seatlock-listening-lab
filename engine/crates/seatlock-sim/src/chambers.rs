@@ -5,7 +5,7 @@
 
 use seatlock_acoustics::network::Duct;
 use seatlock_acoustics::{end_correction_m, PortSpec};
-use seatlock_core::registry::OuterShape;
+use seatlock_core::registry::{AirRegions, MouldedOpening, OuterShape};
 use seatlock_core::DesignFile;
 use serde_json::Value;
 
@@ -18,19 +18,82 @@ pub struct Chamber {
     pub max_m: [f64; 3],
     /// Plastic placed in this chamber's air (the design's `voxels` solids), m^3.
     pub plastic_m3: f64,
+    /// For an imported model with marked holes: the enclosed air space this chamber is, found
+    /// from the model's geometry; `min_m` and `max_m` are then only its bounds.
+    pub region: Option<(std::sync::Arc<AirRegions>, usize)>,
 }
 
 impl Chamber {
-    /// The chamber's air: its box less the plastic placed in it.
+    /// The chamber's air: its box (or air space) less the plastic placed in it.
     pub fn volume_m3(&self) -> f64 {
         self.box_m3() - self.plastic_m3
     }
     pub fn box_m3(&self) -> f64 {
+        if let Some((air, index)) = &self.region {
+            return air.volumes_m3[*index];
+        }
         (0..3).map(|i| self.max_m[i] - self.min_m[i]).product()
     }
     pub fn contains(&self, p: [f64; 3]) -> bool {
+        if let Some((air, index)) = &self.region {
+            return air.region_at(p) == Some(*index);
+        }
         (0..3).all(|i| p[i] > self.min_m[i] && p[i] < self.max_m[i])
     }
+}
+
+/// The chambers the simulator uses: the design's, or, for an imported model with marked
+/// holes, each enclosed air space a sound source or a moulded duct opens into, called
+/// `space-1`, `space-2`, ... from the largest.
+pub fn for_simulation(design: &DesignFile, shape: &dyn OuterShape) -> Result<Vec<Chamber>, String> {
+    let Some(air) = shape.air_regions() else {
+        return chambers(design);
+    };
+    if !design.speaker.enclosure.chambers.is_empty() {
+        return Err(
+            "an imported cabinet with marked holes finds its own air spaces; leave its chambers \
+             list empty."
+                .into(),
+        );
+    }
+    let mut used: Vec<usize> = design
+        .speaker
+        .enclosure
+        .mounts
+        .iter()
+        .filter_map(|mount| shape.region_behind(&mount.surface))
+        .chain(shape.moulded_openings().iter().map(|o| o.region))
+        .collect();
+    used.sort_unstable();
+    used.dedup();
+    Ok(used
+        .into_iter()
+        .map(|index| {
+            let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+            for (cell, label) in air.labels.iter().enumerate() {
+                if *label as usize != index + 1 {
+                    continue;
+                }
+                let c = [
+                    cell / (air.n[1] * air.n[2]),
+                    (cell / air.n[2]) % air.n[1],
+                    cell % air.n[2],
+                ];
+                for k in 0..3 {
+                    let x = air.origin_m[k] + c[k] as f64 * air.dx_m;
+                    lo[k] = lo[k].min(x);
+                    hi[k] = hi[k].max(x + air.dx_m);
+                }
+            }
+            Chamber {
+                id: format!("space-{}", index + 1),
+                min_m: lo,
+                max_m: hi,
+                plastic_m3: 0.0,
+                region: Some((air.clone(), index)),
+            }
+        })
+        .collect())
 }
 
 fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
@@ -64,6 +127,7 @@ pub fn chambers(design: &DesignFile) -> Result<Vec<Chamber>, String> {
             min_m,
             max_m,
             plastic_m3: 0.0,
+            region: None,
         });
     }
     let (placed, _) = crate::solids::solids(design)?;
@@ -236,6 +300,9 @@ pub struct AirNetwork {
     /// For each radiator in design order, the chamber it pushes into, when it loads the
     /// cabinet.
     pub driver_nodes: Vec<Option<usize>>,
+    /// Ducts moulded into an imported model, each with the chamber it leads from; they follow
+    /// the design's ducts to the outside in `ports`.
+    pub moulded: Vec<(MouldedOpening, usize)>,
     pub notes: Vec<String>,
 }
 
@@ -247,7 +314,7 @@ pub fn air_network(
     displacement_of: impl Fn(&seatlock_core::design::KindPart) -> f64,
     loads_box: impl Fn(&seatlock_core::design::KindPart) -> bool,
 ) -> Option<Result<AirNetwork, String>> {
-    let list = match chambers(design) {
+    let list = match for_simulation(design, shape) {
         Ok(list) if list.is_empty() => return None,
         Ok(list) => list,
         Err(err) => return Some(Err(err)),
@@ -263,6 +330,9 @@ fn build(
     loads_box: impl Fn(&seatlock_core::design::KindPart) -> bool,
 ) -> Result<AirNetwork, String> {
     for (i, chamber) in chambers.iter().enumerate() {
+        if chamber.region.is_some() {
+            continue;
+        }
         let inset = 1e-6;
         for corner in 0..8 {
             let p = [
@@ -321,7 +391,15 @@ fn build(
         else {
             continue;
         };
-        let node = index_of(&mount.rear_into);
+        let node = if chambers.iter().any(|c| c.region.is_some()) {
+            shape.region_behind(&mount.surface).and_then(|region| {
+                chambers
+                    .iter()
+                    .position(|c| c.region.as_ref().is_some_and(|(_, r)| *r == region))
+            })
+        } else {
+            index_of(&mount.rear_into)
+        };
         if let Some(node) = node {
             volumes[node] -= displacement_of(part);
         }
@@ -407,6 +485,30 @@ fn build(
         }
         ducts.push(duct);
     }
+    // Ducts moulded into an imported model: their air is in their space's volume.
+    let mut moulded = Vec::new();
+    for opening in shape.moulded_openings() {
+        let node = chambers
+            .iter()
+            .position(|c| c.region.as_ref().is_some_and(|(_, r)| *r == opening.region))
+            .ok_or(format!("Opening {} leads from no chamber.", opening.id))?;
+        volumes[node] -= opening.volume_m3();
+        let length = opening.length_m();
+        let r_in = (opening.inner_area_m2() / std::f64::consts::PI).sqrt();
+        let r_out = (opening.mouth_area_m2() / std::f64::consts::PI).sqrt();
+        let duct = Duct {
+            from: node,
+            to: None,
+            area_m2: length / opening.length_over_area(),
+            length_eff_m: length + end_correction_m(r_in, true) + end_correction_m(r_out, false),
+        };
+        ports.push(PortSpec {
+            area_m2: opening.mouth_area_m2(),
+            length_eff_m: duct.length_eff_m,
+        });
+        ducts.push(duct);
+        moulded.push((opening, node));
+    }
     if let Some((index, _)) = volumes.iter().enumerate().find(|(_, v)| **v <= 0.0) {
         return Err(format!(
             "Chamber {} has no air left after its drivers and tubes.",
@@ -423,6 +525,7 @@ fn build(
         ports,
         driver,
         driver_nodes,
+        moulded,
         notes,
     })
 }
@@ -447,6 +550,7 @@ pub fn waveguide_network(
     names: &[String],
     volumes_m3: &[f64],
     driver: usize,
+    moulded: &[(MouldedOpening, usize)],
 ) -> Result<WaveguideNetwork, String> {
     use seatlock_acoustics::AcousticNode;
     struct Edge {
@@ -455,6 +559,8 @@ pub fn waveguide_network(
         section: Section,
         length: f64,
         outside_slot: Option<usize>,
+        /// A moulded duct's slices from the chamber to the mouth: `(length, area)`.
+        slices: Option<Vec<(f64, f64)>>,
     }
     let index_of = |name: &str| -> Result<Option<usize>, String> {
         if name == "outside" {
@@ -494,6 +600,45 @@ pub fn waveguide_network(
             section,
             length,
             outside_slot,
+            slices: None,
+        });
+    }
+    // Moulded ducts, from their chamber to the mouth, in slices of about 10 mm (README 5.4).
+    for (opening, node) in moulded {
+        let mut pieces: Vec<(f64, f64)> = opening
+            .segment_lengths_m()
+            .into_iter()
+            .zip(opening.areas_m2.iter().copied())
+            .rev()
+            .collect();
+        let mut merged: Vec<(f64, f64)> = Vec::new();
+        let (mut length, mut l_over_a) = (0.0, 0.0);
+        for (l, a) in pieces.drain(..) {
+            length += l;
+            l_over_a += l / a.max(1e-12);
+            if length >= 0.01 {
+                merged.push((length, length / l_over_a));
+                length = 0.0;
+                l_over_a = 0.0;
+            }
+        }
+        if length > 0.0 {
+            merged.push((length, length / l_over_a));
+        }
+        let total: f64 = merged.iter().map(|m| m.0).sum();
+        outside_count += 1;
+        edges.push(Edge {
+            a: Some(*node),
+            b: None,
+            section: Section {
+                round: true,
+                start: vec![(4.0 * opening.inner_area_m2() / std::f64::consts::PI).sqrt()],
+                end: vec![(4.0 * opening.mouth_area_m2() / std::f64::consts::PI).sqrt()],
+                tube_m: 0.0,
+            },
+            length: total,
+            outside_slot: Some(outside_count - 1),
+            slices: Some(merged),
         });
     }
     let mut order = Vec::new();
@@ -552,6 +697,26 @@ pub fn waveguide_network(
                     )
                 }
             };
+            if let Some(slices) = &edge.slices {
+                // From the mouth back to the chamber, each slice loaded by the next.
+                let mut node = load;
+                for (index, (length, area)) in slices.iter().enumerate().rev() {
+                    let added = if index == 0 {
+                        0.849 * (area / std::f64::consts::PI).sqrt()
+                    } else {
+                        0.0
+                    };
+                    node = AcousticNode::Duct {
+                        length_m: *length,
+                        area_in_m2: *area,
+                        area_out_m2: *area,
+                        added_length_m: added,
+                        load: Box::new(node),
+                    };
+                }
+                branches.push(node);
+                continue;
+            }
             branches.push(AcousticNode::Duct {
                 length_m: edge.length,
                 area_in_m2: a_near,
@@ -583,6 +748,17 @@ pub fn waveguide_network(
             "{bends} bend{} in the ducts treated as straight: each duct is its center line's \
              length, and the air in a corner is not modeled.",
             if bends == 1 { "" } else { "s" }
+        ));
+    }
+    for (opening, _) in moulded {
+        notes.push(format!(
+            "Port {} is moulded into the imported model: measured on its grid as {:.0} mm long \
+             along its middle, {:.1} cm^2 at the mouth and {:.1} cm^2 on average; its bends \
+             count as straight.",
+            opening.id,
+            opening.length_m() * 1000.0,
+            opening.mouth_area_m2() * 1e4,
+            opening.length_m() / opening.length_over_area() * 1e4
         ));
     }
     notes.push(

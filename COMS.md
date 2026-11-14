@@ -45,6 +45,24 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-13 — Claude — Handoff: start here. The LCM Nearfield Monitor, imported exactly
+
+- **To:** next lead session (any Claude model)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner (2026-11-13): simulate a well-known DIY speaker with trusted measurements; chose the LCM Nearfield Monitor; asked for the designer's exact model; approved downloading the Thingiverse files.
+
+**Done:** catalog `tangband-w3-1876s`, `tectonic-tebm35c10-4` (makers' sheets; mounting from Parts Express). `designs/imports/lcm/`: the designer's STL halves (EVO and 2021), SigmaStudio project, `build_designs.py`, `lcm-evo` and `lcm-2021` designs, and a README with credits and licenses (CC BY-NC). Engine: `hole` on mesh points (`seal`, `opening`), voted grid cells, enclosed air spaces (`OuterShape::air_regions`, `region_behind`), moulded ducts (`moulded_openings`, `MouldedOpening`, measured in `seatlock-geom/src/mesh.rs` `measure_opening`), `chambers::for_simulation` (space chambers), moulded ducts in the quick and detailed networks (`AirNetwork.moulded`, sliced in `waveguide_network`), in radiation (`port_poses`), and in the 3D grid (`ports::moulded_mouths`, `Bore.moulded`). Fixed `design_ports` (slot ports in one-chamber cabinets). README 6.2; numbers in STATUS.
+
+**Last check on this commit:** `tools/cloud-check.sh`: rustfmt, clippy, 209 engine tests passed, 0 failed; the run then stopped (the workspace restarted) before the wasm build, type check, vitest, and browser tests. **First step next session: run `tools/cloud-check.sh` in full**; the browser tests have not run on this commit (the generator's family test is the one most likely to move, since two drivers joined the catalog and the generator's schedule changed).
+
+**Also changed:** the generator's search schedule (three of every five candidates random, two refine, independent of the budget; README 11.4), after `searching_longer_does_not_make_the_best_worse` failed by luck.
+
+**Tests:** `seatlock-sim/tests/lcm.rs` (designer's volumes and port; bass extension against Erin's measured 33.7 Hz; full 3D at 5 mm against the detailed model, on request, about 8 minutes); `imported.rs` known-answer moulded slot.
+
+**Open, in order:** (1) Erin's measured curves (STATUS question 11; spinorama's GitHub data, CC BY-NC-SA, needs the owner's yes) against the lab's: on axis, listening window, early reflections, power; then place the 3 dB bass-to-midrange difference (driver sensitivities, BMR above its piston range, amplifier channel gains). (2) A control on the page to mark a hole when placing a point on an imported model. (3) A measured response file for the TEBM35C10-4 (the maker's sheet has graphs only). (4) The 3D self-check's 249 % at low frequency on the LCM. (5) Then the standing queue of the posts below.
+
+**Pitfalls:** the LCM designs are 2.3 to 2.7 MB; they are not in `designs/examples` on purpose (the browser checks run every example). A hole must be on a face that faces along a model axis. The importer is built several times per simulation (about 0.3 s each for the LCM in release); cache it if it shows up in the page.
+
 ### 2026-11-13 — Claude — Handoff: start here. Walls for divided cabinets, sheet boxes, and tube caps
 
 - **To:** next lead session (any Claude model)
@@ -527,6 +545,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-13: The LCM Nearfield Monitor imported from its designer's files, with holes, air spaces, and moulded ducts in the importer, done on `main` by Claude.
 - 2026-11-13: Walls for cabinets divided into chambers, foam-board sheet boxes, and tube end caps done on `main` by Claude.
 - 2026-11-13: Wall vibration (sand-filled, plaster-filled, and two-filament walls heard) done on `main` by Claude.
 - 2026-11-12: Novel materials (panel, damping, wall fill, foaming filament records), layered and direction-dependent panels, and priced wall builds done on `main` by Claude.

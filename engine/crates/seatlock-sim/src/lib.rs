@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
-    baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3,
-    effective_port_length_m, solve, spl_db, vented_sample, PortSpec,
+    baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3, solve, spl_db,
+    vented_sample, PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::{C0, P_REF, RHO0};
@@ -355,6 +355,11 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
     };
+    if !outer.moulded_openings().is_empty() {
+        fidelity
+            .ignored
+            .retain(|line| !line.starts_with("the detailed model treats a box without ducts"));
+    }
     let baffle = outer.baffle_width_m();
     if let Err(err) = outer.outer_size_m() {
         issues.push(Issue::error(
@@ -488,6 +493,7 @@ pub fn simulate_with_progress(
                         &names,
                         &net.volumes_m3,
                         node,
+                        &net.moulded,
                     ))
                 } else {
                     None
@@ -617,6 +623,7 @@ pub fn simulate_with_progress(
                     &["main".to_string()],
                     &[volume],
                     0,
+                    &[],
                 ))
             } else {
                 None
@@ -1753,11 +1760,13 @@ pub(crate) fn cabinet_grid_of(
     } else {
         0.0
     };
-    let chamber_list = chambers::chambers(design)?;
+    let chamber_list = chambers::for_simulation(design, outer)?;
     let mut bores = Vec::new();
     for runs in ports::bores(design) {
         bores.extend(runs?);
     }
+    // A moulded duct's mouth: two cells deep, enough to carry the opening's faces.
+    bores.extend(ports::moulded_mouths(outer, 2.0 * dx));
     let (placed, _) = solids::solids(design)?;
     voxels::cabinet_grid(
         outer,
@@ -2188,6 +2197,15 @@ fn port_poses(design: &DesignFile, shape: &dyn OuterShape) -> Vec<PlacedSource> 
             radius_m: diameter / 2.0,
         });
     }
+    // Ducts moulded into an imported model follow the design's, in the same order as the
+    // air network's ports.
+    for opening in shape.moulded_openings() {
+        poses.push(PlacedSource {
+            position: opening.mouth.position_m,
+            outward: opening.mouth.outward,
+            radius_m: (opening.mouth_area_m2() / std::f64::consts::PI).sqrt(),
+        });
+    }
     poses
 }
 
@@ -2319,13 +2337,10 @@ fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
         if !leaves {
             continue;
         }
-        let diameter = duct
-            .pointer("/section/start_m/0")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
-        if diameter <= 0.0 {
+        // Round or slot, straight or tapered: the same section as the air network reads.
+        let Ok(section) = chambers::Section::of(duct) else {
             continue;
-        }
+        };
         let mut length = 0.0;
         if let Some(points) = duct.get("path_m").and_then(Value::as_array) {
             for pair in points.windows(2) {
@@ -2337,10 +2352,21 @@ fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
                 length += (dx * dx + dy * dy + dz * dz).sqrt();
             }
         }
-        let radius = diameter / 2.0;
+        // The air mass `rho * L_eff / S` with a taper's equivalent area; the inside end flush
+        // with the chamber wall, the outside end free.
+        let area = if length > 0.0 {
+            length / section.inertance_length_over_area(length)
+        } else {
+            section.area(0.0, 0.0)
+        };
         ports.push(PortSpec {
-            area_m2: std::f64::consts::PI * radius * radius,
-            length_eff_m: effective_port_length_m(length, radius),
+            area_m2: area,
+            length_eff_m: length
+                + seatlock_acoustics::end_correction_m(section.end_radius(from == "outside"), true)
+                + seatlock_acoustics::end_correction_m(
+                    section.end_radius(from != "outside"),
+                    false,
+                ),
         });
     }
     ports

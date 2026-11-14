@@ -1,0 +1,49 @@
+{
+  "id": "tectonic-tebm35c10-4",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Tectonic",
+  "model": "TEBM35C10-4 (BMR)",
+  "kind": "fullrange",
+  "published": {
+    "fs_hz": 166.0,
+    "qes": 1.05,
+    "qms": 3.4,
+    "vas_m3": 0.00012,
+    "re_ohm": 4.2,
+    "le_h": 7e-05,
+    "sd_m2": 0.001104,
+    "xmax_m": 0.0025,
+    "pe_w": 10.0,
+    "mms_kg": 0.00108,
+    "cms_m_per_n": 0.00086,
+    "bl_tm": 2.03,
+    "sens_db_1w": 80.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.042926,
+    "outer_diameter_m": 0.051816,
+    "bolt_circle_m": 0.04826,
+    "bolt_count": 4,
+    "depth_m": 0.024892,
+    "source": {
+      "url": "https://parts-express.com/Tectonic-TEBM35C10-4-BMR-2-Full-Range-Speaker-4-Ohm-297-216",
+      "title": "Parts Express product page: cutout 1.69 in, outside 2.04 in, depth 0.98 in, 4 mounting holes, bolt circle 1.9 (no unit printed; read as inches like the page's other sizes)",
+      "read_on": "2026-11-13"
+    }
+  },
+  "note": "A balanced-mode radiator: a flat diaphragm that moves as a piston low down and bends above. The lab models it as a piston, so its wide high-frequency dispersion is not represented. Linear travel 2.5 mm is from the Parts Express page; the maker's sheet prints only an 8 mm peak-to-peak mechanical limit. Sheet revision 1.0 printed fs 145 Hz, Vas 0.18 L, Qes 1.06, Qms 3.84; revision 1.8 is used.",
+  "response_file": null,
+  "source": {
+    "url": "https://datasheet.sic-components.com/TEBM35C10-4.pdf",
+    "title": "Tectonic Audio Labs TEBM35C10-4 data sheet, DS-TEBM35C10-4 revision 1.8 (hosted by SIC Components)",
+    "read_on": "2026-11-13"
+  },
+  "price": {
+    "amount": 7.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://parts-express.com/Tectonic-TEBM35C10-4-BMR-2-Full-Range-Speaker-4-Ohm-297-216",
+    "read_on": "2026-11-13"
+  }
+}

@@ -543,6 +543,9 @@ pub struct Bore {
     pub ext1: f64,
     pub right: [f64; 3],
     pub up: [f64; 3],
+    /// The mouth of a duct moulded into an imported model: its air is already in the model,
+    /// so the grid only marks the mouth, and builds no tube.
+    pub moulded: bool,
 }
 
 impl Bore {
@@ -622,10 +625,36 @@ pub fn bores(design: &DesignFile) -> Vec<Result<Vec<Bore>, String>> {
                     ext1: seg.ext1,
                     right: seg.right,
                     up: seg.up,
+                    moulded: false,
                 })
                 .collect()
         });
         out.push(built);
     }
     out
+}
+
+/// The mouth of each duct moulded into an imported model (README 6.2), as a short bore of the
+/// mouth's size reaching `depth` into the model, for the 3D grid's openings.
+pub fn moulded_mouths(shape: &dyn seatlock_core::registry::OuterShape, depth: f64) -> Vec<Bore> {
+    shape
+        .moulded_openings()
+        .into_iter()
+        .map(|o| Bore {
+            id: o.id.clone(),
+            inner: add_scaled(o.mouth.position_m, o.mouth.outward, -depth),
+            dir: o.mouth.outward,
+            length: depth,
+            round: false,
+            start: o.mouth_size_m.to_vec(),
+            end: o.mouth_size_m.to_vec(),
+            tube_m: 0.0,
+            to_outside: true,
+            ext0: 0.0,
+            ext1: 0.0,
+            right: o.right,
+            up: o.up,
+            moulded: true,
+        })
+        .collect()
 }

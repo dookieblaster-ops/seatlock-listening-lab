@@ -135,6 +135,118 @@ pub trait OuterShape: Send + Sync {
     fn air_tree(&self) -> Result<Value, String> {
         not_finished()
     }
+
+    /// The separate enclosed air spaces of a cabinet whose inside is found from its geometry
+    /// (an imported model with holes the user marked), each a chamber of its own. `None` for
+    /// a shape whose chambers come from the design's `chambers` list.
+    fn air_regions(&self) -> Option<std::sync::Arc<AirRegions>> {
+        None
+    }
+
+    /// The air space behind a mounting surface, as an index into `air_regions`.
+    fn region_behind(&self, _surface: &str) -> Option<usize> {
+        None
+    }
+
+    /// Openings that are part of the model itself (a port moulded into an imported cabinet),
+    /// each measured from the geometry.
+    fn moulded_openings(&self) -> Vec<MouldedOpening> {
+        Vec::new()
+    }
+}
+
+/// Enclosed air spaces on a grid: each cell's space, numbered from 1 (0 is no space).
+#[derive(Clone, Debug)]
+pub struct AirRegions {
+    pub origin_m: [f64; 3],
+    pub dx_m: f64,
+    pub n: [usize; 3],
+    pub labels: Vec<u32>,
+    /// Air of each space, m^3: `volumes_m3[k]` is space `k + 1`, its moulded ducts included.
+    pub volumes_m3: Vec<f64>,
+}
+
+impl AirRegions {
+    /// The space holding a point, as an index into `volumes_m3`.
+    pub fn region_at(&self, p: [f64; 3]) -> Option<usize> {
+        let mut c = [0usize; 3];
+        for k in 0..3 {
+            let f = ((p[k] - self.origin_m[k]) / self.dx_m).floor();
+            if f < 0.0 || f >= self.n[k] as f64 {
+                return None;
+            }
+            c[k] = f as usize;
+        }
+        let label = self.labels[(c[0] * self.n[1] + c[1]) * self.n[2] + c[2]];
+        (label > 0).then(|| label as usize - 1)
+    }
+}
+
+/// A duct that is part of an imported model (README 6.2, `mesh`), measured from its air: its
+/// mouth, the space it leads from, and its center line with the cross-section along it.
+#[derive(Clone, Debug)]
+pub struct MouldedOpening {
+    pub id: String,
+    /// The air space (index into `air_regions`) the duct leads from.
+    pub region: usize,
+    /// The middle of the mouth on the outer surface, facing out.
+    pub mouth: MountPose,
+    /// The mouth's extent across, along `right` and `up` (both unit and in its plane), m.
+    pub mouth_size_m: [f64; 2],
+    pub right: [f64; 3],
+    pub up: [f64; 3],
+    /// Center line from the mouth inward; `areas_m2[i]` is the cross-section along
+    /// `path_m[i]` to `path_m[i + 1]`.
+    pub path_m: Vec<[f64; 3]>,
+    pub areas_m2: Vec<f64>,
+}
+
+impl MouldedOpening {
+    pub fn length_m(&self) -> f64 {
+        self.path_m
+            .windows(2)
+            .map(|w| {
+                let d = [w[1][0] - w[0][0], w[1][1] - w[0][1], w[1][2] - w[0][2]];
+                (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+            })
+            .sum()
+    }
+
+    pub fn segment_lengths_m(&self) -> Vec<f64> {
+        self.path_m
+            .windows(2)
+            .map(|w| {
+                let d = [w[1][0] - w[0][0], w[1][1] - w[0][1], w[1][2] - w[0][2]];
+                (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+            })
+            .collect()
+    }
+
+    /// The duct's air, m^3.
+    pub fn volume_m3(&self) -> f64 {
+        self.segment_lengths_m()
+            .iter()
+            .zip(&self.areas_m2)
+            .map(|(l, a)| l * a)
+            .sum()
+    }
+
+    /// `integral of dx / S(x)` for the air mass, m^-1.
+    pub fn length_over_area(&self) -> f64 {
+        self.segment_lengths_m()
+            .iter()
+            .zip(&self.areas_m2)
+            .map(|(l, a)| l / a.max(1e-12))
+            .sum()
+    }
+
+    pub fn mouth_area_m2(&self) -> f64 {
+        self.areas_m2.first().copied().unwrap_or(0.0)
+    }
+
+    pub fn inner_area_m2(&self) -> f64 {
+        self.areas_m2.last().copied().unwrap_or(0.0)
+    }
 }
 
 /// A radiator evaluated at 1 V RMS, before the DSP chain.
