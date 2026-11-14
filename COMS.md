@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-14 — Cursor — Handoff: start here. Hole marks on the page; Erin's curves next
+### 2026-11-14 — Cursor — Handoff: start here. Erin's LCM curves in; BMR level is the bass step
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`. Level 3. Continued the LCM queue from the post below. Owner started this session with Check COMS.md in Cursor cloud.
+- **Context:** `main`. Level 3. Owner answered STATUS question 11: yes to Erin's curves.
 
-**Done this session:** (1) Full check on the LCM commit that the previous handoff left unfinished: rustfmt, clippy, 209 engine tests, bindings, both wasm modules, type check, vitest, build, 37 of 37 browser tests (generator finished in 240 s). (2) Clippy on stable 1.100.0: `as_chunks` in `seatlock-geom/src/mesh.rs`, enumerate in `seatlock-fdtd/tests/checks.rs`. (3) `tools/cloud-check.sh` installs Chromium with Playwright when `/opt/pw-browsers` is missing (Cursor cloud). (4) Page control to mark holes on imported models: checkbox "The model already has this hole" when placing a source, "Mark a sealed hole", "Mark a moulded port mouth", edit/remove; README 6.2; browser test in `e2e/import.spec.ts`.
+**Done this session (continued):** (1) Downloaded Erin's CTA-2034 curves from spinorama.org into `designs/imports/lcm/erin/cea2034.json` (CC BY-NC-SA; GitHub repo was 404; site hosts the same data). (2) Test `the_lcm_matches_erins_shape_within_known_limits`: Erin bass-mid +0.30 dB, lab −2.25 dB; RMS 4.72 / 1.55 / 2.15 dB; BMR band +2.9 dB vs woofer band. (3) Placed the cause: midrange rides high because the BMR out-levels the woofer; do not invent a sensitivity fix. Earlier this session: full check, Clippy 1.100, cloud-check Playwright fallback, hole-marking UI.
 
-**Last full check:** engine 209 / 0; after hole UI, `e2e/import.spec.ts` 3 of 3 (38 browser tests with the new one). Re-run `tools/cloud-check.sh` after pulling if anything else landed.
+**Last check:** `cargo test -p seatlock-sim --test lcm`: 3 passed, 1 ignored (full 3D). Re-run `tools/cloud-check.sh` on the new commit before stopping a longer session.
 
-**Open, in order:** (1) Erin's measured curves for the LCM (STATUS question 11; spinorama GitHub, CC BY-NC-SA) against the lab's: on axis, listening window, early reflections, power; then place the 3 dB bass-to-midrange difference. **Asked again this session; waiting on the owner's yes.** (2) A measured response file for the TEBM35C10-4 (maker's sheet has graphs only). (3) The 3D self-check's 249 % at low frequency on the LCM. (4) Then the standing queue of the posts below (MDF/plywood figures, braces, CTA-2034 score, boundary elements, …).
+**Open, in order:** (1) A measured response file for the TEBM35C10-4 (maker's sheet has graphs only; HiFiCompass / Voice Coil / Erin drive-unit if one exists) so the BMR's real level and break-up can replace the piston guess. (2) The 3D self-check's 249 % at low frequency on the LCM. (3) Standing queue below (MDF/plywood figures, braces, CTA-2034 score as the lab's own score, boundary elements, …).
 
-**Pitfalls:** as below. On Cursor cloud use `tools/cloud-check.sh` (it now installs Playwright Chromium); do not assume `/opt/pw-browsers`. A hole mark on a face with no actual hole in the mesh fails with "there is no hole under it" (expected). LCM designs stay out of `designs/examples`.
+**Pitfalls:** as below. Erin's stored levels are relative (midband ~0 dB); absolute sensitivity is 91.4 dB in the note. Published summary f3 38.1 Hz differs a little from the file's on-axis crossing (36.7 Hz); f6 matches. LCM designs stay out of `designs/examples`.
 
-**Next step:** read the owner's answer to question 11; if yes, fetch Erin's spinorama curves and compare. If no answer yet, item 2 (TEBM35C10-4 measured response) or the wall/material queue below.
+**Next step:** queue item 1 (TEBM35C10-4 measured curve), then item 2.
+
+### 2026-11-14 — Cursor — Handoff: Hole marks on the page; Erin's curves next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued the LCM queue. Owner started with Check COMS.md in Cursor cloud.
+
+**Done:** full check on the LCM commit; Clippy for 1.100; cloud-check Playwright fallback; hole-marking UI. Erin's curves were still waiting; answered and done in the post above.
+
+**Next step:** superseded by the handoff above.
 
 ### 2026-11-13 — Claude — Handoff: The LCM Nearfield Monitor, imported exactly
 
@@ -561,6 +571,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-14: Erin's LCM CTA-2034 curves kept under CC BY-NC-SA; bass-to-midrange step placed as BMR vs woofer level, done on `main` by Cursor.
 - 2026-11-14: Full check completed on the LCM commit; Clippy for stable 1.100 fixed; cloud-check installs Playwright Chromium on Cursor; hole-marking controls on the page for imported models, done on `main` by Cursor.
 - 2026-11-13: The LCM Nearfield Monitor imported from its designer's files, with holes, air spaces, and moulded ducts in the importer, done on `main` by Claude.
 - 2026-11-13: Walls for cabinets divided into chambers, foam-board sheet boxes, and tube end caps done on `main` by Claude.

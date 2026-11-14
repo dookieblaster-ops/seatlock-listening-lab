@@ -1,0 +1,1379 @@
+{
+  "kind": "speaker_spinorama",
+  "speaker": "LCM Nearfield Monitor 3-D Printed DIY",
+  "by": "Erin's Audio Corner (via the spinorama project)",
+  "title": "LCM Nearfield Monitor 3-D Printed DIY Speaker Kit Review, CTA-2034 / Klippel NFS",
+  "url": "https://erinsaudiocorner.com/loudspeakers/lcm_nearfield_monitor/",
+  "spinorama_url": "https://www.spinorama.org/speakers/LCM%20Nearfield%20Monitor%203-D%20Printed%20DIY/ErinsAudioCorner/index_eac.html",
+  "data_url": "https://www.spinorama.org/speakers/LCM%20Nearfield%20Monitor%203-D%20Printed%20DIY/ErinsAudioCorner/eac/CEA2034.json",
+  "license": "CC BY-NC-SA 4.0",
+  "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+  "read_on": "2026-11-14",
+  "conditions": "Klippel Near-Field Scanner, free-field CTA-2034 curves as published by the spinorama project from Erin's Audio Corner. Levels are relative: spinorama normalises the reference so the on-axis mean from 300 Hz to 5 kHz is about 0.3 dB (stated absolute sensitivity 91.4 dB at 2.83 V / 1 m, average 300 Hz to 3 kHz). -3 dB / -6 dB bass points reported as 38.1 Hz / 33.7 Hz.",
+  "curves": [
+    "on_axis",
+    "listening_window",
+    "early_reflections",
+    "sound_power"
+  ],
+  "points": [
+    {
+      "hz": 20.508,
+      "on_axis": -39.626,
+      "listening_window": -39.619,
+      "early_reflections": -39.614,
+      "sound_power": -39.463
+    },
+    {
+      "hz": 21.973,
+      "on_axis": -27.538,
+      "listening_window": -27.505,
+      "early_reflections": -27.238,
+      "sound_power": -26.882
+    },
+    {
+      "hz": 23.438,
+      "on_axis": -25.36,
+      "listening_window": -25.37,
+      "early_reflections": -25.49,
+      "sound_power": -25.491
+    },
+    {
+      "hz": 24.902,
+      "on_axis": -22.196,
+      "listening_window": -22.206,
+      "early_reflections": -22.335,
+      "sound_power": -22.357
+    },
+    {
+      "hz": 26.367,
+      "on_axis": -18.602,
+      "listening_window": -18.606,
+      "early_reflections": -18.684,
+      "sound_power": -18.677
+    },
+    {
+      "hz": 27.832,
+      "on_axis": -16.09,
+      "listening_window": -16.104,
+      "early_reflections": -16.269,
+      "sound_power": -16.348
+    },
+    {
+      "hz": 29.297,
+      "on_axis": -12.986,
+      "listening_window": -12.992,
+      "early_reflections": -13.063,
+      "sound_power": -13.037
+    },
+    {
+      "hz": 30.762,
+      "on_axis": -10.383,
+      "listening_window": -10.392,
+      "early_reflections": -10.505,
+      "sound_power": -10.532
+    },
+    {
+      "hz": 32.227,
+      "on_axis": -7.977,
+      "listening_window": -7.994,
+      "early_reflections": -8.2,
+      "sound_power": -8.32
+    },
+    {
+      "hz": 33.691,
+      "on_axis": -5.497,
+      "listening_window": -5.513,
+      "early_reflections": -5.709,
+      "sound_power": -5.847
+    },
+    {
+      "hz": 35.156,
+      "on_axis": -4.675,
+      "listening_window": -4.679,
+      "early_reflections": -4.737,
+      "sound_power": -4.704
+    },
+    {
+      "hz": 36.621,
+      "on_axis": -2.761,
+      "listening_window": -2.77,
+      "early_reflections": -2.872,
+      "sound_power": -2.889
+    },
+    {
+      "hz": 38.086,
+      "on_axis": -1.105,
+      "listening_window": -1.118,
+      "early_reflections": -1.284,
+      "sound_power": -1.372
+    },
+    {
+      "hz": 39.551,
+      "on_axis": -0.136,
+      "listening_window": -0.149,
+      "early_reflections": -0.298,
+      "sound_power": -0.381
+    },
+    {
+      "hz": 41.016,
+      "on_axis": 0.291,
+      "listening_window": 0.283,
+      "early_reflections": 0.188,
+      "sound_power": 0.162
+    },
+    {
+      "hz": 42.48,
+      "on_axis": 0.814,
+      "listening_window": 0.801,
+      "early_reflections": 0.661,
+      "sound_power": 0.595
+    },
+    {
+      "hz": 43.945,
+      "on_axis": 1.077,
+      "listening_window": 1.064,
+      "early_reflections": 0.919,
+      "sound_power": 0.842
+    },
+    {
+      "hz": 45.41,
+      "on_axis": 1.313,
+      "listening_window": 1.299,
+      "early_reflections": 1.133,
+      "sound_power": 1.036
+    },
+    {
+      "hz": 46.875,
+      "on_axis": 1.46,
+      "listening_window": 1.445,
+      "early_reflections": 1.274,
+      "sound_power": 1.167
+    },
+    {
+      "hz": 48.34,
+      "on_axis": 1.53,
+      "listening_window": 1.513,
+      "early_reflections": 1.322,
+      "sound_power": 1.198
+    },
+    {
+      "hz": 51.27,
+      "on_axis": 1.393,
+      "listening_window": 1.372,
+      "early_reflections": 1.141,
+      "sound_power": 0.966
+    },
+    {
+      "hz": 52.734,
+      "on_axis": 1.362,
+      "listening_window": 1.345,
+      "early_reflections": 1.162,
+      "sound_power": 1.035
+    },
+    {
+      "hz": 54.199,
+      "on_axis": 1.553,
+      "listening_window": 1.534,
+      "early_reflections": 1.327,
+      "sound_power": 1.176
+    },
+    {
+      "hz": 55.664,
+      "on_axis": 1.479,
+      "listening_window": 1.462,
+      "early_reflections": 1.28,
+      "sound_power": 1.155
+    },
+    {
+      "hz": 58.594,
+      "on_axis": 1.618,
+      "listening_window": 1.599,
+      "early_reflections": 1.403,
+      "sound_power": 1.264
+    },
+    {
+      "hz": 60.059,
+      "on_axis": 1.669,
+      "listening_window": 1.65,
+      "early_reflections": 1.452,
+      "sound_power": 1.309
+    },
+    {
+      "hz": 62.988,
+      "on_axis": 1.733,
+      "listening_window": 1.713,
+      "early_reflections": 1.503,
+      "sound_power": 1.349
+    },
+    {
+      "hz": 64.453,
+      "on_axis": 1.793,
+      "listening_window": 1.769,
+      "early_reflections": 1.527,
+      "sound_power": 1.337
+    },
+    {
+      "hz": 67.383,
+      "on_axis": 1.93,
+      "listening_window": 1.906,
+      "early_reflections": 1.651,
+      "sound_power": 1.445
+    },
+    {
+      "hz": 68.848,
+      "on_axis": 2.033,
+      "listening_window": 2.009,
+      "early_reflections": 1.749,
+      "sound_power": 1.535
+    },
+    {
+      "hz": 71.777,
+      "on_axis": 1.847,
+      "listening_window": 1.828,
+      "early_reflections": 1.608,
+      "sound_power": 1.435
+    },
+    {
+      "hz": 74.707,
+      "on_axis": 1.703,
+      "listening_window": 1.687,
+      "early_reflections": 1.506,
+      "sound_power": 1.374
+    },
+    {
+      "hz": 77.637,
+      "on_axis": 1.544,
+      "listening_window": 1.531,
+      "early_reflections": 1.382,
+      "sound_power": 1.284
+    },
+    {
+      "hz": 79.102,
+      "on_axis": 1.479,
+      "listening_window": 1.465,
+      "early_reflections": 1.311,
+      "sound_power": 1.209
+    },
+    {
+      "hz": 82.031,
+      "on_axis": 1.476,
+      "listening_window": 1.461,
+      "early_reflections": 1.295,
+      "sound_power": 1.187
+    },
+    {
+      "hz": 84.961,
+      "on_axis": 1.477,
+      "listening_window": 1.458,
+      "early_reflections": 1.271,
+      "sound_power": 1.145
+    },
+    {
+      "hz": 87.891,
+      "on_axis": 1.542,
+      "listening_window": 1.52,
+      "early_reflections": 1.305,
+      "sound_power": 1.146
+    },
+    {
+      "hz": 90.82,
+      "on_axis": 1.593,
+      "listening_window": 1.57,
+      "early_reflections": 1.349,
+      "sound_power": 1.178
+    },
+    {
+      "hz": 95.215,
+      "on_axis": 1.605,
+      "listening_window": 1.585,
+      "early_reflections": 1.377,
+      "sound_power": 1.22
+    },
+    {
+      "hz": 98.144,
+      "on_axis": 1.182,
+      "listening_window": 1.164,
+      "early_reflections": 0.985,
+      "sound_power": 0.857
+    },
+    {
+      "hz": 101.074,
+      "on_axis": 1.134,
+      "listening_window": 1.117,
+      "early_reflections": 0.95,
+      "sound_power": 0.842
+    },
+    {
+      "hz": 105.469,
+      "on_axis": 1.502,
+      "listening_window": 1.483,
+      "early_reflections": 1.308,
+      "sound_power": 1.188
+    },
+    {
+      "hz": 108.398,
+      "on_axis": 1.181,
+      "listening_window": 1.161,
+      "early_reflections": 0.979,
+      "sound_power": 0.854
+    },
+    {
+      "hz": 112.793,
+      "on_axis": 1.251,
+      "listening_window": 1.226,
+      "early_reflections": 1.004,
+      "sound_power": 0.838
+    },
+    {
+      "hz": 117.188,
+      "on_axis": 1.309,
+      "listening_window": 1.285,
+      "early_reflections": 1.066,
+      "sound_power": 0.899
+    },
+    {
+      "hz": 120.117,
+      "on_axis": 1.126,
+      "listening_window": 1.103,
+      "early_reflections": 0.891,
+      "sound_power": 0.737
+    },
+    {
+      "hz": 124.512,
+      "on_axis": 1.253,
+      "listening_window": 1.231,
+      "early_reflections": 1.044,
+      "sound_power": 0.923
+    },
+    {
+      "hz": 128.906,
+      "on_axis": 1.263,
+      "listening_window": 1.235,
+      "early_reflections": 0.997,
+      "sound_power": 0.823
+    },
+    {
+      "hz": 133.301,
+      "on_axis": 1.142,
+      "listening_window": 1.112,
+      "early_reflections": 0.855,
+      "sound_power": 0.657
+    },
+    {
+      "hz": 139.16,
+      "on_axis": 1.042,
+      "listening_window": 1.014,
+      "early_reflections": 0.762,
+      "sound_power": 0.567
+    },
+    {
+      "hz": 143.555,
+      "on_axis": 0.942,
+      "listening_window": 0.914,
+      "early_reflections": 0.672,
+      "sound_power": 0.492
+    },
+    {
+      "hz": 147.949,
+      "on_axis": 0.817,
+      "listening_window": 0.786,
+      "early_reflections": 0.536,
+      "sound_power": 0.358
+    },
+    {
+      "hz": 153.809,
+      "on_axis": 0.624,
+      "listening_window": 0.591,
+      "early_reflections": 0.292,
+      "sound_power": 0.063
+    },
+    {
+      "hz": 159.668,
+      "on_axis": 0.21,
+      "listening_window": 0.178,
+      "early_reflections": -0.128,
+      "sound_power": -0.372
+    },
+    {
+      "hz": 165.527,
+      "on_axis": -0.278,
+      "listening_window": -0.311,
+      "early_reflections": -0.567,
+      "sound_power": -0.741
+    },
+    {
+      "hz": 171.387,
+      "on_axis": -0.367,
+      "listening_window": -0.404,
+      "early_reflections": -0.718,
+      "sound_power": -0.915
+    },
+    {
+      "hz": 177.246,
+      "on_axis": -0.426,
+      "listening_window": -0.464,
+      "early_reflections": -0.778,
+      "sound_power": -0.982
+    },
+    {
+      "hz": 183.105,
+      "on_axis": -0.873,
+      "listening_window": -0.911,
+      "early_reflections": -1.248,
+      "sound_power": -1.471
+    },
+    {
+      "hz": 188.965,
+      "on_axis": -0.94,
+      "listening_window": -0.984,
+      "early_reflections": -1.341,
+      "sound_power": -1.575
+    },
+    {
+      "hz": 196.289,
+      "on_axis": -0.929,
+      "listening_window": -0.983,
+      "early_reflections": -1.418,
+      "sound_power": -1.727
+    },
+    {
+      "hz": 203.613,
+      "on_axis": -1.363,
+      "listening_window": -1.408,
+      "early_reflections": -1.842,
+      "sound_power": -2.171
+    },
+    {
+      "hz": 210.938,
+      "on_axis": -1.921,
+      "listening_window": -1.964,
+      "early_reflections": -2.332,
+      "sound_power": -2.596
+    },
+    {
+      "hz": 218.262,
+      "on_axis": -1.812,
+      "listening_window": -1.863,
+      "early_reflections": -2.285,
+      "sound_power": -2.601
+    },
+    {
+      "hz": 225.586,
+      "on_axis": -1.788,
+      "listening_window": -1.841,
+      "early_reflections": -2.281,
+      "sound_power": -2.622
+    },
+    {
+      "hz": 232.91,
+      "on_axis": -1.977,
+      "listening_window": -2.032,
+      "early_reflections": -2.455,
+      "sound_power": -2.773
+    },
+    {
+      "hz": 241.699,
+      "on_axis": -2.136,
+      "listening_window": -2.195,
+      "early_reflections": -2.65,
+      "sound_power": -3.005
+    },
+    {
+      "hz": 250.488,
+      "on_axis": -2.2,
+      "listening_window": -2.268,
+      "early_reflections": -2.807,
+      "sound_power": -3.288
+    },
+    {
+      "hz": 259.277,
+      "on_axis": -2.012,
+      "listening_window": -2.083,
+      "early_reflections": -2.634,
+      "sound_power": -3.148
+    },
+    {
+      "hz": 268.066,
+      "on_axis": -1.83,
+      "listening_window": -1.891,
+      "early_reflections": -2.374,
+      "sound_power": -2.827
+    },
+    {
+      "hz": 276.855,
+      "on_axis": -2.086,
+      "listening_window": -2.153,
+      "early_reflections": -2.633,
+      "sound_power": -3.08
+    },
+    {
+      "hz": 287.109,
+      "on_axis": -2.283,
+      "listening_window": -2.351,
+      "early_reflections": -2.836,
+      "sound_power": -3.293
+    },
+    {
+      "hz": 297.363,
+      "on_axis": -1.935,
+      "listening_window": -2.007,
+      "early_reflections": -2.608,
+      "sound_power": -3.17
+    },
+    {
+      "hz": 307.617,
+      "on_axis": -2.069,
+      "listening_window": -2.136,
+      "early_reflections": -2.676,
+      "sound_power": -3.179
+    },
+    {
+      "hz": 319.336,
+      "on_axis": -2.767,
+      "listening_window": -2.841,
+      "early_reflections": -3.349,
+      "sound_power": -3.844
+    },
+    {
+      "hz": 329.59,
+      "on_axis": -2.602,
+      "listening_window": -2.682,
+      "early_reflections": -3.233,
+      "sound_power": -3.768
+    },
+    {
+      "hz": 341.309,
+      "on_axis": -2.457,
+      "listening_window": -2.54,
+      "early_reflections": -3.123,
+      "sound_power": -3.73
+    },
+    {
+      "hz": 353.027,
+      "on_axis": -2.405,
+      "listening_window": -2.502,
+      "early_reflections": -3.182,
+      "sound_power": -3.895
+    },
+    {
+      "hz": 366.211,
+      "on_axis": -2.069,
+      "listening_window": -2.145,
+      "early_reflections": -2.761,
+      "sound_power": -3.411
+    },
+    {
+      "hz": 379.395,
+      "on_axis": -1.942,
+      "listening_window": -2.036,
+      "early_reflections": -2.742,
+      "sound_power": -3.482
+    },
+    {
+      "hz": 392.578,
+      "on_axis": -2.233,
+      "listening_window": -2.322,
+      "early_reflections": -2.969,
+      "sound_power": -3.677
+    },
+    {
+      "hz": 405.762,
+      "on_axis": -2.103,
+      "listening_window": -2.198,
+      "early_reflections": -2.844,
+      "sound_power": -3.496
+    },
+    {
+      "hz": 420.41,
+      "on_axis": -2.261,
+      "listening_window": -2.365,
+      "early_reflections": -3.064,
+      "sound_power": -3.784
+    },
+    {
+      "hz": 435.059,
+      "on_axis": -2.031,
+      "listening_window": -2.13,
+      "early_reflections": -2.866,
+      "sound_power": -3.65
+    },
+    {
+      "hz": 451.172,
+      "on_axis": -2.086,
+      "listening_window": -2.195,
+      "early_reflections": -2.967,
+      "sound_power": -3.715
+    },
+    {
+      "hz": 465.82,
+      "on_axis": -1.775,
+      "listening_window": -1.895,
+      "early_reflections": -2.768,
+      "sound_power": -3.747
+    },
+    {
+      "hz": 483.398,
+      "on_axis": -1.803,
+      "listening_window": -1.936,
+      "early_reflections": -2.813,
+      "sound_power": -3.749
+    },
+    {
+      "hz": 499.512,
+      "on_axis": -1.584,
+      "listening_window": -1.711,
+      "early_reflections": -2.621,
+      "sound_power": -3.605
+    },
+    {
+      "hz": 517.09,
+      "on_axis": -1.67,
+      "listening_window": -1.832,
+      "early_reflections": -2.922,
+      "sound_power": -3.999
+    },
+    {
+      "hz": 536.133,
+      "on_axis": -1.455,
+      "listening_window": -1.566,
+      "early_reflections": -2.625,
+      "sound_power": -3.742
+    },
+    {
+      "hz": 555.176,
+      "on_axis": -1.428,
+      "listening_window": -1.537,
+      "early_reflections": -2.658,
+      "sound_power": -3.828
+    },
+    {
+      "hz": 574.219,
+      "on_axis": -1.129,
+      "listening_window": -1.277,
+      "early_reflections": -2.468,
+      "sound_power": -3.76
+    },
+    {
+      "hz": 594.727,
+      "on_axis": -1.364,
+      "listening_window": -1.412,
+      "early_reflections": -2.312,
+      "sound_power": -3.458
+    },
+    {
+      "hz": 615.234,
+      "on_axis": -1.413,
+      "listening_window": -1.536,
+      "early_reflections": -2.51,
+      "sound_power": -3.665
+    },
+    {
+      "hz": 637.207,
+      "on_axis": -1.148,
+      "listening_window": -1.258,
+      "early_reflections": -2.32,
+      "sound_power": -3.58
+    },
+    {
+      "hz": 659.18,
+      "on_axis": -1.482,
+      "listening_window": -1.602,
+      "early_reflections": -2.478,
+      "sound_power": -3.517
+    },
+    {
+      "hz": 682.617,
+      "on_axis": -1.505,
+      "listening_window": -1.647,
+      "early_reflections": -2.713,
+      "sound_power": -3.751
+    },
+    {
+      "hz": 707.52,
+      "on_axis": -0.848,
+      "listening_window": -1.058,
+      "early_reflections": -2.335,
+      "sound_power": -3.693
+    },
+    {
+      "hz": 732.422,
+      "on_axis": -0.622,
+      "listening_window": -0.804,
+      "early_reflections": -2.179,
+      "sound_power": -3.41
+    },
+    {
+      "hz": 757.324,
+      "on_axis": -0.464,
+      "listening_window": -0.706,
+      "early_reflections": -2.04,
+      "sound_power": -3.334
+    },
+    {
+      "hz": 785.156,
+      "on_axis": 0.113,
+      "listening_window": -0.148,
+      "early_reflections": -1.816,
+      "sound_power": -3.482
+    },
+    {
+      "hz": 811.523,
+      "on_axis": 0.4,
+      "listening_window": 0.075,
+      "early_reflections": -1.74,
+      "sound_power": -3.232
+    },
+    {
+      "hz": 840.82,
+      "on_axis": 1.469,
+      "listening_window": 1.059,
+      "early_reflections": -1.121,
+      "sound_power": -3.105
+    },
+    {
+      "hz": 870.117,
+      "on_axis": 1.801,
+      "listening_window": 1.439,
+      "early_reflections": -0.884,
+      "sound_power": -3.224
+    },
+    {
+      "hz": 900.879,
+      "on_axis": -0.624,
+      "listening_window": -0.539,
+      "early_reflections": -1.957,
+      "sound_power": -3.788
+    },
+    {
+      "hz": 933.105,
+      "on_axis": -0.356,
+      "listening_window": -0.249,
+      "early_reflections": -1.911,
+      "sound_power": -3.602
+    },
+    {
+      "hz": 965.332,
+      "on_axis": -0.879,
+      "listening_window": -0.543,
+      "early_reflections": -1.513,
+      "sound_power": -3.343
+    },
+    {
+      "hz": 1000.49,
+      "on_axis": -6.791,
+      "listening_window": -5.494,
+      "early_reflections": -3.102,
+      "sound_power": -3.206
+    },
+    {
+      "hz": 1035.64,
+      "on_axis": 0.196,
+      "listening_window": -0.304,
+      "early_reflections": -0.983,
+      "sound_power": -1.446
+    },
+    {
+      "hz": 1072.27,
+      "on_axis": 3.731,
+      "listening_window": 3.07,
+      "early_reflections": 0.767,
+      "sound_power": -0.721
+    },
+    {
+      "hz": 1108.89,
+      "on_axis": 3.295,
+      "listening_window": 2.842,
+      "early_reflections": 0.738,
+      "sound_power": -1.12
+    },
+    {
+      "hz": 1148.44,
+      "on_axis": 3.33,
+      "listening_window": 2.704,
+      "early_reflections": 0.344,
+      "sound_power": -1.615
+    },
+    {
+      "hz": 1189.45,
+      "on_axis": 2.352,
+      "listening_window": 1.938,
+      "early_reflections": 0.012,
+      "sound_power": -2.321
+    },
+    {
+      "hz": 1230.47,
+      "on_axis": 0.97,
+      "listening_window": 0.622,
+      "early_reflections": -0.653,
+      "sound_power": -2.6
+    },
+    {
+      "hz": 1274.41,
+      "on_axis": 1.243,
+      "listening_window": 0.942,
+      "early_reflections": -0.666,
+      "sound_power": -2.783
+    },
+    {
+      "hz": 1319.82,
+      "on_axis": 1.32,
+      "listening_window": 1.004,
+      "early_reflections": -0.615,
+      "sound_power": -2.848
+    },
+    {
+      "hz": 1366.7,
+      "on_axis": 1.027,
+      "listening_window": 0.8,
+      "early_reflections": -0.415,
+      "sound_power": -2.946
+    },
+    {
+      "hz": 1413.57,
+      "on_axis": -1.047,
+      "listening_window": -0.956,
+      "early_reflections": -0.903,
+      "sound_power": -2.305
+    },
+    {
+      "hz": 1463.38,
+      "on_axis": 1.647,
+      "listening_window": 1.173,
+      "early_reflections": -0.224,
+      "sound_power": -1.638
+    },
+    {
+      "hz": 1516.11,
+      "on_axis": 2.78,
+      "listening_window": 2.474,
+      "early_reflections": 0.592,
+      "sound_power": -1.375
+    },
+    {
+      "hz": 1568.85,
+      "on_axis": 1.994,
+      "listening_window": 1.95,
+      "early_reflections": 0.504,
+      "sound_power": -1.376
+    },
+    {
+      "hz": 1624.51,
+      "on_axis": 1.795,
+      "listening_window": 1.617,
+      "early_reflections": 0.216,
+      "sound_power": -1.347
+    },
+    {
+      "hz": 1681.64,
+      "on_axis": 1.79,
+      "listening_window": 1.264,
+      "early_reflections": -0.553,
+      "sound_power": -2.344
+    },
+    {
+      "hz": 1741.7,
+      "on_axis": 2.078,
+      "listening_window": 1.31,
+      "early_reflections": -0.514,
+      "sound_power": -2.734
+    },
+    {
+      "hz": 1803.22,
+      "on_axis": 2.663,
+      "listening_window": 1.979,
+      "early_reflections": -0.15,
+      "sound_power": -2.547
+    },
+    {
+      "hz": 1866.21,
+      "on_axis": 2.478,
+      "listening_window": 1.969,
+      "early_reflections": 0.026,
+      "sound_power": -2.672
+    },
+    {
+      "hz": 1932.13,
+      "on_axis": 2.178,
+      "listening_window": 1.722,
+      "early_reflections": 0.212,
+      "sound_power": -2.814
+    },
+    {
+      "hz": 1999.51,
+      "on_axis": 1.442,
+      "listening_window": 1.024,
+      "early_reflections": 0.32,
+      "sound_power": -2.382
+    },
+    {
+      "hz": 2069.82,
+      "on_axis": 2.101,
+      "listening_window": 1.788,
+      "early_reflections": 0.55,
+      "sound_power": -1.847
+    },
+    {
+      "hz": 2143.07,
+      "on_axis": 2.054,
+      "listening_window": 1.602,
+      "early_reflections": -0.036,
+      "sound_power": -2.523
+    },
+    {
+      "hz": 2219.24,
+      "on_axis": 1.971,
+      "listening_window": 1.69,
+      "early_reflections": 0.072,
+      "sound_power": -2.721
+    },
+    {
+      "hz": 2296.88,
+      "on_axis": 1.24,
+      "listening_window": 1.389,
+      "early_reflections": 0.264,
+      "sound_power": -2.819
+    },
+    {
+      "hz": 2378.91,
+      "on_axis": -0.253,
+      "listening_window": -0.344,
+      "early_reflections": -0.356,
+      "sound_power": -2.932
+    },
+    {
+      "hz": 2462.4,
+      "on_axis": -0.664,
+      "listening_window": -1.099,
+      "early_reflections": -1.223,
+      "sound_power": -3.339
+    },
+    {
+      "hz": 2548.83,
+      "on_axis": 0.231,
+      "listening_window": -0.186,
+      "early_reflections": -1.115,
+      "sound_power": -3.424
+    },
+    {
+      "hz": 2639.65,
+      "on_axis": 0.434,
+      "listening_window": -0.139,
+      "early_reflections": -1.554,
+      "sound_power": -3.866
+    },
+    {
+      "hz": 2731.93,
+      "on_axis": 2.374,
+      "listening_window": 1.649,
+      "early_reflections": -0.861,
+      "sound_power": -3.39
+    },
+    {
+      "hz": 2828.61,
+      "on_axis": 2.411,
+      "listening_window": 1.929,
+      "early_reflections": -0.543,
+      "sound_power": -3.546
+    },
+    {
+      "hz": 2928.22,
+      "on_axis": 2.42,
+      "listening_window": 1.986,
+      "early_reflections": -0.529,
+      "sound_power": -3.284
+    },
+    {
+      "hz": 3030.76,
+      "on_axis": 2.901,
+      "listening_window": 2.335,
+      "early_reflections": -0.334,
+      "sound_power": -3.037
+    },
+    {
+      "hz": 3137.7,
+      "on_axis": 2.782,
+      "listening_window": 2.45,
+      "early_reflections": 0.019,
+      "sound_power": -2.811
+    },
+    {
+      "hz": 3249.02,
+      "on_axis": 1.637,
+      "listening_window": 1.867,
+      "early_reflections": -0.198,
+      "sound_power": -2.689
+    },
+    {
+      "hz": 3363.28,
+      "on_axis": 1.016,
+      "listening_window": 1.339,
+      "early_reflections": -0.379,
+      "sound_power": -2.723
+    },
+    {
+      "hz": 3481.93,
+      "on_axis": 1.675,
+      "listening_window": 1.576,
+      "early_reflections": -0.116,
+      "sound_power": -2.627
+    },
+    {
+      "hz": 3604.98,
+      "on_axis": 2.425,
+      "listening_window": 2.254,
+      "early_reflections": -0.03,
+      "sound_power": -2.57
+    },
+    {
+      "hz": 3732.42,
+      "on_axis": 1.923,
+      "listening_window": 1.954,
+      "early_reflections": -0.435,
+      "sound_power": -3.011
+    },
+    {
+      "hz": 3864.26,
+      "on_axis": 2.928,
+      "listening_window": 2.82,
+      "early_reflections": -0.045,
+      "sound_power": -2.701
+    },
+    {
+      "hz": 4000.49,
+      "on_axis": 1.783,
+      "listening_window": 2.38,
+      "early_reflections": -0.182,
+      "sound_power": -2.717
+    },
+    {
+      "hz": 4141.11,
+      "on_axis": 1.829,
+      "listening_window": 2.489,
+      "early_reflections": -0.204,
+      "sound_power": -2.719
+    },
+    {
+      "hz": 4287.6,
+      "on_axis": 1.131,
+      "listening_window": 1.958,
+      "early_reflections": -0.464,
+      "sound_power": -3.142
+    },
+    {
+      "hz": 4438.48,
+      "on_axis": 1.192,
+      "listening_window": 1.824,
+      "early_reflections": -0.886,
+      "sound_power": -3.57
+    },
+    {
+      "hz": 4595.21,
+      "on_axis": 0.347,
+      "listening_window": 1.173,
+      "early_reflections": -1.467,
+      "sound_power": -3.918
+    },
+    {
+      "hz": 4756.35,
+      "on_axis": 0.084,
+      "listening_window": 0.832,
+      "early_reflections": -1.761,
+      "sound_power": -4.359
+    },
+    {
+      "hz": 4924.8,
+      "on_axis": -0.367,
+      "listening_window": 0.319,
+      "early_reflections": -2.277,
+      "sound_power": -4.952
+    },
+    {
+      "hz": 5097.66,
+      "on_axis": 0.201,
+      "listening_window": 0.447,
+      "early_reflections": -2.281,
+      "sound_power": -5.102
+    },
+    {
+      "hz": 5277.83,
+      "on_axis": 0.821,
+      "listening_window": 0.861,
+      "early_reflections": -2.086,
+      "sound_power": -5.098
+    },
+    {
+      "hz": 5463.87,
+      "on_axis": 1.304,
+      "listening_window": 0.949,
+      "early_reflections": -2.128,
+      "sound_power": -5.348
+    },
+    {
+      "hz": 5657.23,
+      "on_axis": 0.93,
+      "listening_window": 0.585,
+      "early_reflections": -2.517,
+      "sound_power": -5.781
+    },
+    {
+      "hz": 5856.45,
+      "on_axis": 0.616,
+      "listening_window": 0.568,
+      "early_reflections": -2.441,
+      "sound_power": -5.622
+    },
+    {
+      "hz": 6062.99,
+      "on_axis": 0.998,
+      "listening_window": 0.656,
+      "early_reflections": -2.479,
+      "sound_power": -5.715
+    },
+    {
+      "hz": 6276.86,
+      "on_axis": 2.086,
+      "listening_window": 1.437,
+      "early_reflections": -2.419,
+      "sound_power": -6.18
+    },
+    {
+      "hz": 6498.05,
+      "on_axis": 2.874,
+      "listening_window": 1.901,
+      "early_reflections": -2.182,
+      "sound_power": -6.369
+    },
+    {
+      "hz": 6726.56,
+      "on_axis": 2.947,
+      "listening_window": 1.934,
+      "early_reflections": -2.364,
+      "sound_power": -6.65
+    },
+    {
+      "hz": 6963.87,
+      "on_axis": 1.721,
+      "listening_window": 1.011,
+      "early_reflections": -2.968,
+      "sound_power": -6.463
+    },
+    {
+      "hz": 7209.96,
+      "on_axis": -0.642,
+      "listening_window": -1.23,
+      "early_reflections": -3.422,
+      "sound_power": -5.433
+    },
+    {
+      "hz": 7464.84,
+      "on_axis": -1.892,
+      "listening_window": -2.461,
+      "early_reflections": -3.399,
+      "sound_power": -5.462
+    },
+    {
+      "hz": 7727.05,
+      "on_axis": -1.064,
+      "listening_window": -1.904,
+      "early_reflections": -3.171,
+      "sound_power": -5.531
+    },
+    {
+      "hz": 7999.51,
+      "on_axis": -0.495,
+      "listening_window": -1.366,
+      "early_reflections": -2.817,
+      "sound_power": -5.438
+    },
+    {
+      "hz": 8282.23,
+      "on_axis": 0.384,
+      "listening_window": -0.742,
+      "early_reflections": -2.775,
+      "sound_power": -5.788
+    },
+    {
+      "hz": 8573.73,
+      "on_axis": 0.506,
+      "listening_window": -0.378,
+      "early_reflections": -2.755,
+      "sound_power": -6.04
+    },
+    {
+      "hz": 8876.95,
+      "on_axis": 0.19,
+      "listening_window": -0.197,
+      "early_reflections": -2.613,
+      "sound_power": -6.198
+    },
+    {
+      "hz": 9188.96,
+      "on_axis": 0.376,
+      "listening_window": 0.133,
+      "early_reflections": -2.596,
+      "sound_power": -6.275
+    },
+    {
+      "hz": 9514.16,
+      "on_axis": 1.369,
+      "listening_window": 0.747,
+      "early_reflections": -2.488,
+      "sound_power": -6.309
+    },
+    {
+      "hz": 9849.61,
+      "on_axis": 2.044,
+      "listening_window": 1.241,
+      "early_reflections": -2.413,
+      "sound_power": -6.393
+    },
+    {
+      "hz": 10196.8,
+      "on_axis": 2.318,
+      "listening_window": 1.64,
+      "early_reflections": -2.142,
+      "sound_power": -6.236
+    },
+    {
+      "hz": 10555.7,
+      "on_axis": 2.492,
+      "listening_window": 1.657,
+      "early_reflections": -2.258,
+      "sound_power": -6.1
+    },
+    {
+      "hz": 10927.7,
+      "on_axis": 2.345,
+      "listening_window": 1.081,
+      "early_reflections": -2.427,
+      "sound_power": -5.956
+    },
+    {
+      "hz": 11313.0,
+      "on_axis": 1.557,
+      "listening_window": 0.397,
+      "early_reflections": -2.675,
+      "sound_power": -5.898
+    },
+    {
+      "hz": 11712.9,
+      "on_axis": 0.593,
+      "listening_window": -0.104,
+      "early_reflections": -3.001,
+      "sound_power": -6.164
+    },
+    {
+      "hz": 12126.0,
+      "on_axis": 0.942,
+      "listening_window": 0.037,
+      "early_reflections": -3.109,
+      "sound_power": -6.589
+    },
+    {
+      "hz": 12553.7,
+      "on_axis": 1.768,
+      "listening_window": 0.496,
+      "early_reflections": -2.951,
+      "sound_power": -6.667
+    },
+    {
+      "hz": 12996.1,
+      "on_axis": 2.209,
+      "listening_window": 0.806,
+      "early_reflections": -2.863,
+      "sound_power": -6.634
+    },
+    {
+      "hz": 13454.6,
+      "on_axis": 2.651,
+      "listening_window": 1.19,
+      "early_reflections": -2.621,
+      "sound_power": -6.506
+    },
+    {
+      "hz": 13929.2,
+      "on_axis": 2.986,
+      "listening_window": 1.637,
+      "early_reflections": -2.32,
+      "sound_power": -6.45
+    },
+    {
+      "hz": 14419.9,
+      "on_axis": 3.557,
+      "listening_window": 2.074,
+      "early_reflections": -1.935,
+      "sound_power": -6.292
+    },
+    {
+      "hz": 14928.2,
+      "on_axis": 4.186,
+      "listening_window": 2.549,
+      "early_reflections": -1.526,
+      "sound_power": -5.974
+    },
+    {
+      "hz": 15455.6,
+      "on_axis": 4.508,
+      "listening_window": 2.976,
+      "early_reflections": -1.187,
+      "sound_power": -5.641
+    },
+    {
+      "hz": 16000.5,
+      "on_axis": 5.073,
+      "listening_window": 3.509,
+      "early_reflections": -0.722,
+      "sound_power": -5.244
+    },
+    {
+      "hz": 16564.5,
+      "on_axis": 5.544,
+      "listening_window": 4.149,
+      "early_reflections": -0.088,
+      "sound_power": -4.567
+    },
+    {
+      "hz": 17148.9,
+      "on_axis": 5.786,
+      "listening_window": 4.806,
+      "early_reflections": 0.58,
+      "sound_power": -3.841
+    },
+    {
+      "hz": 17752.4,
+      "on_axis": 6.28,
+      "listening_window": 5.651,
+      "early_reflections": 1.419,
+      "sound_power": -2.801
+    },
+    {
+      "hz": 18379.4,
+      "on_axis": 6.083,
+      "listening_window": 5.74,
+      "early_reflections": 1.667,
+      "sound_power": -2.443
+    },
+    {
+      "hz": 19026.9,
+      "on_axis": 4.665,
+      "listening_window": 3.633,
+      "early_reflections": -0.877,
+      "sound_power": -5.426
+    },
+    {
+      "hz": 19697.8,
+      "on_axis": 6.838,
+      "listening_window": 5.919,
+      "early_reflections": 1.813,
+      "sound_power": -2.601
+    },
+    {
+      "hz": 19999.5,
+      "on_axis": 6.507,
+      "listening_window": 5.732,
+      "early_reflections": 1.844,
+      "sound_power": -2.473
+    }
+  ]
+}

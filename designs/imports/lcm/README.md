@@ -7,7 +7,7 @@ A known DIY speaker, imported from its designer's own files so that the lab's pr
 - **Design:** "LCM Monitor Speaker - 40Hz waveguide - Bluetooth - DSP" by zx82net (Luke), https://www.thingiverse.com/thing:4980197.
 - **License:** Creative Commons Attribution - Non-Commercial. The STL and DSP files here are the designer's, unchanged. The `.seatlock.json` designs are built from them by `build_designs.py`, so they carry the same license.
 - **Build notes:** https://www.instructables.com/LCM-Waveguide-Speaker-3D-Printed-Near-field-Studio/ (published 2021-11-16, read 2026-11-13). Parts Express project gallery: https://projectgallery.parts-express.com/speaker-projects/lcm-little-californian-monitor/.
-- **Measurement:** Erin's Audio Corner, "LCM Nearfield Monitor 3-D Printed DIY Speaker Kit Review", 2022-06-22, https://erinsaudiocorner.com/loudspeakers/lcm_nearfield_monitor/ (Klippel Near-Field Scanner). Its summary figures are on https://www.spinorama.org/speakers/LCM%20Nearfield%20Monitor%203-D%20Printed%20DIY/ErinsAudioCorner/index_eac.html (data CC BY-NC-SA 4.0). The curves themselves are not in this repository yet.
+- **Measurement:** Erin's Audio Corner, "LCM Nearfield Monitor 3-D Printed DIY Speaker Kit Review", 2022-06-22, https://erinsaudiocorner.com/loudspeakers/lcm_nearfield_monitor/ (Klippel Near-Field Scanner). CTA-2034 curves are in `erin/` (from https://www.spinorama.org/speakers/LCM%20Nearfield%20Monitor%203-D%20Printed%20DIY/ErinsAudioCorner/index_eac.html, CC BY-NC-SA 4.0; owner approved 2026-11-14).
 
 ## Files
 
@@ -18,8 +18,9 @@ A known DIY speaker, imported from its designer's own files so that the lab's pr
 | `zx82net_LCM_DSP_project_simple.dspproj` | The designer's SigmaStudio project. Read for: crossover 200 Hz on both sides, tweeter -6 dB, +2.5 dB at 10 kHz. |
 | `build_designs.py` | Builds the two designs below from the STL files (`python3 build_designs.py`). |
 | `lcm-evo.seatlock.json`, `lcm-2021.seatlock.json` | The lab's designs: the imported cabinet with its holes marked, the two drivers, the designer's DSP. |
+| `erin/` | Erin's CTA-2034 curves (on axis, listening window, early reflections, sound power) and a short comparison note. |
 
-All downloaded 2026-11-13.
+Cabinet files downloaded 2026-11-13; Erin's curves 2026-11-14.
 
 ## What the design says
 
@@ -32,4 +33,4 @@ All downloaded 2026-11-13.
 
 - The polyfill the build notes put in the tweeter's chamber (the quick and detailed models do not model fill).
 - Wall vibration (imported cabinets keep rigid walls).
-- The BMR's real bending behaviour above its piston range: there is no measured response file for it yet.
+- The BMR's real bending behaviour above its piston range: there is no measured response file for it yet. That, and the makers' sensitivity figures, are the likely cause of the lab's bass sitting about 2 dB below the midrange where Erin's measurement is level (`erin/README.md`).
