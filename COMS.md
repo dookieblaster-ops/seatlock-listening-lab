@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. Preference-as-target or BEM / woofers next
+### 2026-11-15 — Cursor — Handoff: start here. Preference-as-target next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/cta2034-preference-e85b` (stacks on passive R/L/C PR #12). Level 3.
+
+**Done this session:** CTA-2034 / Olive preference rating behind `cta2034` request flag (page on; scores/optimizer off). Early reflections, relative SP, PIR, score on the page. Criton ASR: LFX 42.5 Hz, preference 4.31 vs published 4.68 (formula with published terms recovers 4.68). Passive shortfall still ranks. Passive R/L/C tune was the prior item (PR #12).
+
+**Open, in order:** (1) Use preference as the ranked score / redefine the target. (2) BEM; larger budget woofers; browser speed; non-box page fields; multi-source generator harden. (3) Real PLA/TPU damping — do not invent. (4) Criton leftovers only if a source appears.
+
+**Pitfalls:** Page sets `cta2034: true` (sound power + ~46 ER directions). Scores/optimizer leave it off so candidates stay fast. Do not invent damping. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `tools/cloud-check.sh` passed (engine + browser 41) on stable 1.100 after gating.
+
+**Next step:** item 1 — preference as the ranked target.
+
+### 2026-11-15 — Cursor — Handoff: CTA-2034 gated; cloud-check pending (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
