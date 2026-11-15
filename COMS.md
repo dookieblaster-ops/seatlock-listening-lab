@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/c-note-mt-71c7` → merge to `main`. Level 3. Owner go-ahead for C-Note with passive vs ASR.
+- **Context:** `main` (merged from `cursor/c-note-mt-71c7`). Level 3. Owner go-ahead for C-Note with passive vs ASR.
 
 **Done this session:** (1) Catalog `dayton-nd25fw-4` (sheet + maker DATS Q + VCdia→Sd; FRD from maker package). (2) `designs/imports/c-note/c-note-mt.seatlock.json`: kit box/port/passive schematic (R1/C1/L2/C2/C3 tweeter; L1/C4 woofer). (3) ASR CTA-2034 in `asr/cea2034.json` (CC BY-NC-SA). (4) Tests `c_note`: sim OK, bass/treble split, shape vs ASR (mid 2.06 dB / treble 2.62 dB RMS; lab bass ~2.7 dB lower relative to midband).
 
@@ -59,7 +59,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** do not digitize FR graphs. Do not undo Q12. ND25FW sheet omits Q/Sd — Q from maker DATS in the package; Sd from VCdia (noted). ASR curves are relative; kit F3 ads are absolute. When `passive` is set, digital blocks are ignored.
 
-**Next step:** merge this branch to `main`, then passive listen/editor/optimize or CTA-2034 preference score.
+**Next step:** passive listen/editor/optimize, or CTA-2034 preference score.
 
 ### 2026-11-15 — Cursor — Handoff: start here. Passive crossover for graphs and scores
 
