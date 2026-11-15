@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-15 (C-Note MT vs ASR)
+Updated: 2026-11-15 (handoff: passive listen next)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -66,8 +66,8 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
-0. Wall vibration remainder: real PLA/TPU damping figures (imported-cabinet walls, MDF/plywood, braces, partitions done 2026-11-15).
-0p. Passive crossover follow-ups: listen-mode filters from the network; page editor for the netlist; optimize R/L/C toward a score (C-Note MT vs ASR done 2026-11-15).
+0p. **Next:** passive listen-mode from the network (`listen_package` / impulses); then page netlist editor; then optimize R/L/C toward a score. (Graphs/scores + C-Note MT vs ASR done 2026-11-15.)
+0. Wall vibration remainder: real PLA/TPU damping figures (imported flats, MDF/plywood, braces, partitions done 2026-11-15).
 1. Research plan (README 2.6): CTA-2034 preference score; multi-source generator hardening; BEM; larger budget woofers; browser speed; non-box page fields.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -95,6 +95,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-15, Cursor cloud: imported mesh cabinets vibrate. `cabinet_walls` for `mesh` finds air AABB, measures face thickness through the solid, reuses chamber-face plates; sand-filled imported vs box worst 0.06 dB. `imported` 7 passed; `walls` 10 passed. fmt; clippy `-D warnings` on sim tests.
 - 2026-11-15, Cursor cloud: passive crossover. `seatlock_acoustics::passive` MNA for R/L/C + driver loads; `dsp.passive` in the design; simulate uses network voltages instead of digital crossover blocks. Unit tests 3 passed; `seatlock-sim --test passive` 2 passed. fmt; clippy `-D warnings`. TS bindings regenerated.
 - 2026-11-15, Cursor cloud: C-Note MT kit copy. Catalog `dayton-nd25fw-4` + FRD; design `c-note-mt` with kit passive netlist; ASR `cea2034.json`; tests `c_note` 3 passed. Against ASR: mid RMS 2.06 dB, treble 2.62 dB, bass-mid lab −6.3 vs ASR −3.6. Volume 8.82 L. fmt; clippy on touched crates.
+- 2026-11-15, Cursor cloud: handoff board refreshed. `COMS.md` / `docs/new-chat.md` / STATUS next steps / README §7: next work is passive listen-mode; C-Note and passive graphs marked done.
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
 - 2026-11-10, Cursor's shelf fix: at the 95 dB target sealed-test under `baffle` keeps a 2.0 dB shelf. CHK-E2E-1 moved from bass limit 125 Hz, evenness 7.4 dB, clean level 83 dB to 113 Hz, 7.4 dB, 83 dB. A test-only 80 dB target keeps a shelf of at least 3 dB and improves evenness.

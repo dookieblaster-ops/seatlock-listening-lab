@@ -45,84 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. C-Note MT vs ASR
+### 2026-11-15 — Cursor — Handoff: start here. Passive listen-mode next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (merged from `cursor/c-note-mt-71c7`). Level 3. Owner go-ahead for C-Note with passive vs ASR.
+- **Context:** `main`. Level 3. C-Note MT vs ASR and `dsp.passive` graphs are on `main`. Owner said **Go** after that; then asked only to refresh this board (no code change this turn).
 
-**Done this session:** (1) Catalog `dayton-nd25fw-4` (sheet + maker DATS Q + VCdia→Sd; FRD from maker package). (2) `designs/imports/c-note/c-note-mt.seatlock.json`: kit box/port/passive schematic (R1/C1/L2/C2/C3 tweeter; L1/C4 woofer). (3) ASR CTA-2034 in `asr/cea2034.json` (CC BY-NC-SA). (4) Tests `c_note`: sim OK, bass/treble split, shape vs ASR (mid 2.06 dB / treble 2.62 dB RMS; lab bass ~2.7 dB lower relative to midband).
+**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. Passive R/L/C networks drive graphs and scores (`dsp.passive`). Kit copy `designs/imports/c-note/` compares to ASR CTA-2034 (mid/treble ~2 dB RMS after midband align; bass relative gap noted). Listen mode still plays the digital chain when `passive` is set. No page netlist editor; no R/L/C optimizer yet.
 
-**Last check:** `cargo test -p seatlock-sim --test c_note --test responses`: c_note 3, responses 2. `cargo test -p seatlock-acoustics --test checks sourced_drivers`: ok. fmt; clippy `-D warnings` on touched crates. Full `tools/cloud-check.sh` not re-run.
+**Open, in order (do the first without a new owner answer):**
 
-**Open, in order:** (1) Passive follow-ups: listen-mode from network; page netlist editor; optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score as the lab's own; BEM; … (3) Wall remainder: real PLA/TPU damping. (4) Optional: 1/2 in MDF stock; dimensioned C-Note baffle; inductor DCR; shrink LCM self-check.
+1. **Passive listen-mode:** turn each radiator's passive transfer `H(f)` (network voltage / amp) into the listen impulse / convolver path (`listen_package` / `impulse_responses` in `seatlock-sim`), so Play hears the kit network, not empty digital blocks. Label when loads are frozen at sim Z. Check with C-Note or the first-order two-way fixture.
+2. **Passive page editor** for the netlist (add/edit R/L/C/driver nodes).
+3. **Optimize R/L/C** toward a score (Level 3 optimizer track).
+4. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
+5. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
+6. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
 
-**Pitfalls:** do not digitize FR graphs. Do not undo Q12. ND25FW sheet omits Q/Sd — Q from maker DATS in the package; Sd from VCdia (noted). ASR curves are relative; kit F3 ads are absolute. When `passive` is set, digital blocks are ignored.
+**Owner questions waiting (ask only when they start to matter):** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone). Q11 and Q12 answered — do not re-ask. Do not undo Q12. Do not digitize FR graphs.
 
-**Next step:** passive listen/editor/optimize, or CTA-2034 preference score.
+**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. ND25FW Q from maker DATS in the FRD package; Sd from VCdia (sheet N/A). ASR curves are relative; kit F3 ads are absolute. Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
 
-### 2026-11-15 — Cursor — Handoff: start here. Passive crossover for graphs and scores
+**Last check (C-Note stretch):** `c_note` 3, `responses` 2, `sourced_drivers` ok; fmt; clippy on touched crates. Full `tools/cloud-check.sh` not re-run.
 
-- **To:** next lead session (Claude or Cursor)
-- **Status:** handoff
-- **Context:** `main`. Level 3. Owner go-ahead: passive crossovers for simulation and (later) optimization; interest in C-Note MT vs real measurements.
-
-**Done this session:** (1) `dsp.passive` R/L/C netlist from one amp to driver loads; MNA solve with each driver's terminal Z (box included); voltages drive radiators instead of digital crossover blocks. (2) README 7 + product wording; closed-form R / LR / CR checks; sim direct-wire match and first-order two-way split. (3) Listen mode still digital; no page editor yet; no R/L/C optimizer yet.
-
-**Last check:** `cargo test -p seatlock-acoustics --lib passive`: 3 passed. `cargo test -p seatlock-sim --test passive`: 2 passed. fmt; clippy `-D warnings` on core/acoustics/sim. TS bindings regenerated. Full `tools/cloud-check.sh` not re-run.
-
-**Open, in order:** superseded by the C-Note handoff above.
-
-**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. When `passive` is set, digital blocks on radiators are ignored (label says so). Amp is an ideal voltage source. No mutual inductance / transformer models yet.
-
-**Next step:** superseded by the C-Note handoff above.
-
-### 2026-11-15 — Cursor — Handoff: start here. Imported-cabinet walls vibrate
-
-- **To:** next lead session (Claude or Cursor)
-- **Status:** handoff
-- **Context:** `main`. Level 3. Continued standing queue item 0.
-
-**Done this session:** (1) Imported `mesh` cabinets: air AABB from the solid, each axis-aligned outer face a plate with thickness measured through the plastic, layers from `build.material` / `build.wall`. (2) Sand-filled imported `sealed-test` matches the same parametric box within 0.06 dB; six faces; fidelity says walls vibrate. (3) README 5.11 / Level 3 C / open-items updated. Curved/slanted skin and per-part wall materials still out.
-
-**Last check:** `cargo test -p seatlock-sim --test walls --test imported`: walls 10 passed; imported 7 passed. fmt; clippy `-D warnings` on sim tests. Full `tools/cloud-check.sh` not re-run.
-
-**Open, in order:** (1) Standing queue: real PLA/TPU damping figures (tap test / DMA — do not invent). (2) Research plan: CTA-2034 preference score; BEM; multi-source generator; larger woofers; browser speed; non-box fields. (3) Optional: shrink LCM 3D self-check ~25 %; partition coupling in the waveguide tree; per-part materials for imported wall stacks.
-
-**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Do not invent PLA/TPU loss factors. Mesh walls are axis-aligned flats only. Waveguide + partitions → lumped only. Walls off in engine default and in `correction_plan` on purpose.
-
-**Next step:** superseded by the passive-crossover handoff above.
-
-### 2026-11-15 — Cursor — Handoff: start here. Fresh lead session (Level 3)
-
-- **To:** next lead session (Claude or Cursor)
-- **Status:** handoff
-- **Context:** `main` at `5128556`. Level 3. Wall-vibration track advanced; research-plan and Level 3 remainder still open. Older COMS threads are in `docs/coms-archive.md`. Owner paste for a new chat: `docs/new-chat.md`.
-
-**Where the product stands (one screen):** Level 0–2 complete. Level 3 in progress: room, exterior 3D, DML panels, folded lines, generator (incl. multi-way), imports (3MF/STL), novel materials, wall vibration for printed cabinets (solid / filled / two-filament), divided cabinets, foam-board / MDF / plywood sheet boxes, tube end caps, **braces**, and **partitions**. LCM import + Erin CTA-2034 curves + TEBM independent data + Q12 acoustic level scale + 3D self-check ~25 %; leftover bass-mid tilt **placed** (not trimmed). Laptop: `./start.sh` runs; `./check.sh` not run there.
-
-**Done on 2026-11-15 (Cursor cloud, this stretch):** MDF/plywood density & stiffness (Wood Handbook Table 12-1); LCM tilt cause placed; braces (`min_m`/`max_m`) take air/print/FDTD and split wall spans; partitions as solid plates with mutual Y in the lumped network (waveguide falls back when partitions active).
-
-**Open, in order (do the first you can without a new owner answer):**
-
-1. **Wall vibration remainder:** imported-cabinet walls; real damping figures for PLA and TPU cores (tap test / DMA — do not invent).
-2. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; generator for any number of sources (already partly there — harden); boundary-element exterior joined to the driver network; larger budget woofers; browser speed; page fields for non-box cabinets.
-3. **Inside-shaping earn more:** folded line / ported box, listener-through-baffle objective, real 3D losses so the assumed loss can go.
-4. **Fast 3D leftovers:** smaller exterior block (one-way boundary); WebGPU on the owner's laptop (integrated graphics only).
-5. **Level 3 physics held for Fable if still available:** losses in the 3D model; 3D wave views; room mapping (STATUS Q8).
-6. **Optional:** shrink LCM 3D self-check ~25 % further; partition coupling inside the waveguide tree (today: lumped only).
-
-**Owner questions waiting (ask only when they start to matter):** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone). Q11 and Q12 are answered — do not re-ask. Do not undo Q12. Do not digitize Erin's FR graphs.
-
-**Pitfalls:** Wood Handbook already used for MDF/plywood — do not invent stock figures. Brace cuts near a plate edge are ignored (sliver guard). Partition stack is solid print material, not the outer wall build. Waveguide + partitions → quick network. Imported mesh cabinets still rigid walls. Cloud check: `tools/cloud-check.sh` (Playwright Chromium install on Cursor if `/opt/pw-browsers` missing). Stable Rust ~1.100; do not edit catalog/Rust while that script embeds the catalog. Walls off in engine default and in `correction_plan` on purpose.
-
-**Last check (this stretch):** targeted `walls` / `network` / `lcm` / `independent` / `imported` tests + fmt + clippy `-D warnings` on touched crates. Full `tools/cloud-check.sh` not re-run on the latest commits — run it after a large change or before claiming Level 3 milestones.
-
-**Next step:** queue item 1 (imported-cabinet walls) or item 2 (CTA-2034 preference score). Prefer product-visible sound/score work over cleanup. Superseded by the handoff above.
+**Next step:** item 1 — passive listen-mode from the network.
 
 ## Resolved
 
-- 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; listen/optimize/C-Note follow.
+- 2026-11-15: C-Note MT kit copy with `dsp.passive` vs ASR CTA-2034 (mid/treble ~2 dB RMS), done on `main` by Cursor (PR #11).
+- 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; listen/editor/optimize still open.
 - 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on `main` by Cursor.
 - 2026-11-15: Board archived to `docs/coms-archive.md` for a fresh lead session; handoff package in `docs/new-chat.md`.
 - 2026-11-15: Partitions between chambers vibrate (mutual admittance in lumped network), done on `main` by Cursor.

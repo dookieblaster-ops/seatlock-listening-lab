@@ -26,6 +26,17 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 `AGENTS.md` loads those three for Claude Code automatically.
 
+## Current queue (2026-11-15)
+
+After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
+
+1. Passive **listen-mode** from `dsp.passive` (fold network `H(f)` into listen impulses)
+2. Passive page netlist editor
+3. Optimize R/L/C toward a score
+4. Then research-plan / walls / optional cleanup (see `COMS.md`)
+
+Already on `main`: `dsp.passive` for graphs and scores; C-Note MT kit copy vs ASR (`designs/imports/c-note/`).
+
 ## What “done” looks like for a lead turn
 
 - Work the first open queue item in the newest COMS handoff
