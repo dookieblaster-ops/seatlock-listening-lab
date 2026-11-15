@@ -21,19 +21,29 @@ pub struct PlacedWall {
     pub patches: Vec<SourcePatch>,
 }
 
+/// A plate between two chambers, pushed by their pressure difference (README 5.11). It does
+/// not radiate outside; it only couples the air network.
+pub struct Partition {
+    pub chamber_a: usize,
+    pub chamber_b: usize,
+    pub panel: WallPanel,
+    pub thickness_m: f64,
+}
+
 pub struct CabinetWalls {
     pub walls: Vec<PlacedWall>,
+    pub partitions: Vec<Partition>,
     /// Lines for the fidelity label.
     pub notes: Vec<String>,
 }
 
 impl CabinetWalls {
-    /// Outward volume velocity of all walls together per pascal inside.
+    /// Outward volume velocity of all outer walls together per pascal inside.
     pub fn admittance(&self, freq_hz: f64) -> Complex64 {
         self.walls.iter().map(|w| w.panel.admittance(freq_hz)).sum()
     }
 
-    /// Outward volume velocity of every element per pascal inside, walls in order.
+    /// Outward volume velocity of every outer-wall element per pascal inside, walls in order.
     pub fn element_admittances(&self, freq_hz: f64) -> Vec<Complex64> {
         self.walls
             .iter()
@@ -48,13 +58,22 @@ impl CabinetWalls {
             .collect()
     }
 
-    /// Outward volume velocity of one chamber's walls per pascal in that chamber.
+    /// Outward volume velocity of one chamber's outer walls per pascal in that chamber.
     pub fn chamber_admittance(&self, chamber: usize, freq_hz: f64) -> Complex64 {
         self.walls
             .iter()
             .filter(|w| w.chamber == chamber)
             .map(|w| w.panel.admittance(freq_hz))
             .sum()
+    }
+
+    /// Partition links `(chamber_a, chamber_b, Y)` for the lumped network: volume velocity
+    /// from `a` into `b` per pascal of `(P_a - P_b)`.
+    pub fn partition_admittances(&self, freq_hz: f64) -> Vec<(usize, usize, Complex64)> {
+        self.partitions
+            .iter()
+            .map(|p| (p.chamber_a, p.chamber_b, p.panel.admittance(freq_hz)))
+            .collect()
     }
 
     /// For every element, in the order of [`CabinetWalls::patches`], its chamber.
@@ -65,11 +84,12 @@ impl CabinetWalls {
             .collect()
     }
 
-    /// The lowest wall resonance, in Hz.
+    /// The lowest wall or partition resonance, in Hz.
     pub fn first_resonance_hz(&self) -> f64 {
         self.walls
             .iter()
             .map(|w| w.panel.first_resonance_hz())
+            .chain(self.partitions.iter().map(|p| p.panel.first_resonance_hz()))
             .fold(f64::INFINITY, f64::min)
     }
 }
@@ -693,7 +713,11 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
         notes
             .push("Walls that are not rectangles are taken as rectangles of the same area.".into());
     }
-    Ok(CabinetWalls { walls, notes })
+    Ok(CabinetWalls {
+        walls,
+        partitions: Vec::new(),
+        notes,
+    })
 }
 
 /// Surfaces that carry a sound source other than a cone (a panel speaker): their walls are
@@ -717,16 +741,23 @@ fn covered_surfaces(design: &DesignFile) -> Vec<String> {
         .collect()
 }
 
-/// How far the plastic reaches from `from` along `direction` before the outside air, if it
-/// does so within `limit_m`; `None` when another chamber's air or more plastic comes first.
-fn distance_to_outside(
+enum FaceBeyond {
+    Outside(f64),
+    /// Neighbor chamber index and the plastic thickness to its face.
+    Partition(usize, f64),
+    Held,
+}
+
+/// What the ray from a chamber face hits within `limit_m`: the outside, another chamber
+/// (a partition), or neither (thicker plastic / open air that is not a chamber).
+fn face_beyond(
     outer: &dyn OuterShape,
     chambers: &[crate::chambers::Chamber],
     own: usize,
     from: [f64; 3],
     direction: [f64; 3],
     limit_m: f64,
-) -> Option<f64> {
+) -> FaceBeyond {
     let step = 2.5e-4;
     let mut t = step;
     while t <= limit_m {
@@ -736,23 +767,24 @@ fn distance_to_outside(
             from[2] + t * direction[2],
         ];
         if !outer.contains_cabinet(p).unwrap_or(true) {
-            return Some(t);
+            return FaceBeyond::Outside(t);
         }
-        if chambers
+        if let Some((i, _)) = chambers
             .iter()
             .enumerate()
-            .any(|(i, c)| i != own && c.contains(p))
+            .find(|(i, c)| *i != own && c.contains(p))
         {
-            return None;
+            return FaceBeyond::Partition(i, t);
         }
         t += step;
     }
-    None
+    FaceBeyond::Held
 }
 
 /// The walls of a cabinet divided into chambers (README 5.11): each face of a chamber that
 /// lies against the cabinet's outer wall is a plate over that face, pushed by that chamber's
-/// pressure. Faces against partitions or thicker plastic are held still.
+/// pressure. Faces against another chamber are partitions (two-sided plates); faces against
+/// thicker plastic are held still.
 pub fn chamber_walls(
     design: &DesignFile,
     outer: &dyn OuterShape,
@@ -779,9 +811,13 @@ pub fn chamber_walls(
         .map(|p| p.braces)
         .unwrap_or_default();
     let covered = covered_surfaces(design);
+    let infill = design.build.infill_fraction.clamp(0.0, 1.0);
     let mut walls = Vec::new();
+    let mut partitions = Vec::new();
     let mut held = 0usize;
     let mut braces_used = 0usize;
+    // Partition pairs already made (lower chamber index, higher), so each plate is once.
+    let mut seen_partitions = std::collections::HashSet::<(usize, usize)>::new();
     for (index, chamber) in chambers.iter().enumerate() {
         for axis in 0..3 {
             for high in [false, true] {
@@ -801,9 +837,8 @@ pub fn chamber_walls(
                 };
                 let width = chamber.max_m[u_axis] - chamber.min_m[u_axis];
                 let height = chamber.max_m[v_axis] - chamber.min_m[v_axis];
-                // The middle and four points halfway to the corners must all reach the
-                // outside through no more than a wall and a half of plastic.
-                let mut reach = Vec::new();
+                // Probe the middle and four points halfway to the corners.
+                let mut probes = Vec::new();
                 for (du, dv) in [
                     (0.0, 0.0),
                     (-0.25, -0.25),
@@ -814,7 +849,7 @@ pub fn chamber_walls(
                     let mut p = centre;
                     p[u_axis] += du * width;
                     p[v_axis] += dv * height;
-                    reach.push(distance_to_outside(
+                    probes.push(face_beyond(
                         outer,
                         chambers,
                         index,
@@ -823,70 +858,119 @@ pub fn chamber_walls(
                         1.5 * wall_m + 1e-6,
                     ));
                 }
-                let Some(thickness) = reach
+                let all_outside = probes.iter().all(|p| matches!(p, FaceBeyond::Outside(_)));
+                let all_partition = probes
                     .iter()
-                    .copied()
-                    .collect::<Option<Vec<f64>>>()
-                    .map(|all| all[0])
-                else {
-                    held += 1;
-                    continue;
-                };
-                let surface = outer
-                    .surface_facing(outward)
-                    .unwrap_or_else(|| format!("chamber {} side", chamber.id));
-                if covered.contains(&surface) {
-                    notes.push(format!(
-                        "The {surface} wall carries a panel speaker and is held still."
-                    ));
+                    .all(|p| matches!(p, FaceBeyond::Partition(_, _)));
+                if all_outside {
+                    let FaceBeyond::Outside(thickness) = probes[0] else {
+                        unreachable!()
+                    };
+                    let surface = outer
+                        .surface_facing(outward)
+                        .unwrap_or_else(|| format!("chamber {} side", chamber.id));
+                    if covered.contains(&surface) {
+                        notes.push(format!(
+                            "The {surface} wall carries a panel speaker and is held still."
+                        ));
+                        continue;
+                    }
+                    let (span_w, span_h) = (width + wall_m, height + wall_m);
+                    if span_w <= wall_m || span_h <= wall_m {
+                        continue;
+                    }
+                    let skin = [
+                        centre[0] + thickness * outward[0],
+                        centre[1] + thickness * outward[1],
+                        centre[2] + thickness * outward[2],
+                    ];
+                    let mut along = [0.0; 3];
+                    along[u_axis] = 1.0;
+                    let mut across = [0.0; 3];
+                    across[v_axis] = 1.0;
+                    let (tiles, used) = wall_tiles(
+                        span_w, span_h, &braces, skin, outward, along, across, wall_m,
+                    );
+                    braces_used += used;
+                    for tile in tiles {
+                        let panel = WallPanel::new(tile.width, tile.height, &stack)?;
+                        let area = panel.element_area_m2();
+                        let patches = panel
+                            .element_centers_m()
+                            .iter()
+                            .map(|[x, y]| {
+                                let (x, y) = (x + tile.mid_u, y + tile.mid_v);
+                                SourcePatch {
+                                    position_m: [
+                                        skin[0] + x * along[0] + y * across[0],
+                                        skin[1] + x * along[1] + y * across[1],
+                                        skin[2] + x * along[2] + y * across[2],
+                                    ],
+                                    outward,
+                                    area_m2: area,
+                                }
+                            })
+                            .collect();
+                        walls.push(PlacedWall {
+                            surface: surface.clone(),
+                            chamber: index,
+                            panel,
+                            patches,
+                        });
+                    }
                     continue;
                 }
-                // The plate spans between the middles of the walls and partitions around it.
-                let (span_w, span_h) = (width + wall_m, height + wall_m);
-                if span_w <= wall_m || span_h <= wall_m {
-                    continue;
-                }
-                // Skin centre for radiation (outer face), while brace attachment uses the
-                // chamber face as centre (inner face of the wall).
-                let skin = [
-                    centre[0] + thickness * outward[0],
-                    centre[1] + thickness * outward[1],
-                    centre[2] + thickness * outward[2],
-                ];
-                let mut along = [0.0; 3];
-                along[u_axis] = 1.0;
-                let mut across = [0.0; 3];
-                across[v_axis] = 1.0;
-                let (tiles, used) = wall_tiles(
-                    span_w, span_h, &braces, skin, outward, along, across, wall_m,
-                );
-                braces_used += used;
-                for tile in tiles {
-                    let panel = WallPanel::new(tile.width, tile.height, &stack)?;
-                    let area = panel.element_area_m2();
-                    let patches = panel
-                        .element_centers_m()
+                if all_partition {
+                    let FaceBeyond::Partition(other, thickness) = probes[0] else {
+                        unreachable!()
+                    };
+                    let same_other = probes
                         .iter()
-                        .map(|[x, y]| {
-                            let (x, y) = (x + tile.mid_u, y + tile.mid_v);
-                            SourcePatch {
-                                position_m: [
-                                    skin[0] + x * along[0] + y * across[0],
-                                    skin[1] + x * along[1] + y * across[1],
-                                    skin[2] + x * along[2] + y * across[2],
-                                ],
-                                outward,
-                                area_m2: area,
-                            }
-                        })
-                        .collect();
-                    walls.push(PlacedWall {
-                        surface: surface.clone(),
-                        chamber: index,
+                        .all(|p| matches!(p, FaceBeyond::Partition(o, _) if *o == other));
+                    if !same_other || thickness <= 0.0 {
+                        held += 1;
+                        continue;
+                    }
+                    let key = if index < other {
+                        (index, other)
+                    } else {
+                        (other, index)
+                    };
+                    if !seen_partitions.insert(key) {
+                        continue;
+                    }
+                    let neighbor = &chambers[other];
+                    // Overlap of the two chamber faces in the plane of the partition.
+                    let u0 = chamber.min_m[u_axis].max(neighbor.min_m[u_axis]);
+                    let u1 = chamber.max_m[u_axis].min(neighbor.max_m[u_axis]);
+                    let v0 = chamber.min_m[v_axis].max(neighbor.min_m[v_axis]);
+                    let v1 = chamber.max_m[v_axis].min(neighbor.max_m[v_axis]);
+                    let span_w = u1 - u0;
+                    let span_h = v1 - v0;
+                    if span_w <= thickness || span_h <= thickness {
+                        held += 1;
+                        continue;
+                    }
+                    // The solid between chambers is printed plastic, not the outer wall build.
+                    let mut part_notes = Vec::new();
+                    let layer =
+                        printed_layer(&design.build.material, thickness, infill, &mut part_notes)?;
+                    if layer.youngs_pa <= 0.0 {
+                        held += 1;
+                        continue;
+                    }
+                    notes.extend(part_notes);
+                    let part_stack = WallStack::from_layers(std::slice::from_ref(&layer))?;
+                    let panel = WallPanel::new(span_w, span_h, &part_stack)?;
+                    partitions.push(Partition {
+                        chamber_a: key.0,
+                        chamber_b: key.1,
                         panel,
-                        patches,
+                        thickness_m: thickness,
                     });
+                    continue;
                 }
+                held += 1;
             }
         }
     }
@@ -896,29 +980,42 @@ pub fn chamber_walls(
     let first = walls
         .iter()
         .map(|w| w.panel.first_resonance_hz())
+        .chain(partitions.iter().map(|p| p.panel.first_resonance_hz()))
         .fold(f64::INFINITY, f64::min);
     let resolved = walls
         .iter()
         .map(|w| w.panel.resolved_up_to_hz)
+        .chain(partitions.iter().map(|p| p.panel.resolved_up_to_hz))
         .fold(f64::INFINITY, f64::min);
     let names: Vec<&str> = layers.iter().map(|l| l.name.as_str()).collect();
     notes.insert(
         0,
         format!(
-            "Walls vibrate: {} walls of {} ({:.1} kg/m2) over {} chambers, each a plate with \
-             supported edges over its chamber's side, pushed by that chamber's mean pressure; \
-             the lowest wall resonance is {first:.0} Hz, and wall resonances above {resolved:.0} \
-             Hz are left out.",
+            "Walls vibrate: {} outer walls of {} ({:.1} kg/m2) over {} chambers, each a plate \
+             with supported edges over its chamber's side, pushed by that chamber's mean \
+             pressure; the lowest wall resonance is {first:.0} Hz, and wall resonances above \
+             {resolved:.0} Hz are left out.",
             walls.len(),
             names.join(" / "),
             stack.mass_per_area,
             chambers.len()
         ),
     );
+    if !partitions.is_empty() {
+        let part_first = partitions
+            .iter()
+            .map(|p| p.panel.first_resonance_hz())
+            .fold(f64::INFINITY, f64::min);
+        notes.push(format!(
+            "{} partition(s) between chambers vibrate as solid printed plates pushed by the \
+             pressure difference (lowest partition resonance {part_first:.0} Hz); they couple \
+             the air network and do not radiate outside.",
+            partitions.len()
+        ));
+    }
     if held > 0 {
         notes.push(format!(
-            "{held} chamber sides lie against partitions or thicker plastic and are held still \
-             (partitions between two chambers do not vibrate in this model)."
+            "{held} chamber sides lie against thicker plastic and are held still."
         ));
     }
     if braces_used > 0 {
@@ -932,5 +1029,9 @@ pub fn chamber_walls(
          curved skin does not vibrate in this model."
             .into(),
     );
-    Ok(CabinetWalls { walls, notes })
+    Ok(CabinetWalls {
+        walls,
+        partitions,
+        notes,
+    })
 }

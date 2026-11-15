@@ -1,7 +1,7 @@
 //! The several-chamber `lumped` network against closed-form circuits (README 5.3, 6.2).
 
 use num_complex::Complex64;
-use seatlock_acoustics::network::{lumped_network, Duct};
+use seatlock_acoustics::network::{lumped_network, lumped_network_with_walls, Duct};
 use seatlock_acoustics::{vented_sample, PortSpec};
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
@@ -67,6 +67,42 @@ fn two_chambers_joined_by_a_duct_match_the_circuit() {
     let low = lumped_network(&[va, vb], &[duct], 0, 1.0).z_ab;
     let one = 1.0 / (Complex64::new(0.0, 2.0 * PI) * compliance(va + vb));
     assert!((low - one).norm() / one.norm() < 1e-3);
+}
+
+#[test]
+fn a_partition_spring_couples_two_sealed_chambers() {
+    // No duct: a spring partition of compliance Cp between A and B. Drive A:
+    // Pa = (Yb + Y) / ((Ya + Y)(Yb + Y) - Y^2), Y = jωCp.
+    let (va, vb, cp) = (0.005, 0.008, 2.0e-8);
+    for freq in [5.0, 20.0, 80.0] {
+        let w = 2.0 * PI * freq;
+        let j = Complex64::new(0.0, 1.0);
+        let ya = j * w * compliance(va);
+        let yb = j * w * compliance(vb);
+        let y = j * w * cp;
+        let expected = (yb + y) / ((ya + y) * (yb + y) - y * y);
+        let got = lumped_network_with_walls(&[va, vb], &[], 0, freq, &[], &[(0, 1, y)]).z_ab;
+        assert!(
+            (got - expected).norm() / expected.norm() < 1e-10,
+            "{freq} Hz: {got} against {expected}"
+        );
+        // Rigid partition (Y = 0) leaves B unmoved and A alone.
+        let alone = lumped_network(&[va, vb], &[], 0, freq);
+        let rigid = lumped_network_with_walls(
+            &[va, vb],
+            &[],
+            0,
+            freq,
+            &[],
+            &[(0, 1, Complex64::new(0.0, 0.0))],
+        );
+        assert!((alone.z_ab - 1.0 / ya).norm() / alone.z_ab.norm() < 1e-10);
+        assert!((rigid.z_ab - alone.z_ab).norm() < 1e-12);
+        assert!(
+            (got - alone.z_ab).norm() > 1e-6 * alone.z_ab.norm(),
+            "partition must change the load"
+        );
+    }
 }
 
 #[test]

@@ -31,17 +31,20 @@ pub fn lumped_network(
     driver: usize,
     freq_hz: f64,
 ) -> NetworkSample {
-    lumped_network_with_walls(volumes_m3, ducts, driver, freq_hz, &[])
+    lumped_network_with_walls(volumes_m3, ducts, driver, freq_hz, &[], &[])
 }
 
-/// [`lumped_network`] with each chamber's walls a shunt: `walls[i]` is the outward volume
-/// velocity of chamber `i`'s walls per pascal inside (README 5.11); missing entries are rigid.
+/// [`lumped_network`] with each chamber's outer walls a shunt and partitions as mutual
+/// admittances: `walls[i]` is the outward volume velocity of chamber `i`'s outer walls per
+/// pascal inside; each `partitions` entry `(a, b, Y)` is volume velocity from `a` into `b`
+/// per pascal of `(P_a - P_b)` (README 5.11). Missing wall entries are rigid.
 pub fn lumped_network_with_walls(
     volumes_m3: &[f64],
     ducts: &[Duct],
     driver: usize,
     freq_hz: f64,
     walls: &[Complex64],
+    partitions: &[(usize, usize, Complex64)],
 ) -> NetworkSample {
     let n = volumes_m3.len();
     let omega = 2.0 * PI * freq_hz.max(1e-6);
@@ -50,6 +53,15 @@ pub fn lumped_network_with_walls(
     for (i, volume) in volumes_m3.iter().enumerate() {
         matrix[i][i] += Complex64::new(0.0, omega * volume / (RHO0 * C0 * C0));
         matrix[i][i] += walls.get(i).copied().unwrap_or_default();
+    }
+    for &(a, b, y) in partitions {
+        if a >= n || b >= n || a == b {
+            continue;
+        }
+        matrix[a][a] += y;
+        matrix[b][b] += y;
+        matrix[a][b] -= y;
+        matrix[b][a] -= y;
     }
     let impedance = |duct: &Duct| {
         Complex64::new(

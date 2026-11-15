@@ -439,24 +439,33 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
         Some(Ok(net)) => {
-            let wall_y: Vec<Vec<Complex64>> = if request.walls {
+            let empty_walls = vec![Vec::new(); freqs.len()];
+            let empty_parts = vec![Vec::new(); freqs.len()];
+            let (wall_y, part_y) = if request.walls {
                 let modeled = walls::chamber_walls(design, outer.as_ref(), &net.chambers);
-                let y = match &modeled {
-                    Ok(cabinet) => freqs
-                        .iter()
-                        .map(|f| {
-                            (0..net.chambers.len())
-                                .map(|c| cabinet.chamber_admittance(c, *f))
-                                .collect()
-                        })
-                        .collect(),
-                    Err(_) => vec![Vec::new(); freqs.len()],
+                let (y, p) = match &modeled {
+                    Ok(cabinet) => (
+                        freqs
+                            .iter()
+                            .map(|f| {
+                                (0..net.chambers.len())
+                                    .map(|c| cabinet.chamber_admittance(c, *f))
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>(),
+                        freqs
+                            .iter()
+                            .map(|f| cabinet.partition_admittances(*f))
+                            .collect::<Vec<_>>(),
+                    ),
+                    Err(_) => (empty_walls.clone(), empty_parts.clone()),
                 };
                 chamber_cabinet = Some(modeled);
-                y
+                (y, p)
             } else {
-                vec![Vec::new(); freqs.len()]
+                (empty_walls, empty_parts)
             };
+            let partitions_active = part_y.iter().any(|p| !p.is_empty());
             // The load each chamber a driver pushes into presents: the first driver's first,
             // then any other chamber a driver pushes into (README 5.2). Chambers that are not
             // joined by a duct do not affect each other, so each is exact on its own.
@@ -471,6 +480,7 @@ pub fn simulate_with_progress(
                         node,
                         *freq,
                         &wall_y[bin],
+                        &part_y[bin],
                     );
                     pressures.push(solved.pressures.clone());
                     let mut sample = seatlock_acoustics::VentedSample {
@@ -487,7 +497,9 @@ pub fn simulate_with_progress(
                     samples.push(sample);
                 }
                 let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
-                let wave = if base == "waveguide" {
+                // Partition mutual admittance needs the nodal matrix; the waveguide tree
+                // cannot carry it, so keep the lumped solve when partitions vibrate.
+                let wave = if base == "waveguide" && !partitions_active {
                     Some(chambers::waveguide_network(
                         design,
                         &names,
@@ -498,6 +510,14 @@ pub fn simulate_with_progress(
                 } else {
                     None
                 };
+                if partitions_active && base == "waveguide" && notes {
+                    fidelity.ignored.push(
+                        "Partition vibration is solved with the quick network (each duct one air \
+                         mass), because the detailed tree cannot couple two chambers through a \
+                         plate."
+                            .into(),
+                    );
+                }
                 match wave {
                     Some(Ok(network)) => {
                         for (bin, freq) in freqs.iter().enumerate() {
@@ -535,7 +555,7 @@ pub fn simulate_with_progress(
                              compliance and each duct one air mass."
                         ));
                     }
-                    None if notes => fidelity.ignored.push(
+                    None if notes && !partitions_active => fidelity.ignored.push(
                         "Several chambers: each is one compliance and each duct one air mass, \
                          so standing waves and pipe resonances are not modeled."
                             .into(),

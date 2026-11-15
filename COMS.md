@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Partitions vibrate between chambers
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued standing queue item 0.
+
+**Done this session:** (1) Chamber faces against another chamber are `Partition` plates (solid print material of the gap thickness) driven by `(P_a - P_b)`. (2) Mutual admittance in `lumped_network_with_walls`; waveguide falls back to the quick network when partitions are active (label says so). (3) Partitions do not radiate outside. Tests: network spring coupler; two sealed chambers partition ~492 Hz heard (~0.6 dB); `two-chamber` still hears wall build.
+
+**Last check:** `cargo test -p seatlock-acoustics --test network`: 4 passed. `cargo test -p seatlock-sim --test walls`: 10 passed. fmt; clippy `-D warnings` on acoustics+sim tests. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Standing queue: imported-cabinet walls; PLA/TPU real damping figures. (2) Research plan: CTA-2034 preference score; BEM; multi-source generator; larger woofers; browser speed; non-box fields. (3) Optional: shrink LCM 3D self-check ~25 %; partition coupling in the waveguide tree.
+
+**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Partition stack is solid print material, not the outer wall build (sand fill). Waveguide + partitions → lumped only. Imported cabinets still rigid.
+
+**Next step:** imported-cabinet walls, or CTA-2034 preference score.
+
 ### 2026-11-15 — Cursor — Handoff: start here. Braces split wall spans
 
 - **To:** next lead session (Claude or Cursor)

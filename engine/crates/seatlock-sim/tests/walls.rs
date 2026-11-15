@@ -438,11 +438,10 @@ fn a_chamber_that_fills_the_inside_has_the_undivided_cabinets_walls() {
     }
 }
 
-/// Two sealed chambers one above the other, each with its own driver: below the walls'
-/// resonances each chamber's walls are a spring on that chamber alone, so under `point`
-/// radiation the result is the rigid cabinet with each chamber larger by its own walls'
-/// compliance, less the share the walls give back (as in the check above). A driver that
-/// pushed on the other chamber's walls, or a partition that moved, would not match.
+/// Two sealed chambers one above the other, each with its own driver: below the outer walls'
+/// resonances each chamber's outer walls are a spring on that chamber alone. The partition
+/// between them also vibrates (a solid plate); at 10–20 Hz a stiff PLA partition couples the
+/// chambers only slightly, so the outer-wall spring identity still holds within 0.05 dB.
 #[test]
 fn each_chamber_pushes_on_its_own_walls() {
     let base = example("sealed-test");
@@ -474,9 +473,13 @@ fn each_chamber_pushes_on_its_own_walls() {
         .unwrap();
     let chambers = seatlock_sim::chambers::chambers(&file).unwrap();
     let walls = chamber_walls(&file, outer.as_ref(), &chambers).unwrap();
-    // Five sides each; the two sides that face the partition are held still.
+    // Five outer sides each; the shared face is one vibrating partition.
     assert_eq!(walls.walls.len(), 10);
-    assert!(walls.notes.iter().any(|n| n.starts_with("2 chamber sides")));
+    assert_eq!(walls.partitions.len(), 1);
+    assert!(walls
+        .notes
+        .iter()
+        .any(|n| n.contains("partition") && n.contains("vibrate")));
     let omega = 2.0 * PI * 0.5;
     let c_low = (walls.chamber_admittance(0, 0.5) / Complex64::new(0.0, omega)).re;
     let c_high = (walls.chamber_admittance(1, 0.5) / Complex64::new(0.0, omega)).re;
@@ -499,14 +502,79 @@ fn each_chamber_pushes_on_its_own_walls() {
     larger["speaker"]["enclosure"]["chambers"][1]["max_m"][1] = json!(0.172 + delta);
     let give_back = 20.0 * (1.0 - c_low / (c_air + c_low)).log10();
     println!(
-        "each chamber's walls: {:.3} % of its air, give-back {give_back:.4} dB",
-        100.0 * c_low / c_air
+        "each chamber's walls: {:.3} % of its air, give-back {give_back:.4} dB, partition \
+         {:.0} Hz",
+        100.0 * c_low / c_air,
+        walls.partitions[0].panel.first_resonance_hz()
     );
     for freq in [10.0, 20.0] {
         let got = level_at(&value, &with_walls, freq);
         let want = level_at(&larger, &rigid, freq) + give_back;
-        assert!((got - want).abs() < 0.01, "{freq} Hz: {got} against {want}");
+        assert!((got - want).abs() < 0.05, "{freq} Hz: {got} against {want}");
     }
+}
+
+/// The partition between two sealed chambers is heard: near its resonance the level moves
+/// relative to outer walls alone (checked by the partition's own compliance changing Z_ab).
+#[test]
+fn a_partition_between_chambers_vibrates() {
+    let mut value = example("sealed-test");
+    let enclosure = &mut value["speaker"]["enclosure"];
+    enclosure["outer"]["height_m"] = json!(0.492);
+    enclosure["chambers"] = json!([
+        { "id": "low", "min_m": [0.008, 0.008, 0.008], "max_m": [0.152, 0.172, 0.242] },
+        { "id": "high", "min_m": [0.008, 0.008, 0.250], "max_m": [0.152, 0.172, 0.484] }
+    ]);
+    enclosure["mounts"] = json!([
+        { "id": "a", "surface": "front", "at_m": [0.08, 0.125], "rear_into": "low", "recess_m": 0.0 }
+    ]);
+    value["speaker"]["radiators"] =
+        json!([{ "kind": "cone", "driver_id": "test-woofer-a", "mount": "a" }]);
+    let file = design(&value);
+    let registry = builtin();
+    let outer = registry
+        .create_outer(
+            &file.speaker.enclosure.outer.kind,
+            &file.speaker.enclosure.outer.fields,
+        )
+        .unwrap();
+    let chambers = seatlock_sim::chambers::chambers(&file).unwrap();
+    let walls = chamber_walls(&file, outer.as_ref(), &chambers).unwrap();
+    assert_eq!(walls.partitions.len(), 1);
+    let part = &walls.partitions[0];
+    let first = part.panel.first_resonance_hz();
+    assert!(
+        first > 50.0 && first < 5000.0,
+        "partition resonance {first}"
+    );
+    // Soften the partition by asking for a thin solid: rebuild with wall_m still 8 mm gap
+    // but compare Z via simulate — with walls on, fidelity names the partition.
+    let with_walls = SimulateRequest {
+        walls: true,
+        radiation: "point".into(),
+        frequencies_hz: Some(vec![first, first * 0.5, 20.0]),
+        ..SimulateRequest::default()
+    };
+    let result = simulate(&file, &with_walls, &registry);
+    assert!(result
+        .fidelity
+        .ignored
+        .iter()
+        .any(|l| l.contains("partition") && l.contains("vibrate")));
+    // At the partition resonance the two chambers share flow; Z_ab differs from the
+    // outer-wall-only spring (rigid partition) enough to move the on-axis level.
+    let rigid = SimulateRequest {
+        radiation: "point".into(),
+        frequencies_hz: Some(vec![first]),
+        ..SimulateRequest::default()
+    };
+    let soft = level_at(&value, &with_walls, first);
+    let hard = level_at(&value, &rigid, first);
+    println!("partition {first:.0} Hz: walls {soft:.2} dB, rigid {hard:.2} dB");
+    assert!(
+        (soft - hard).abs() > 0.05,
+        "partition should be heard near its resonance: {soft} against {hard}"
+    );
 }
 
 /// A brace bar across the chamber reaches opposite walls, splits those plates, raises the
@@ -596,7 +664,7 @@ fn a_brace_splits_the_walls_it_reaches_and_takes_air() {
     );
 }
 
-/// The `two-chamber` bandpass: both chambers' walls are heard, and its partition is held.
+/// The `two-chamber` bandpass: both chambers' outer walls are heard, and the partition vibrates.
 #[test]
 fn a_divided_cabinet_hears_its_wall_build() {
     let mut value = example("two-chamber");
@@ -620,7 +688,7 @@ fn a_divided_cabinet_hears_its_wall_build() {
             .fidelity
             .ignored
             .iter()
-            .any(|l| l.contains("held still")));
+            .any(|l| l.contains("partition") && l.contains("vibrate")));
     }
     let worst = solid
         .summed_spl_db
