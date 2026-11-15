@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. LCM 3D self-check fixed (249 % → ~25 %)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued queue item 1 from the post below.
+
+**Done this session:** (1) Diagnosed LCM 3D self-check 249 %: moulded `PortSpec` used flared mouth area (14.1 cm²) instead of inertance area (6.74 cm²); self-check also compared to a one-chamber `vented_sample` of bass+tweeter volume. (2) `chambers.rs`: PortSpec uses duct inertance area. (3) `full_3d_enclosure` self-check compares to the detailed model's `Z_ab`. (4) Remeasured at 5 mm release: **24.9 %** (still warns; flare/end corrections). CHK-FDTD-4 still 5.0 %.
+
+**Last check:** `cargo test -p seatlock-sim --test lcm --test independent`: 4+4 passed, 2 ignored. `full_3d` release: 5 passed. Ignored `the_lcms_full_3d_self_check_is_within_reason_at_5mm` passed at 24.9 %. fmt; clippy `-D warnings` on sim tests. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Leftover LCM relative tilt after the BMR level scale (+2.4 dB bass-mid vs Erin's +0.3). (2) Standing queue (MDF/plywood, braces, CTA-2034 score, boundary elements, …). Optional: shrink the remaining ~25 % self-check (finer mouth model, or accept with the warning).
+
+**Pitfalls:** 10 mm grid under-resolves the LCM's 10 mm port slot (FDTD mass ~18× too small); use 5 mm. Do not digitize Erin's FR. Do not undo Q12.
+
+**Next step:** queue item 1 (LCM relative tilt) or standing queue item 0 (MDF/plywood figures).
+
 ### 2026-11-15 — Cursor — Handoff: start here. Q12 yes; BMR level scale in; 3D self-check next
 
 - **To:** next lead session (Claude or Cursor)
@@ -603,6 +619,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-15: LCM 3D self-check 249 % traced to mouth-area PortSpec and total-volume Helmholtz compare; fixed to ~25 % at 5 mm, done on `main` by Cursor.
 - 2026-11-15: STATUS question 12 answered yes; independent acoustic sensitivity scales BMR piston level while Vas keeps compliance, done on `main` by Cursor.
 - 2026-11-14: Erin's LCM CTA-2034 curves kept under CC BY-NC-SA; bass-to-midrange step placed as BMR vs woofer level, done on `main` by Cursor.
 - 2026-11-14: Full check completed on the LCM commit; Clippy for stable 1.100 fixed; cloud-check installs Playwright Chromium on Cursor; hole-marking controls on the page for imported models, done on `main` by Cursor.

@@ -478,8 +478,10 @@ fn build(
             length_eff_m: length + ends,
         };
         if other.is_none() {
+            // Same equivalent area as the duct: vented_sample / the 3D self-check need the
+            // inertance area, not the mouth's face (a flare would understate the air mass).
             ports.push(PortSpec {
-                area_m2: section.area(if from == "outside" { 0.0 } else { 1.0 }, 0.0),
+                area_m2: duct.area_m2,
                 length_eff_m: duct.length_eff_m,
             });
         }
@@ -503,7 +505,7 @@ fn build(
             length_eff_m: length + end_correction_m(r_in, true) + end_correction_m(r_out, false),
         };
         ports.push(PortSpec {
-            area_m2: opening.mouth_area_m2(),
+            area_m2: duct.area_m2,
             length_eff_m: duct.length_eff_m,
         });
         ducts.push(duct);

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-15
+Updated: 2026-11-15 (LCM 3D self-check)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -67,7 +67,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 3. Step 2: a library of 3D-solved parts (bends, steps, chamber corners) stored as scattering matrices that the detailed model chains; then the shape optimizer over line length, folds, taper, chamber, and port (owner request, 2026-11-11).
 4. Losses in the 3D model, the 3D wave views (owner request, 2026-11-10), and room mapping (owner request, 2026-11-11; STATUS question 8).
 5. The panel speaker's open items and the rest of Level 3 (README section 12).
-0b. The LCM comparison: Erin's curves, BMR independent T/S, and acoustic level scale are in (2026-11-15). Next on that track: the 3D self-check's 249 % at low frequency on the LCM; leftover relative bass-mid tilt (+2.4 dB) after the BMR level scale.
+0b. The LCM comparison: Erin's curves, BMR independent T/S, acoustic level scale, and the 3D self-check fix are in (2026-11-15). Self-check was 249 % from a wrong PortSpec area and a one-chamber total-volume compare; now ~25 % at 5 mm (flare/end corrections). Leftover: relative bass-mid tilt (+2.4 dB) after the BMR level scale.
 6. Owner questions waiting: 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone).
 
 ## What has been verified
@@ -79,6 +79,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-14, Erin's LCM CTA-2034 curves (`designs/imports/lcm/erin/cea2034.json`, test `the_lcm_matches_erins_shape_within_known_limits`): on-axis bass-mid Erin +0.30 dB vs lab −2.25 dB; RMS after midband align 4.72 / 1.55 / 2.15 dB below 300 Hz / 0.3–2 kHz / 2–10 kHz; BMR band 2.9 dB above the woofer's. Erin's file f6 33.6 Hz (published 33.7); file f3 36.7 Hz (published summary 38.1).
 - 2026-11-15, Cursor cloud: Erin's TEBM35C10-4 review opened (`erinsaudiocorner.com/driveunits/tectonic-elements-tebm35c10-4-miniature-bmr-driver/`); DATS T/S and acoustic average 77 dB at 2.83 V/1 m copied into `independent` (no FRD; FR PNG only). `with_independent` can replace `sens_db_1w` / `sens_db_2v83` and drops the sibling voltage so the maker's 1 W figure does not override. LCM recheck before Q12: bass-mid −1.18 dB, BMR–woofer +1.9 dB, RMS 4.27 / 1.58 / 2.37 dB.
 - 2026-11-15, Cursor cloud: owner answered STATUS question 12 yes. `sensitivity_level_policy` scales radiated volume velocity to an independent sensitivity that disagrees with Vas; Vas still sets compliance; maker-only disagreement unchanged. LCM after scale: bass-mid +2.40 dB, BMR–woofer −2.1 dB, RMS 4.54 / 1.58 / 2.37 dB. README 5.1 and 9.1 updated. Tests: `independent` 4 passed; `lcm` 3 passed, 1 ignored.
+- 2026-11-15, Cursor cloud: LCM 3D self-check. Cause of 249 %: moulded `PortSpec.area_m2` was the mouth face; self-check rebuilt a one-chamber Helmholtz on total volume. Fix: inertance area for moulded (and tapered) ports; self-check uses the detailed model's `Z_ab`. Remeasured at 5 mm release: 24.9 % (grid 2.608 L, design 2.229 L). CHK-FDTD-4 self-check 5.0 % (was 5.1 %). README 5.5 updated.
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
 - 2026-11-10, Cursor's shelf fix: at the 95 dB target sealed-test under `baffle` keeps a 2.0 dB shelf. CHK-E2E-1 moved from bass limit 125 Hz, evenness 7.4 dB, clean level 83 dB to 113 Hz, 7.4 dB, 83 dB. A test-only 80 dB target keeps a shelf of at least 3 dB and improves evenness.
@@ -205,7 +206,7 @@ The full history is in `docs/status-history.md`. The latest state:
   - Moulded against built, `sealed-test`'s box: detailed model tuning 51.87 Hz both, levels within 0.046 dB to 200 Hz; quick model 51.87 and 51.13 Hz, within 0.29 dB.
   - The LCM (both versions): bass space 1.839 and 1.838 L net of the port (designer 1.85 L), tweeter space 0.390 L (designer 0.4 L), port 543.0 mm (designer about 55 cm), 6.74 cm^2 on average, 14 cm^2 at its flared mouth.
   - Against Erin's measurement (spinorama.org summary): 6 dB down at 35.7 Hz (measured 33.7 Hz) from the level between 300 Hz and 5 kHz. Measured 3 dB down at 38.1 Hz; the lab's level from 40 to 270 Hz is about 3 dB under its 300 Hz to 5 kHz mean, so its 3 dB point is 270 Hz. Not yet placed: the woofer's and BMR's real sensitivities, the BMR above its piston range (no measured file), and the amplifier's per-channel gain are candidates; the measured curves would show which.
-  - Full 3D at 5 mm against the detailed model, `lcm-evo`: within 1.03 dB from 44 to 400 Hz, 2.25 dB from 30 Hz (the 3D model a little lower below the tuning). 487 s natively in a release build. Its low-frequency self-check reads 249 %: below the tuning `Z_ab` is the port's air mass, whose end corrections the quick model only estimates, and the moulded port's mouth flares; not explained further yet.
+  - Full 3D at 5 mm against the detailed model, `lcm-evo`: within 1.03 dB from 44 to 400 Hz, 2.25 dB from 30 Hz (the 3D model a little lower below the tuning). 487 s natively in a release build. Low-frequency self-check was 249 % (2026-11-13): PortSpec used the flared mouth area (14 cm² vs 6.74 cm² inertance) and compared to a one-chamber `vented_sample` of bass+tweeter volume. Fixed 2026-11-15: inertance area in PortSpec; self-check compares to the detailed model's `Z_ab`. Now ~24.9 % at 5 mm (end corrections and flare; still warns above 3 %).
   - Not tried: the LCM in the browser, the page's import of these files (holes are marked in the design file), or the owner's laptop.
   - Fail-first, an older check: `searching_longer_does_not_make_the_best_worse` (generator) failed after the two drivers joined the catalog (8 candidates 3.92, 30 candidates worse). It had held by luck: the share of random candidates was set from the budget, so a longer search did not begin with the shorter one's candidates. Now three of every five are random and two refine, independent of the budget; the property holds by construction (8: 3.924, 30: 3.922).
 

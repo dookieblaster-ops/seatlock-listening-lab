@@ -244,6 +244,77 @@ fn the_lcm_matches_erins_shape_within_known_limits() {
 }
 
 #[test]
+fn the_lcms_moulded_port_self_check_uses_inertance_area() {
+    // The 3D self-check compares Z_ab to vented_sample with PortSpec. A flared mouth's face
+    // is larger than the inertance area; using the mouth understated the air mass and made
+    // the LCM self-check read ~249 %. The network duct already carried the right area.
+    let registry = builtin();
+    let design = load("lcm-evo");
+    let outer = registry
+        .create_outer(
+            &design.speaker.enclosure.outer.kind,
+            &design.speaker.enclosure.outer.fields,
+        )
+        .unwrap();
+    let net = seatlock_sim::chambers::air_network(
+        &design,
+        outer.as_ref(),
+        |part| seatlock_acoustics::cone_displacement_m3(&part.fields).0,
+        |_| true,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(net.ports.len(), 1);
+    let opening = &outer.moulded_openings()[0];
+    let equiv = opening.length_m() / opening.length_over_area();
+    let mouth = opening.mouth_area_m2();
+    assert!(
+        mouth > 1.5 * equiv,
+        "mouth {:.2} cm^2 should exceed average {:.2} cm^2",
+        mouth * 1e4,
+        equiv * 1e4
+    );
+    assert!(
+        (net.ports[0].area_m2 - equiv).abs() / equiv < 0.01,
+        "PortSpec area {:.2} cm^2 vs inertance {:.2} cm^2",
+        net.ports[0].area_m2 * 1e4,
+        equiv * 1e4
+    );
+}
+
+#[test]
+#[ignore = "about 5 minutes in release: 5 mm grid (the 10 mm port slot needs it)"]
+fn the_lcms_full_3d_self_check_is_within_reason_at_5mm() {
+    // Was ~249 %: PortSpec used the flared mouth area, and the self-check compared to a
+    // one-chamber vented_sample of bass+tweeter volume. Now it compares to the detailed
+    // model; end corrections and the flare still leave more than a straight tube's 5 %.
+    let registry = builtin();
+    let design = load("lcm-evo");
+    let r = simulate(
+        &design,
+        &SimulateRequest {
+            enclosure: "fdtd".into(),
+            fdtd_dx_m: Some(0.005),
+            ..everyday()
+        },
+        &registry,
+    );
+    assert!(r.issues.iter().all(|i| i.severity != Severity::Error));
+    let report = r.fdtd.as_ref().expect("fdtd report");
+    let error = report.self_check_error.expect("self-check");
+    eprintln!(
+        "LCM 5 mm self-check {:.1}% (grid {:.3} L, design {:.3} L)",
+        error * 100.0,
+        report.grid_volume_m3 * 1000.0,
+        report.net_volume_m3 * 1000.0
+    );
+    assert!(
+        error < 0.25,
+        "self-check {error} should be well under the old 249 %"
+    );
+}
+
+#[test]
 #[ignore = "about 8 minutes: the 3D grid at 5 mm, which the 10 mm port slot needs"]
 fn the_lcms_full_3d_model_agrees_with_the_detailed_model() {
     let registry = builtin();

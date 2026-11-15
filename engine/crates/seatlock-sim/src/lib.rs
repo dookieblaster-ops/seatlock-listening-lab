@@ -678,7 +678,7 @@ pub fn simulate_with_progress(
             outer.as_ref(),
             &freqs,
             volume,
-            &ports,
+            &z_ab,
             request.fdtd_dx_m.unwrap_or(0.01),
             request.fdtd_full_decay,
             request.losses,
@@ -718,13 +718,13 @@ pub fn simulate_with_progress(
                         let ports_note = if ports.is_empty() {
                             ""
                         } else {
-                            " With ports, part of the difference is the ports' end corrections, \
-                             which the quick model only estimates."
+                            " With ports, part of the difference is the ports' end corrections \
+                             and flares, which the detailed model only estimates."
                         };
                         issues.push(Issue::warning(
                             "fdtd_self_check",
                             format!(
-                                "At low frequency the full 3D air load differs from the quick \
+                                "At low frequency the full 3D air load differs from the detailed \
                                  model by {:.1}% (it should be under 3%). The 3D grid holds \
                                  {:.3} L of air and the design {:.3} L.{ports_note}",
                                 error * 100.0,
@@ -1790,7 +1790,9 @@ fn full_3d_enclosure(
     outer: &dyn OuterShape,
     freqs: &[f64],
     net_volume_m3: f64,
-    ports: &[PortSpec],
+    // Detailed (or quick) model Z_ab: self-check compares the 3D result to this, not to a
+    // one-chamber vented_sample of the total volume (that broke on the LCM).
+    z_ab_reference: &[Complex64],
     dx: f64,
     full_decay: bool,
     losses: bool,
@@ -1872,7 +1874,6 @@ fn full_3d_enclosure(
     let mut z_quick = Vec::new();
     let mut worst: Option<f64> = None;
     let check_below = C0 / (50.0 * built.longest_m.max(dx));
-    let compliance = net_volume_m3 / (RHO0 * C0 * C0);
     let mut cursor = 0usize;
     for (bin, freq) in freqs.iter().enumerate() {
         if *freq > valid {
@@ -1885,13 +1886,12 @@ fn full_3d_enclosure(
                 Complex64::new(response.h_real[port][cursor], response.h_imag[port][cursor]);
         }
         cursor += 1;
-        let quick = if ports.is_empty() {
-            Complex64::new(0.0, -1.0 / (2.0 * std::f64::consts::PI * freq * compliance))
-        } else {
-            vented_sample(net_volume_m3, ports, *freq, false).z_ab
-        };
+        let quick = z_ab_reference
+            .get(bin)
+            .copied()
+            .unwrap_or(Complex64::new(0.0, 0.0));
         z_quick.push(quick);
-        if *freq < check_below {
+        if *freq < check_below && quick.norm() > 0.0 {
             let error = (value - quick).norm() / quick.norm();
             worst = Some(worst.map_or(error, |w: f64| w.max(error)));
         }
