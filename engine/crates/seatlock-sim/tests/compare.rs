@@ -3,7 +3,7 @@
 
 use seatlock_core::catalog;
 use seatlock_sim::builtin;
-use seatlock_sim::compare::{build_methods, cheap_against_reference, score, score_as_is};
+use seatlock_sim::compare::{build_methods, cheap_against_reference, score, score_as_is, Target};
 use seatlock_sim::optimize::{combos, optimize_combo, OptimizeRequest};
 
 fn example(name: &str) -> seatlock_core::DesignFile {
@@ -12,6 +12,47 @@ fn example(name: &str) -> seatlock_core::DesignFile {
         env!("CARGO_MANIFEST_DIR")
     );
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[test]
+fn shortfall_ranks_by_preference_and_clean_level() {
+    // README 11.2: preference deficit + clean-level deficit; bass/evenness live inside preference.
+    let target = Target {
+        preference_min: 5.0,
+        f6_hz_max: 50.0,
+        flatness_db_max: 1.5,
+        max_spl_db_min: 95.0,
+        budget_max: None,
+    };
+    assert!((target.shortfall(Some(5.0), 95.0) - 0.0).abs() < 1e-12);
+    assert!((target.shortfall(Some(4.0), 95.0) - 1.0).abs() < 1e-12);
+    assert!((target.shortfall(Some(5.0), 89.0) - 1.0).abs() < 1e-12);
+    assert!(target.shortfall(Some(6.0), 100.0) == 0.0);
+    assert!(target.shortfall(None, 95.0) >= 10.0);
+}
+
+#[test]
+fn a_scored_design_reports_preference_as_the_ranked_metric() {
+    let registry = builtin();
+    let (as_is, _) = score_as_is(&example("sealed-test"), &registry);
+    let preference = as_is
+        .preference
+        .expect("CTA-2034 preference on every score");
+    assert!(preference.is_finite(), "{preference}");
+    let target = Target {
+        preference_min: 5.0,
+        f6_hz_max: 50.0,
+        flatness_db_max: 1.5,
+        max_spl_db_min: 95.0,
+        budget_max: None,
+    };
+    let expected = target.shortfall(Some(preference), as_is.max_spl_db);
+    assert!(
+        (as_is.shortfall - expected).abs() < 1e-9,
+        "shortfall {} vs preference-based {}",
+        as_is.shortfall,
+        expected
+    );
 }
 
 #[test]

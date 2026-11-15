@@ -693,12 +693,17 @@ fn optimize_passive(
     if let Some(best) = kept.first() {
         let (start_score, _) = score_as_is(design, registry);
         if best.score.shortfall + 1e-9 < start_score.shortfall {
+            let pref = |s: &crate::compare::Score| {
+                s.preference
+                    .map(|p| format!("{p:.2}"))
+                    .unwrap_or_else(|| "—".into())
+            };
             notes.push(format!(
-                "Best shortfall {:.2} (was {:.2}); evenness {:.1} dB (was {:.1} dB).",
+                "Best shortfall {:.2} (was {:.2}); preference {} (was {}).",
                 best.score.shortfall,
                 start_score.shortfall,
-                best.score.flatness_db,
-                start_score.flatness_db
+                pref(&best.score),
+                pref(&start_score)
             ));
         } else {
             notes.push(format!(

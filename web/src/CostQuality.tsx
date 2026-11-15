@@ -13,6 +13,8 @@ export type Score = {
   meets_target: boolean;
   shortfall: number;
   problems: string[];
+  /** Olive preference rating when CTA-2034 curves were formed (README 2.6 / 11.2). */
+  preference?: number | null;
 };
 
 type Variant = { label: string; score: Score; design: unknown; notes: string[] };
@@ -58,8 +60,13 @@ function money(score: Score) {
 }
 
 export function ScoreCells({ score }: { score: Score }) {
+  const preference =
+    score.preference != null && Number.isFinite(score.preference)
+      ? score.preference.toFixed(2)
+      : "—";
   return (
     <>
+      <td>{preference}</td>
       <td>{score.f6_hz.toFixed(0)} Hz</td>
       <td>{score.flatness_db.toFixed(1)} dB</td>
       <td>{score.max_spl_db.toFixed(0)} dB</td>
@@ -72,11 +79,14 @@ export function ScoreCells({ score }: { score: Score }) {
 export const HEADER = (
   <tr>
     <th></th>
+    <th title="Olive preference rating from CTA-2034 curves. Higher is better; the target asks for at least 5.0 by default.">
+      Preference
+    </th>
     <th title="Bass limit: the lowest frequency within 6 dB of the normal level.">Bass limit</th>
     <th title="Evenness: how closely the response follows the target.">Evenness</th>
     <th title="Maximum clean level: the loudest it plays without exceeding a limit, at 1 m.">Clean level</th>
     <th title="Cost of the whole system, from catalog prices.">Cost</th>
-    <th title="Against the quality target; the shortfall adds up how far each number misses.">Target</th>
+    <th title="Against the quality target: preference shortfall plus clean-level shortfall.">Target</th>
     <th></th>
   </tr>
 );
@@ -240,7 +250,11 @@ export function CostQuality({
               // Passive value search leaves the cabinet unchanged; skip the slow full-3D check.
               if (hasPassive) {
                 setVerified(
-                  `Passive board search kept the cabinet fixed. Best evenness ${top.score.flatness_db.toFixed(1)} dB, shortfall ${top.score.shortfall.toFixed(2)}.`,
+                  `Passive board search kept the cabinet fixed. Best preference ${
+                    top.score.preference != null && Number.isFinite(top.score.preference)
+                      ? top.score.preference.toFixed(2)
+                      : "—"
+                  }, shortfall ${top.score.shortfall.toFixed(2)}.`,
                 );
                 setNote("The optimizer finished.");
                 return;

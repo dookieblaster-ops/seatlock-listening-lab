@@ -938,7 +938,7 @@ cost          section 9.2
 
 **The listening window** (as built, Level 3). A speaker is not heard only from straight ahead, so evenness is judged a little off axis too. A request with `listening_window` computes the direct sound at nine points at the listening distance: straight ahead, 10, 20, and 30 degrees to either side, and 10 degrees up and down, and averages them as energy. `flatness_db` is then the worse of two: the evenness of the level straight ahead (in the room, when the design has one) and the evenness of the listening window, each normalized and banded as above. The results give both. Correction still fits the level straight ahead. Under `exterior` radiation the window is left out (each direction would be a 3D run) and the label says so. The page, scores, the optimizer, and the generator ask for it; the engine's default does not. CHK-WIN-1.
 
-**CTA-2034 preference rating** (as built, Level 3). A request with `cta2034` (the page asks for it with the listening window) forms the CTA-2034 early-reflections average (floor, ceiling, front, side, and rear bounce angles under the baffle model), a relative sound-power curve (on-axis level minus the directivity index), and the predicted in-room response (12 % listening window, 44 % early reflections, 44 % sound power, as energy). From those curves it computes Olive's preference rating (AES 6190): `12.69 − 2.49·NBD_ON − 2.99·NBD_PIR − 4.31·LFX + 2.32·SM_PIR`. The page shows the rating and the predicted in-room graph. Scores and the optimizer leave `cta2034` off so candidates stay fast. The existing target shortfall (bass limit, evenness, clean level) still ranks designs until the target itself is redefined around preference. Checked: Olive's published Criton 3TD-X terms recover 4.68; from ASR's Criton CTA-2034 file the lab gets LFX ≈ 42 Hz and preference within a few tenths of 4.68 (resampling details in other pipelines leave a small gap).
+**CTA-2034 preference rating** (as built, Level 3). A request with `cta2034` forms the CTA-2034 early-reflections average (floor, ceiling, front, side, and rear bounce angles under the baffle model), a relative sound-power curve (on-axis level minus the directivity index), and the predicted in-room response (12 % listening window, 44 % early reflections, 44 % sound power, as energy). From those curves it computes Olive's preference rating (AES 6190): `12.69 − 2.49·NBD_ON − 2.99·NBD_PIR − 4.31·LFX + 2.32·SM_PIR`. The page asks for it with the listening window and shows the rating and the predicted in-room graph. Scores, the optimizer, and the generator also ask for it: preference is the ranked quality score (section 11.2). Checked: Olive's published Criton 3TD-X terms recover 4.68; from ASR's Criton CTA-2034 file the lab gets LFX ≈ 42 Hz and preference within a few tenths of 4.68 (resampling details in other pipelines leave a small gap).
 
 From Level 3 the results also include sound power, a directivity index, and, when the design has a room, the in-room response of section 5.10. A design with a room is scored on its in-room response, using the target's tilt. A design without one is scored on its direct response.
 
@@ -948,16 +948,21 @@ A target is a set of thresholds in `targets/`. A design meets the target when it
 
 ```jsonc
 // targets/hifi-default.json
-{ "f6_hz_max": 50, "flatness_db_max": 1.5, "max_spl_db_min": 95, "budget_max": null }
+{
+  "preference_min": 5.0,
+  "f6_hz_max": 50,
+  "flatness_db_max": 1.5,
+  "max_spl_db_min": 95,
+  "budget_max": null
+}
 ```
 
-The owner confirmed these numbers on 2026-11-11.
+`preference_min` is the Olive preference floor (AES 6190; higher is better; published kit scores are often about 2 to 7). Default 5.0 — a solid hi-fi bar; change the target file to raise or lower it. `f6_hz_max` and `flatness_db_max` stay for correction and reporting; bass and evenness already feed preference (LFX, NBD, SM). `max_spl_db_min` stays in the shortfall because loudness is not in Olive's formula. The owner confirmed the older bass / evenness / level numbers on 2026-11-11; preference as the ranked score followed on 2026-11-15.
 
 Among designs that meet the target, the cheaper one is better. Among designs that miss it, the one with the smaller shortfall is better:
 
 ```
-shortfall = max(0, log2(f6_hz / f6_hz_max))
-          + max(0, flatness_db - flatness_db_max) / 1.5
+shortfall = max(0, preference_min - preference)
           + max(0, max_spl_db_min - max_spl_db) / 6
 ```
 
@@ -1033,7 +1038,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - F: FIR blocks and linear-phase crossovers, with latency shown.
 - G: C5, C6, C7, C10.
 - H: audible limit behavior and the room estimate in the virtual speaker.
-- I: the generator of section 11.4, for any number of sound sources; the CTA-2034 curves and Olive preference rating (reported on every listening-window run; using preference as the ranked target score is still open); optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
+- I: the generator of section 11.4, for any number of sound sources; the CTA-2034 curves and Olive preference rating as the ranked target score (plus clean level); optimizer chooses drivers, build method, and stock materials from the catalog as well as geometry and DSP; the where-the-money-matters view of section 9.2; finalists verified with `fdtd`; designs with a room scored on the in-room response.
 - End to end, CHK-E2E-3: the example design `folded-line` runs in all three enclosure models, and the report lists what each model ignored. The example design `rear-panel`, a rear-facing DML panel on an outer shape that is not a box, runs with `exterior` radiation and the `simple` room, and its in-room response differs from its direct response.
 
 **Level 4, closing the loop with real speakers.** Import measurements (FRD and ZMA text files, impulse responses), fit the model to a measured impedance curve, C9, C8, export for the owner's chosen playback hardware, STEP files and stock-sheet parts for imported speakers, and panels that open into a cabinet chamber. Plan this level with the owner when Level 3 is done.

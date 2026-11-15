@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. Preference-as-target next
+### 2026-11-15 — Cursor — Handoff: start here. BEM / woofers / speed next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/preference-as-target-e85b` (stacks on CTA PR #13 → passive #12). Level 3.
+
+**Done this session:** Preference is the ranked quality score. Targets carry `preference_min` (default 5.0). Shortfall = preference deficit + clean-level deficit. Scores, optimizer, and generator ask for `cta2034`. Cost table shows Preference first. Passive tune still improves (9.87 → 7.54). Prior: CTA report (PR #13), passive R/L/C (PR #12).
+
+**Open, in order:** (1) BEM; larger budget woofers; browser speed (preference scoring is slower); non-box page fields; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` in `targets/hifi-default.json`.
+
+**Pitfalls:** Every scored candidate runs CTA early reflections (~46 directions) — cost-quality and generate e2e need long timeouts. Do not invent damping. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `compare` 7 passed; passive optimize passed; clippy `-D warnings` on sim. Full `tools/cloud-check.sh` running / pending on this branch.
+
+**Next step:** item 1 — BEM, larger woofers, or browser speed (preference path is the new bottleneck).
+
+### 2026-11-15 — Cursor — Handoff: preference-as-target next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

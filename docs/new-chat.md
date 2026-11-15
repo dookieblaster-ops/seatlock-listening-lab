@@ -30,10 +30,10 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. **Preference as ranked target** (or BEM / larger woofers / browser speed — see `COMS.md`)
+1. **BEM / larger budget woofers / browser speed** (preference scoring is slower — see `COMS.md`)
 2. Then real PLA/TPU damping / Criton leftovers if a source appears
 
-Already on `main` / open PRs: passive R/L/C tune; CTA-2034 Olive preference reported on listening-window runs; C-Note MT and Criton 3TD-X kit copies vs ASR.
+Already done / open PRs: passive R/L/C tune (#12); CTA-2034 preference report (#13); preference as ranked target (this branch); C-Note MT and Criton 3TD-X kit copies vs ASR.
 
 ## What “done” looks like for a lead turn
 

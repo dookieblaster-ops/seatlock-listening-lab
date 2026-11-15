@@ -34,8 +34,7 @@ pub struct Score {
     pub interior_volume_m3: Option<f64>,
     /// Problems that make the score meaningless (a driver that cannot be simulated, say).
     pub problems: Vec<String>,
-    /// Olive preference rating when CTA-2034 curves were formed (README 2.6); not yet the
-    /// ranking objective.
+    /// Olive preference rating from CTA-2034 curves (README 2.6); the ranking objective.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preference: Option<f64>,
 }
@@ -43,7 +42,11 @@ pub struct Score {
 /// The target's thresholds (README section 11.2).
 #[derive(Debug, Clone, Copy)]
 pub struct Target {
+    /// Minimum Olive preference rating (higher is better).
+    pub preference_min: f64,
+    /// Kept for correction and reporting; not part of the ranked shortfall.
     pub f6_hz_max: f64,
+    /// Kept for correction and reporting; not part of the ranked shortfall.
     pub flatness_db_max: f64,
     pub max_spl_db_min: f64,
     pub budget_max: Option<f64>,
@@ -55,6 +58,7 @@ impl Target {
         let number =
             |key: &str, default: f64| record.get(key).and_then(Value::as_f64).unwrap_or(default);
         Target {
+            preference_min: number("preference_min", 5.0),
             f6_hz_max: number("f6_hz_max", 50.0),
             flatness_db_max: number("flatness_db_max", 1.5),
             max_spl_db_min: number("max_spl_db_min", 95.0),
@@ -62,23 +66,19 @@ impl Target {
         }
     }
 
-    pub fn shortfall(&self, f6_hz: f64, flatness_db: f64, max_spl_db: f64) -> f64 {
-        let f6 = if f6_hz.is_finite() && f6_hz > 0.0 {
-            (f6_hz / self.f6_hz_max).log2().max(0.0)
-        } else {
-            10.0
-        };
-        let flat = if flatness_db.is_finite() {
-            (flatness_db - self.flatness_db_max).max(0.0) / 1.5
-        } else {
-            10.0
+    /// Shortfall for ranking (README 11.2): preference deficit plus clean-level deficit.
+    /// Bass and evenness are already inside Olive's preference (LFX, NBD, SM).
+    pub fn shortfall(&self, preference: Option<f64>, max_spl_db: f64) -> f64 {
+        let pref = match preference {
+            Some(p) if p.is_finite() => (self.preference_min - p).max(0.0),
+            _ => 10.0,
         };
         let spl = if max_spl_db.is_finite() {
             (self.max_spl_db_min - max_spl_db).max(0.0) / 6.0
         } else {
             10.0
         };
-        f6 + flat + spl
+        pref + spl
     }
 }
 
@@ -119,6 +119,8 @@ fn request() -> SimulateRequest {
         radiation: RADIATION.to_string(),
         space: SPACE.to_string(),
         listening_window: true,
+        // Preference is the ranked score (README 11.1 / 2.6); CTA-2034 curves are required.
+        cta2034: true,
         losses: true,
         walls: true,
         ..SimulateRequest::default()
@@ -129,7 +131,11 @@ fn request() -> SimulateRequest {
 pub fn score_as_is(design: &DesignFile, registry: &Registry) -> (Score, SimulateResult) {
     let result = simulate(design, &request(), registry);
     let target = Target::of(design);
-    let shortfall = target.shortfall(result.f6_hz, result.flatness_db, result.max_spl_metric_db);
+    let preference = result
+        .cta2034
+        .as_ref()
+        .map(|report| report.score.preference);
+    let shortfall = target.shortfall(preference, result.max_spl_metric_db);
     let over_budget = target
         .budget_max
         .is_some_and(|budget| result.cost.known_total_usd > budget);
@@ -150,10 +156,7 @@ pub fn score_as_is(design: &DesignFile, registry: &Registry) -> (Score, Simulate
         shortfall,
         interior_volume_m3: result.interior_volume_m3,
         problems,
-        preference: result
-            .cta2034
-            .as_ref()
-            .map(|report| report.score.preference),
+        preference,
     };
     (score, result)
 }
