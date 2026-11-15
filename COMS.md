@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Research plan or real damping next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (via PR). Level 3. Passive R/L/C value search is in.
+
+**Done this session:** Optimize R/L/C toward a score. When a design has `dsp.passive`, the cost panel shows "Tune the passive board": Nelder–Mead on R/L/C values only (cabinet and wiring fixed, no digital correction). Mis-tuned first-order two-way shortfall 8.34 → 5.66 in 40 evals, seed-repeatable. README §7 / §11.3 / §12 F / §14 updated.
+
+**Open, in order:** (1) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed, non-box page fields. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears: 0.47 µF nodes, port flare, lining resistivity, maker FRD. (4) Optional: price R/L/C parts in the cost model; lock inductor DCR resistors out of the search.
+
+**Pitfalls:** Passive search uses `score_as_is` (correction filters are ignored under a passive board). Boards with many parts (Criton ~18) need more evals; the page asks for 60. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `tools/cloud-check.sh` passed (engine 232, browser 41) on stable 1.100.
+
+**Next step:** item 1 — research plan (README 2.6), or item 2 if the owner prefers walls.
+
 ### 2026-11-15 — Cursor — Handoff: start here. Optimize passive R/L/C next
 
 - **To:** next lead session (Claude or Cursor)
@@ -88,6 +104,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-15: Passive R/L/C value optimizer ("Tune the passive board"), done by Cursor (PR on branch). Mis-tuned first-order shortfall 8.34 → 5.66.
 - 2026-11-15: CSS Criton 3TD-X kit copy vs ASR CTA-2034 (mid/treble ~2 dB RMS; bass relatively high), done on `main` by Cursor. Skyline skipped for lack of a Klippel measurement.
 - 2026-11-15: Any number of vents, add-a-driver on the page, Play up to 16 drivers; three Dayton mounting drawings filled in. Laptop check skipped. Done on `main` by Cursor.
 - 2026-11-15: Passive page netlist editor (ohm / mH / µF), done on `main` by Cursor.

@@ -2,6 +2,11 @@
 //! drivers the user chose. Discrete choices (sealed or vented, crossover slope) are combos;
 //! each combo searches box volume, tuning, crossover frequency, and gains with Nelder-Mead,
 //! correcting and scoring every candidate.
+//!
+//! When the design has a passive R/L/C board (`dsp.passive`), the search keeps the cabinet
+//! and the netlist wiring fixed and varies only the part values toward the score (README
+//! section 7). Digital correction is left out: with a passive board those filters are not
+//! used on the graphs.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -9,7 +14,7 @@ use serde_json::{json, Value};
 use seatlock_core::registry::Registry;
 use seatlock_core::{catalog, DesignFile, C0};
 
-use crate::compare::{rebuild_to, score, Body, Score};
+use crate::compare::{rebuild_to, score, score_as_is, Body, Score};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OptimizeRequest {
@@ -69,7 +74,20 @@ fn multi_way(design: &DesignFile) -> bool {
     design.speaker.radiators.len() > 1
 }
 
+fn has_passive(design: &DesignFile) -> bool {
+    design.dsp.passive.is_some()
+}
+
 pub fn combos(design: &DesignFile) -> Vec<Combo> {
+    // A passive board: only its R/L/C values are searched (cabinet and wiring stay put).
+    if has_passive(design) {
+        return vec![Combo {
+            index: 0,
+            label: "Passive board values".into(),
+            vented: false,
+            crossover_order: None,
+        }];
+    }
     let tube = design.speaker.enclosure.outer.kind == "tube";
     let mut out = Vec::new();
     for vented in [false, true] {
@@ -358,6 +376,347 @@ pub(crate) fn objective(score: &Score) -> f64 {
     }
 }
 
+/// One R, L, or C part in the passive netlist that the value search may change.
+#[derive(Debug, Clone)]
+struct PassivePart {
+    index: usize,
+    kind: char,
+    /// SI value: ohm, henry, or farad.
+    now: f64,
+}
+
+fn passive_parts(passive: &Value) -> Result<Vec<PassivePart>, String> {
+    let elements = passive
+        .get("elements")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "the passive board has no elements list.".to_string())?;
+    let mut parts = Vec::new();
+    for (index, element) in elements.iter().enumerate() {
+        let kind = element
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_ascii_uppercase();
+        let (kind, key) = match kind.as_str() {
+            "R" => ('R', "ohm"),
+            "L" => ('L', "henry"),
+            "C" => ('C', "farad"),
+            _ => continue,
+        };
+        let now = element
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite() && *v > 0.0)
+            .ok_or_else(|| {
+                format!(
+                    "passive part {} ({kind}) needs a positive {key} value.",
+                    index + 1
+                )
+            })?;
+        parts.push(PassivePart { index, kind, now });
+    }
+    if parts.is_empty() {
+        return Err(
+            "the passive board has no R, L, or C parts to tune (only driver loads).".into(),
+        );
+    }
+    Ok(parts)
+}
+
+fn passive_space(parts: &[PassivePart]) -> Space {
+    let mut variables = Vec::new();
+    for part in parts {
+        let (name, low_abs, high_abs) = match part.kind {
+            'R' => (format!("R{} (ohm)", part.index + 1), 0.05, 100.0),
+            'L' => (format!("L{} (mH)", part.index + 1), 1e-5, 0.05),
+            'C' => (format!("C{} (µF)", part.index + 1), 1e-8, 2e-4),
+            _ => unreachable!(),
+        };
+        // Search a factor of four either side of the kit value, clipped to a sane absolute band.
+        let low = (part.now * 0.25).max(low_abs);
+        let high = (part.now * 4.0).min(high_abs).max(low * 1.01);
+        variables.push(Variable {
+            name,
+            low,
+            high,
+            log: true,
+        });
+    }
+    let start: Vec<f64> = parts
+        .iter()
+        .zip(&variables)
+        .map(|(part, variable)| variable.position(part.now))
+        .collect();
+    Space { variables, start }
+}
+
+fn apply_passive_values(
+    base: &DesignFile,
+    parts: &[PassivePart],
+    variables: &[Variable],
+    x: &[f64],
+) -> Result<(DesignFile, Vec<(String, f64)>), String> {
+    let mut design = base.clone();
+    let passive = design
+        .dsp
+        .passive
+        .as_mut()
+        .ok_or_else(|| "the design has no passive board.".to_string())?;
+    let elements = match passive.get_mut("elements") {
+        Some(Value::Array(list)) => list,
+        _ => return Err("the passive board has no elements list.".into()),
+    };
+    let mut named = Vec::new();
+    for ((part, variable), xi) in parts.iter().zip(variables).zip(x) {
+        let value = variable.value(*xi);
+        let element = elements
+            .get_mut(part.index)
+            .ok_or_else(|| format!("passive part {} is missing.", part.index + 1))?;
+        let object = element
+            .as_object_mut()
+            .ok_or_else(|| format!("passive part {} is not an object.", part.index + 1))?;
+        // Clear sibling unit keys so ohm/henry/farad stay unambiguous.
+        object.remove("ohm");
+        object.remove("henry");
+        object.remove("farad");
+        let (key, display) = match part.kind {
+            'R' => ("ohm", value),
+            'L' => ("henry", value * 1000.0),
+            'C' => ("farad", value * 1e6),
+            _ => unreachable!(),
+        };
+        object.insert(key.into(), json!(value));
+        named.push((variable.name.clone(), display));
+    }
+    Ok((design, named))
+}
+
+fn default_passive_evaluations(n_parts: usize) -> usize {
+    // Simplex needs n+1 points; give a few more steps for boards with many parts.
+    (4 * n_parts + 20).clamp(30, 120)
+}
+
+/// Searches R/L/C values of `dsp.passive` toward the target score (cabinet fixed).
+fn optimize_passive(
+    design: &DesignFile,
+    request: &OptimizeRequest,
+    registry: &Registry,
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> Result<ComboResult, String> {
+    let combo = Combo {
+        index: request.combo,
+        label: "Passive board values".into(),
+        vented: false,
+        crossover_order: None,
+    };
+    let passive = design
+        .dsp
+        .passive
+        .as_ref()
+        .ok_or_else(|| "the design has no passive board.".to_string())?;
+    let parts = passive_parts(passive)?;
+    let Space { variables, start } = passive_space(&parts);
+    let mut notes = vec![
+        "Cabinet, drivers, and board wiring stay fixed; only R, L, and C values move.".into(),
+        "Digital correction is not applied: with a passive board those filters are left out \
+         of the graphs."
+            .into(),
+    ];
+    if design.speaker.radiators.iter().any(|part| {
+        part.fields
+            .get("driver_id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id.starts_with("test-"))
+    }) {
+        notes.push("This design uses test drivers, which are not real products.".into());
+    }
+
+    let mut random =
+        SplitMix(request.seed ^ (request.combo as u64 + 1).wrapping_mul(0x5851_F42D_4C95_7F2D));
+    let budget = if request.evaluations == default_evaluations() {
+        default_passive_evaluations(parts.len())
+    } else {
+        request.evaluations.max(parts.len() + 2)
+    };
+
+    let mut points = Vec::new();
+    let mut kept: Vec<Candidate> = Vec::new();
+    let mut count = 0usize;
+    let mut canceled = false;
+    let mut failures: Vec<String> = Vec::new();
+
+    let evaluate = |x: &[f64],
+                    count: &mut usize,
+                    kept: &mut Vec<Candidate>,
+                    points: &mut Vec<Point>,
+                    failures: &mut Vec<String>|
+     -> f64 {
+        *count += 1;
+        match apply_passive_values(design, &parts, &variables, x) {
+            Ok((candidate, named)) => {
+                // score_as_is: correction filters would be ignored under dsp.passive.
+                let (score, _) = score_as_is(&candidate, registry);
+                let value = objective(&score);
+                points.push(Point {
+                    cost_usd: score.cost_usd,
+                    shortfall: score.shortfall,
+                    meets_target: score.meets_target,
+                });
+                let summary = named
+                    .iter()
+                    .take(6)
+                    .map(|(name, value)| format!("{name} {value:.3}"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let summary = if named.len() > 6 {
+                    format!("{summary}, … ({} parts)", named.len())
+                } else {
+                    summary
+                };
+                let close = |other: &Candidate| {
+                    other.variables.iter().zip(&named).all(|((_, a), (_, b))| {
+                        (a - b).abs() <= 0.03 * a.abs().max(b.abs()).max(1.0)
+                    })
+                };
+                if let Some(index) = kept.iter().position(close) {
+                    if objective(&kept[index].score) <= value {
+                        return value;
+                    }
+                    kept.remove(index);
+                }
+                kept.push(Candidate {
+                    combo: combo.index,
+                    summary: format!("{}: {summary}", combo.label),
+                    score,
+                    design: candidate,
+                    variables: named,
+                });
+                kept.sort_by(|a, b| objective(&a.score).total_cmp(&objective(&b.score)));
+                kept.truncate(3);
+                value
+            }
+            Err(error) => {
+                if failures.len() < 3 && !failures.contains(&error) {
+                    failures.push(error);
+                }
+                1e12
+            }
+        }
+    };
+
+    let n = start.len();
+    let mut simplex: Vec<(Vec<f64>, f64)> = Vec::new();
+    let first = start.clone();
+    let value = evaluate(&first, &mut count, &mut kept, &mut points, &mut failures);
+    simplex.push((first, value));
+    for axis in 0..n {
+        let mut x = start.clone();
+        let step = 0.15 + 0.1 * random.next();
+        x[axis] = if x[axis] + step <= 1.0 {
+            x[axis] + step
+        } else {
+            x[axis] - step
+        };
+        let value = evaluate(&x, &mut count, &mut kept, &mut points, &mut failures);
+        simplex.push((x, value));
+        if !progress(count, budget) {
+            canceled = true;
+            break;
+        }
+    }
+    let clamp = |x: Vec<f64>| -> Vec<f64> { x.into_iter().map(|v| v.clamp(0.0, 1.0)).collect() };
+    while !canceled && count < budget {
+        simplex.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let worst = simplex[n].clone();
+        let centroid: Vec<f64> = (0..n)
+            .map(|axis| simplex[..n].iter().map(|(x, _)| x[axis]).sum::<f64>() / n as f64)
+            .collect();
+        let along = |t: f64| -> Vec<f64> {
+            clamp(
+                centroid
+                    .iter()
+                    .zip(&worst.0)
+                    .map(|(c, w)| c + t * (c - w))
+                    .collect(),
+            )
+        };
+        let reflected = along(1.0);
+        let r = evaluate(
+            &reflected,
+            &mut count,
+            &mut kept,
+            &mut points,
+            &mut failures,
+        );
+        if r < simplex[0].1 {
+            let expanded = along(2.0);
+            let e = evaluate(&expanded, &mut count, &mut kept, &mut points, &mut failures);
+            simplex[n] = if e < r { (expanded, e) } else { (reflected, r) };
+        } else if r < simplex[n - 1].1 {
+            simplex[n] = (reflected, r);
+        } else {
+            let contracted = along(-0.5);
+            let c = evaluate(
+                &contracted,
+                &mut count,
+                &mut kept,
+                &mut points,
+                &mut failures,
+            );
+            if c < worst.1 {
+                simplex[n] = (contracted, c);
+            } else {
+                let best = simplex[0].0.clone();
+                for entry in simplex.iter_mut().skip(1) {
+                    let x: Vec<f64> = entry
+                        .0
+                        .iter()
+                        .zip(&best)
+                        .map(|(x, b)| b + 0.5 * (x - b) + 0.02 * (random.next() - 0.5))
+                        .collect();
+                    let x = clamp(x);
+                    let value = evaluate(&x, &mut count, &mut kept, &mut points, &mut failures);
+                    *entry = (x, value);
+                    if count >= budget {
+                        break;
+                    }
+                }
+            }
+        }
+        if !progress(count, budget) {
+            canceled = true;
+        }
+    }
+    for failure in failures {
+        notes.push(format!("Some candidates could not be scored: {failure}"));
+    }
+    if let Some(best) = kept.first() {
+        let (start_score, _) = score_as_is(design, registry);
+        if best.score.shortfall + 1e-9 < start_score.shortfall {
+            notes.push(format!(
+                "Best shortfall {:.2} (was {:.2}); evenness {:.1} dB (was {:.1} dB).",
+                best.score.shortfall,
+                start_score.shortfall,
+                best.score.flatness_db,
+                start_score.flatness_db
+            ));
+        } else {
+            notes.push(format!(
+                "No better shortfall than the starting board ({:.2}).",
+                start_score.shortfall
+            ));
+        }
+    }
+    Ok(ComboResult {
+        combo,
+        points,
+        best: kept,
+        evaluations: count,
+        canceled,
+        notes,
+    })
+}
+
 /// A small, seeded random source, so a run repeats from its seed.
 pub(crate) struct SplitMix(pub(crate) u64);
 
@@ -378,6 +737,9 @@ pub fn optimize_combo(
     registry: &Registry,
     progress: &mut dyn FnMut(usize, usize) -> bool,
 ) -> Result<ComboResult, String> {
+    if has_passive(design) {
+        return optimize_passive(design, request, registry, progress);
+    }
     let all = combos(design);
     let combo = all
         .get(request.combo)

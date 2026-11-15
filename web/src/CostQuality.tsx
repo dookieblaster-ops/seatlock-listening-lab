@@ -102,6 +102,16 @@ export function CostQuality({
     workers.current = [];
   };
 
+  let hasPassive = false;
+  if (text) {
+    try {
+      const parsed = JSON.parse(text) as { dsp?: { passive?: unknown } };
+      hasPassive = parsed.dsp?.passive != null;
+    } catch {
+      hasPassive = false;
+    }
+  }
+
   const ranked = results
     .flatMap((result) => result.best)
     .sort((a, b) => rank(a.score) - rank(b.score))
@@ -167,7 +177,12 @@ export function CostQuality({
         <button
           type="button"
           disabled={!text}
-          title="Searches box volume, port tuning, crossover, and levels for the drivers you chose, sealed and vented, and ranks the results: the cheapest that meets the target first."
+          data-testid="optimize-run"
+          title={
+            hasPassive
+              ? "Keeps the cabinet and board wiring fixed, and searches resistor, inductor, and capacitor values toward the quality target."
+              : "Searches box volume, port tuning, crossover, and levels for the drivers you chose, sealed and vented, and ranks the results: the cheapest that meets the target first."
+          }
           onClick={() => {
             if (!text) {
               return;
@@ -176,7 +191,11 @@ export function CostQuality({
             setResults([]);
             setProgress({});
             setVerified("");
-            setNote("Finding the cheapest design that meets the target…");
+            setNote(
+              hasPassive
+                ? "Tuning the passive board toward the target…"
+                : "Finding the cheapest design that meets the target…",
+            );
             void (async () => {
               const combosJson = await runJob("optimize.combos", { text }, () => {}, workers.current);
               const combos = JSON.parse(combosJson) as Combo[] | { error: string };
@@ -185,11 +204,12 @@ export function CostQuality({
                 return;
               }
               const finished: ComboResult[] = [];
+              const evaluations = hasPassive ? 60 : 30;
               await Promise.all(
                 combos.map((combo) =>
                   runJob(
                     "optimize.combo",
-                    { text, combo: combo.index, seed: 1, evaluations: 30 },
+                    { text, combo: combo.index, seed: 1, evaluations },
                     (done, total) =>
                       setProgress((old) => ({ ...old, [combo.index]: `${combo.label}: ${done} of ${total}` })),
                     workers.current,
@@ -215,6 +235,14 @@ export function CostQuality({
                 .sort((a, b) => rank(a.score) - rank(b.score))[0];
               if (!top) {
                 setNote("The optimizer gave no result.");
+                return;
+              }
+              // Passive value search leaves the cabinet unchanged; skip the slow full-3D check.
+              if (hasPassive) {
+                setVerified(
+                  `Passive board search kept the cabinet fixed. Best evenness ${top.score.flatness_db.toFixed(1)} dB, shortfall ${top.score.shortfall.toFixed(2)}.`,
+                );
+                setNote("The optimizer finished.");
                 return;
               }
               // README 11.3: verify the finalist with the full 3D model and report what changed.
@@ -246,7 +274,7 @@ export function CostQuality({
             })();
           }}
         >
-          Find the cheapest design
+          {hasPassive ? "Tune the passive board" : "Find the cheapest design"}
         </button>
         <button
           type="button"

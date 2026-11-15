@@ -136,7 +136,9 @@ export function PassiveEditor({ value, radiatorCount, onChange }: PassiveEditorP
         <>
           <p data-testid="passive-on-note">
             On: the board sets each driver&apos;s voltage. Digital filters listed on each driver
-            are left out of the graphs and Play; delay, level, and polarity still apply.
+            are left out of the graphs and Play; delay, level, and polarity still apply. On the
+            cost panel, &quot;Tune the passive board&quot; searches these part values toward the
+            quality target.
           </p>
           <div className="grid">
             <label>

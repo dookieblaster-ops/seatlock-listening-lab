@@ -1,5 +1,7 @@
 //! Passive crossover networks in the simulator (README section 7).
 
+use seatlock_sim::compare::score_as_is;
+use seatlock_sim::optimize::{combos, optimize_combo, OptimizeRequest};
 use seatlock_sim::{builtin, listen_package, simulate, SimulateRequest};
 use serde_json::{json, Value};
 
@@ -271,6 +273,69 @@ fn a_series_woofer_pair_and_two_other_drivers_split() {
         "{woofer_a} vs {woofer_b}"
     );
     assert!(woofer_a > tweeter + 6.0, "{woofer_a} vs {tweeter}");
+}
+
+/// A passive board's R/L/C values are searched toward the score; the cabinet stays fixed.
+#[test]
+fn the_passive_optimizer_improves_a_mis_tuned_first_order_board() {
+    let registry = builtin();
+    let mut value = example("two-way-vented");
+    value["dsp"]["per_radiator"][0]["blocks"] = json!([]);
+    value["dsp"]["per_radiator"][1]["blocks"] = json!([]);
+    // Deliberately low corner (~400 Hz on ~6 ohm): a bad split for these drivers.
+    value["dsp"]["passive"] = json!({
+        "source": ["amp", "gnd"],
+        "elements": [
+            { "kind": "L", "a": "amp", "b": "w", "henry": 0.0024 },
+            { "kind": "driver", "a": "w", "b": "gnd", "radiator": 0 },
+            { "kind": "C", "a": "amp", "b": "t", "farad": 66e-6 },
+            { "kind": "driver", "a": "t", "b": "gnd", "radiator": 1 }
+        ]
+    });
+    let design = design(&value);
+    let all = combos(&design);
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].label, "Passive board values");
+    let (start, _) = score_as_is(&design, &registry);
+    let request = OptimizeRequest {
+        seed: 3,
+        combo: 0,
+        evaluations: 40,
+    };
+    let first = optimize_combo(&design, &request, &registry, &mut |_, _| true).unwrap();
+    let again = optimize_combo(&design, &request, &registry, &mut |_, _| true).unwrap();
+    assert_eq!(first.evaluations, again.evaluations);
+    assert_eq!(
+        first.best[0].summary, again.best[0].summary,
+        "the search must repeat from its seed"
+    );
+    let best = &first.best[0].score;
+    println!(
+        "passive optimize: shortfall {:.2} → {:.2}, evenness {:.1} → {:.1} dB, {} evals",
+        start.shortfall, best.shortfall, start.flatness_db, best.flatness_db, first.evaluations
+    );
+    assert!(
+        best.shortfall < start.shortfall - 0.05,
+        "expected a better shortfall: start {} best {}",
+        start.shortfall,
+        best.shortfall
+    );
+    // The opened design still carries a passive board with finite part values.
+    let passive = first.best[0]
+        .design
+        .dsp
+        .passive
+        .as_ref()
+        .expect("passive kept");
+    let elements = passive["elements"].as_array().unwrap();
+    assert!(elements
+        .iter()
+        .any(|e| e["kind"] == "L" && e["henry"].as_f64().unwrap() > 0.0));
+    assert!(elements
+        .iter()
+        .any(|e| e["kind"] == "C" && e["farad"].as_f64().unwrap() > 0.0));
+    let (rescored, _) = score_as_is(&first.best[0].design, &registry);
+    assert!(rescored.problems.is_empty());
 }
 
 /// Level of a pure tone in an impulse, via a one-bin DFT (dB re 1).

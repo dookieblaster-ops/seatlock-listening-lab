@@ -30,10 +30,10 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. **Optimize R/L/C** toward a score
-2. Then research-plan / walls / optional cleanup (see `COMS.md`)
+1. **Research plan** (README 2.6): CTA-2034 preference score, BEM, larger budget woofers, browser speed
+2. Then real PLA/TPU damping / Criton leftovers if a source appears (see `COMS.md`)
 
-Already on `main`: `dsp.passive` for graphs, scores, listen impulses, and the page netlist editor; any number of vents and an add-driver control (Play follows up to 16); C-Note MT kit copy vs ASR (`designs/imports/c-note/`).
+Already on `main` (or the open PR): `dsp.passive` for graphs, scores, listen, editor, and R/L/C value search ("Tune the passive board"); any number of vents and an add-driver control (Play follows up to 16); C-Note MT and Criton 3TD-X kit copies vs ASR.
 
 ## What “done” looks like for a lead turn
 
