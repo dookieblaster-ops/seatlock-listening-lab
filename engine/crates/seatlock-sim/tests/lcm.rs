@@ -224,11 +224,12 @@ fn the_lcm_matches_erins_shape_within_known_limits() {
     assert!((erin_f6 - 33.7).abs() < 0.5, "erin f6 {erin_f6}");
     assert!((erin_f3 - 36.7).abs() < 1.0, "erin f3 from file {erin_f3}");
     assert!(erin_bass.abs() < 1.0, "erin bass-mid {erin_bass}");
-    // After Erin's DATS T/S and his acoustic average (~77 dB at 2.83 V) for the BMR
-    // (owner 2026-11-15), the lab's bass sits above midband (~+2.4 dB vs Erin's +0.3): the
-    // BMR band is about 2 dB below the woofer's. The independent level scale matches that
-    // free-air figure; the leftover relative step is likely the woofer model, baffle, and
-    // that "about 77 dB" being a band average on Erin's test baffle, not a half-space eta0.
+    // Placed 2026-11-15: Erin's free-air scale (~77 dB at 2.83 V vs ~81 dB from his DATS Vas)
+    // pulls the BMR about 4 dB; matching his LCM relative bass-mid (+0.3) would need only
+    // about 1.7 dB. His drive-unit "about 77 dB" is a band average on a test baffle, not
+    // half-space eta0. The Tang Band woofer has no independent acoustic figure (Vas and the
+    // maker's 76 dB/1 W agree within 0.7 dB). Result: bass-mid ~+2.4 dB, BMR band ~2 dB below
+    // the woofer's. Q12 stands; the leftover tilt is that limit.
     assert!(lab_bass > 1.0 && lab_bass < 3.5, "lab bass-mid {lab_bass}");
     assert!(
         (tweeter_band - woofer_band + 2.1).abs() < 1.0,

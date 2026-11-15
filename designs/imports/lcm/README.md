@@ -33,4 +33,4 @@ Cabinet files downloaded 2026-11-13; Erin's curves 2026-11-14.
 
 - The polyfill the build notes put in the tweeter's chamber (the quick and detailed models do not model fill).
 - Wall vibration (imported cabinets keep rigid walls).
-- The BMR's midband level: with Erin's DATS T/S and his acoustic average (~77 dB at 2.83 V) setting the piston level (owner 2026-11-15), the lab's bass sits about 2.4 dB above midband where Erin is near level — the BMR band is about 2 dB below the woofer's. See `erin/README.md`.
+- The BMR's midband level: Erin's free-air ~77 dB scale (owner 2026-11-15) overshoots the LCM's relative balance — about +2.4 dB bass-mid vs his +0.3. Matching his shape would need only ~1.7 dB of BMR pull-down; his drive-unit "about 77 dB" is a baffle band average, and the Tang Band woofer has no independent acoustic figure. See `erin/README.md`.

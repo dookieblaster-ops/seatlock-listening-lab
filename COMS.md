@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. LCM tilt placed; MDF/plywood walls vibrate
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued queue from the post below.
+
+**Done this session:** (1) Diagnosed LCM leftover bass-mid tilt (+2.4 dB vs Erin +0.3): free-air ~77 dB scale is ~4 dB of BMR pull-down; ~1.7 dB would match Erin's relative shape. Placed as baffle band-average sensitivity + no independent Tang Band acoustic figure; Q12 stands. Docs in lcm READMEs and `lcm.rs`. (2) `ultrastock-mdf-3-4` density from Wood Handbook Table 12-1 (700–900); `sandeply-18mm` density and MOE from same. Sheet boxes of both pass the wall spring check.
+
+**Last check:** `cargo test -p seatlock-sim --test walls sheet_box`: 2 passed. `cargo test -p seatlock-sim --test lcm --test independent`: independent 4 passed; lcm 4 passed, 2 ignored. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Standing queue: braces, partitions, imported cabinets, PLA/TPU damping; CTA-2034 preference score; BEM; generator for multi-source; larger woofers; browser speed; non-box fields. (2) Optional: shrink LCM 3D self-check ~25 % further.
+
+**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Do not invent a woofer independent sensitivity without a source. Wood Handbook ch.12 is the density/MOE source already used for MDF/plywood.
+
+**Next step:** standing queue item 0 (braces / partitions / damping) or research-plan item 1 (CTA-2034 score / multi-source generator).
+
 ### 2026-11-15 — Cursor — Handoff: start here. LCM 3D self-check fixed (249 % → ~25 %)
 
 - **To:** next lead session (Claude or Cursor)

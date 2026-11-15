@@ -9,6 +9,14 @@
   "length_m": 2.4384,
   "thickness_m": 0.0180086,
   "density_kg_m3": null,
+  "density_range_kg_m3": [
+    400.0,
+    600.0
+  ],
+  "youngs_modulus_range_pa": [
+    6960000000.0,
+    8550000000.0
+  ],
   "source": {
     "url": "https://www.homedepot.com/p/SANDEPLY-18mm-Sande-Plywood-3-4-in-Category-x-4-ft-x-8-ft-Actual-0-709-in-x-48-in-x-96-in-454559/203414066",
     "title": "Home Depot listing for SANDEPLY 18 mm sande plywood",
@@ -22,5 +30,11 @@
     "url": "https://www.homedepot.com/b/Lumber-Composites-Plywood/Sanded/N-5yc1vZbqm7Z1z1tly8",
     "read_on": "2026-11-10",
     "via": "category listing"
+  },
+  "stiffness_note": "The SANDEPLY listing prints no density or stiffness. Density and bending modulus are the Wood Handbook's typical plywood ranges (Table 12-1: specific gravity 0.4 to 0.6, MOE 6.96 to 8.55 GPa), not a measured figure for this sheet.",
+  "data_source": {
+    "url": "https://research.fs.usda.gov/treesearch/37420",
+    "title": "Wood Handbook, Wood as an Engineering Material, Chapter 12 (FPL-GTR-190): Table 12-1, plywood",
+    "read_on": "2026-11-15"
   }
 }

@@ -339,18 +339,56 @@ fn a_sheet_box_vibrates_when_its_sheet_publishes_stiffness_and_density() {
         larger["speaker"]["enclosure"]["outer"]["depth_m"] =
             json!(depth + volume / ((0.16 - 2.0 * t) * (0.25 - 2.0 * t)));
     });
-    // Plywood publishes neither figure here: rigid, with the reason.
-    value["speaker"]["enclosure"]["outer"]["stock_id"] = json!("sandeply-18mm");
+}
+
+/// MDF and plywood sheet boxes vibrate once the catalog carries density and stiffness
+/// (Wood Handbook Table 12-1 ranges, 2026-11-15).
+#[test]
+fn mdf_and_plywood_sheet_boxes_vibrate() {
+    let registry = builtin();
     let request = SimulateRequest {
         walls: true,
         ..SimulateRequest::default()
     };
-    let result = simulate(&design(&value), &request, &registry);
-    assert!(result
-        .fidelity
-        .ignored
-        .iter()
-        .any(|l| l.contains("no published stiffness or density")));
+    for (stock, thickness) in [
+        ("ultrastock-mdf-3-4", 0.01905_f64),
+        ("sandeply-18mm", 0.0180086_f64),
+    ] {
+        let mut value = example("mdf-box");
+        value["speaker"]["enclosure"]["outer"]["stock_id"] = json!(stock);
+        let file = design(&value);
+        let outer = registry
+            .create_outer(
+                &file.speaker.enclosure.outer.kind,
+                &file.speaker.enclosure.outer.fields,
+            )
+            .unwrap();
+        let walls = cabinet_walls(&file, outer.as_ref()).unwrap();
+        assert_eq!(walls.walls.len(), 6, "{stock}");
+        assert!(
+            walls.notes.iter().any(|n| n.contains("published as a range")),
+            "{stock}: {:?}",
+            walls.notes
+        );
+        let result = simulate(&file, &request, &registry);
+        assert!(
+            result
+                .fidelity
+                .ignored
+                .iter()
+                .all(|l| !l.contains("no published stiffness or density")),
+            "{stock}: {:?}",
+            result.fidelity.ignored
+        );
+        let t = thickness;
+        walls_are_a_spring(&value, |larger, volume| {
+            let depth = larger["speaker"]["enclosure"]["outer"]["depth_m"]
+                .as_f64()
+                .unwrap();
+            larger["speaker"]["enclosure"]["outer"]["depth_m"] =
+                json!(depth + volume / ((0.16 - 2.0 * t) * (0.25 - 2.0 * t)));
+        });
+    }
 }
 
 fn everyday_walls() -> SimulateRequest {

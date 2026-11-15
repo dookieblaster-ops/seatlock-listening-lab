@@ -21,6 +21,6 @@ Against the lab's `lcm-evo` everyday model, after aligning midband means (300 Hz
 
 - Erin's on-axis bass (40 to 270 Hz) is about level with its midband (+0.3 dB).
 - The lab's is about 2.3 dB low there. Midband shape against Erin is within about 1.6 dB RMS; above 2 kHz about 2.2 dB RMS.
-- Bass-to-midrange step (2026-11-15): with Erin's DATS T/S and his acoustic average (~77 dB at 2.83 V) on the BMR (owner yes to STATUS question 12), the lab's on-axis bass-mid is about +2.4 dB vs Erin's +0.3 dB; the BMR band (400 to 2000 Hz) sits about 2.1 dB below the woofer's (80 to 180 Hz). The independent level scale matches that free-air figure; leftover relative tilt is likely the woofer model, baffle, and the band-average nature of "about 77 dB".
+- Bass-to-midrange step (2026-11-15): with Erin's DATS T/S and free-air ~77 dB scale on the BMR (STATUS question 12), lab bass-mid is about +2.4 dB vs Erin's +0.3; the BMR band sits about 2.1 dB below the woofer's. Cause placed: that ~4 dB free-air pull-down is more than the ~1.7 dB the LCM relative shape needs — his drive-unit "about 77 dB" is a test-baffle band average, not half-space η0; the Tang Band W3-1876S has no independent acoustic measurement.
 
 Downloaded 2026-11-14.

@@ -9,6 +9,10 @@
   "length_m": 2.4384,
   "thickness_m": 0.01905,
   "density_kg_m3": null,
+  "density_range_kg_m3": [
+    700.0,
+    900.0
+  ],
   "source": {
     "url": "https://www.homedepot.com/b/Lumber-Composites-Plywood/MDF/N-5yc1vZbqm7Z1z11dmm",
     "title": "Home Depot MDF listing showing the 3/4 in. x 4 ft. x 8 ft. panel",
@@ -28,10 +32,15 @@
     1724000000.0,
     2896000000.0
   ],
-  "stiffness_note": "Georgia-Pacific's UltraStock specification prints minimum panel averages for 1/2 to 3/4 in. panels by grade: MOE from 250 kpsi (Embossing) to 420 kpsi (FR), 313 kpsi for Premium and 405 kpsi for Select. The listing does not say which grade this panel is, so only the range is stored. The specification prints no density.",
+  "stiffness_note": "Georgia-Pacific's UltraStock specification prints minimum panel averages for 1/2 to 3/4 in. panels by grade: MOE from 250 kpsi (Embossing) to 420 kpsi (FR), 313 kpsi for Premium and 405 kpsi for Select. The listing does not say which grade this panel is, so only the range is stored. The specification prints no density; density is the Wood Handbook's typical MDF specific-gravity range (Table 12-1), not a measured figure for this panel.",
   "data_source": {
     "url": "https://www.buildgp.com/wp-content/uploads/2018/11/georgia-pacific-ultrastock-MDF-specifications-pdf-1.pdf",
     "title": "Georgia-Pacific UltraStock MDF Specifications",
     "read_on": "2026-11-10"
+  },
+  "density_source": {
+    "url": "https://research.fs.usda.gov/treesearch/37420",
+    "title": "Wood Handbook, Wood as an Engineering Material, Chapter 12 (FPL-GTR-190): Table 12-1, medium-density fiberboard specific gravity 0.7 to 0.9",
+    "read_on": "2026-11-15"
   }
 }
