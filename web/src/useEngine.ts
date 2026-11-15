@@ -235,6 +235,22 @@ export type SimulateResult = {
     reflection_spl_db: number[];
     diffuse_spl_db: number[];
   } | null;
+  /** CTA-2034 curves and Olive preference rating (README 2.6). */
+  cta2034?: {
+    on_axis_db: number[];
+    listening_window_db: number[];
+    early_reflections_db: number[];
+    sound_power_db: number[];
+    predicted_in_room_db: number[];
+    score: {
+      preference: number;
+      nbd_on: number;
+      nbd_pir: number;
+      sm_pir: number;
+      lfx_hz: number;
+      lfx: number;
+    };
+  } | null;
   error?: string;
 };
 

@@ -34,6 +34,10 @@ pub struct Score {
     pub interior_volume_m3: Option<f64>,
     /// Problems that make the score meaningless (a driver that cannot be simulated, say).
     pub problems: Vec<String>,
+    /// Olive preference rating when CTA-2034 curves were formed (README 2.6); not yet the
+    /// ranking objective.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preference: Option<f64>,
 }
 
 /// The target's thresholds (README section 11.2).
@@ -146,6 +150,10 @@ pub fn score_as_is(design: &DesignFile, registry: &Registry) -> (Score, Simulate
         shortfall,
         interior_volume_m3: result.interior_volume_m3,
         problems,
+        preference: result
+            .cta2034
+            .as_ref()
+            .map(|report| report.score.preference),
     };
     (score, result)
 }

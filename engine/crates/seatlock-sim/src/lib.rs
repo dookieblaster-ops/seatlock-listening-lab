@@ -27,12 +27,14 @@ pub mod exterior;
 pub mod generate;
 pub mod optimize;
 pub mod ports;
+pub mod preference;
 pub mod shape;
 pub mod solids;
 pub mod split;
 pub mod voxels;
 pub mod walls;
 pub use cost::{CabinetParts, CostLine, CostReport};
+pub use preference::{Cta2034Report, PreferenceScore};
 
 pub fn builtin() -> Registry {
     let mut registry = Registry::new();
@@ -182,6 +184,10 @@ pub struct SimulateResult {
     /// The in-room response, when the design has a room (README section 5.10). The score
     /// then comes from it; `summed_spl_db` stays the direct sound.
     pub in_room: Option<InRoomReport>,
+    /// CTA-2034 curves and Olive preference rating (README 2.6, 11.1), when the request
+    /// asked for the listening window and sound power.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cta2034: Option<Cta2034Report>,
 }
 
 /// The sound at the listening position in a room, in dB SPL at each frequency.
@@ -328,6 +334,7 @@ pub fn simulate_with_progress(
         window_flatness_db: None,
         directivity_index_db: None,
         in_room: None,
+        cta2034: None,
     };
 
     let outer = match registry.create_outer(
@@ -1559,7 +1566,9 @@ pub fn simulate_with_progress(
     let mut sound_power_db: Option<Vec<f64>> = None;
     let mut directivity_index_db: Option<Vec<f64>> = None;
     let images = room.images(listener, size);
-    let wants_power = room.needs_sound_power() || request.sound_power;
+    // Sound power (and the directivity index) also feed the CTA-2034 preference rating when
+    // the listening window is asked for (README 2.6).
+    let wants_power = room.needs_sound_power() || request.sound_power || request.listening_window;
     if !prepared.is_empty() && (!images.is_empty() || wants_power) {
         let mut driven: Vec<Vec<Complex64>> = Vec::with_capacity(all_patches.len());
         for (place, item) in prepared.iter().enumerate() {
@@ -1784,6 +1793,80 @@ pub fn simulate_with_progress(
     }
     let flatness_db = window_flatness_db.map_or(axis_flatness_db, |w| w.max(axis_flatness_db));
 
+    // CTA-2034 curves and Olive preference (README 2.6): needs the listening window, sound
+    // power (for DI → relative SP), and early-reflection directions under the baffle model.
+    let mut cta2034: Option<Cta2034Report> = None;
+    if request.listening_window && request.radiation != "exterior" && !prepared.is_empty() {
+        if let (Some(lw), Some(di)) = (&listening_window_db, &directivity_index_db) {
+            let distance = design.speaker.listening.distance_m;
+            let mut energy = vec![0.0; freqs.len()];
+            let mut directions = 0.0;
+            let mut failed = false;
+            for (side_deg, up_deg) in preference::early_reflection_angles_deg() {
+                let (side, up) = (side_deg.to_radians(), up_deg.to_radians());
+                let point = [
+                    reference[0] + distance * side.sin() * up.cos(),
+                    reference[1] - distance * side.cos() * up.cos(),
+                    reference[2] + distance * up.sin(),
+                ];
+                let pressure =
+                    match radiation.transfer(&scene, &all_patches, &freqs, point, &mut *progress) {
+                        Ok(transfer) => {
+                            let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
+                            let mut row = 0;
+                            for (place, item) in prepared.iter().enumerate() {
+                                let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
+                                for source in &item.sources {
+                                    for bin in 0..freqs.len() {
+                                        total[bin] += source[bin]
+                                            * item.blocks_h[bin]
+                                            * (request.voltage_v * sign)
+                                            * transfer.per_source[row][bin];
+                                    }
+                                    row += 1;
+                                }
+                            }
+                            total
+                        }
+                        Err(_) => {
+                            failed = true;
+                            break;
+                        }
+                    };
+                for (sum, value) in energy.iter_mut().zip(&pressure) {
+                    *sum += value.norm_sqr();
+                }
+                directions += 1.0;
+            }
+            if !failed && directions > 0.0 {
+                let early: Vec<f64> = energy
+                    .iter()
+                    .map(|sum| 10.0 * (sum / directions / (P_REF * P_REF)).max(1e-30).log10())
+                    .collect();
+                // Relative sound-power curve: on-axis level minus the directivity index.
+                let sp_curve: Vec<f64> = summed_spl_db
+                    .iter()
+                    .zip(di.iter())
+                    .map(|(on, di)| on - di)
+                    .collect();
+                let report =
+                    preference::cta2034_report(&freqs, &summed_spl_db, lw, &early, &sp_curve);
+                fidelity.ignored.push(format!(
+                    "CTA-2034 preference rating {:.2} (Olive): NBD on-axis {:.2} dB, NBD predicted \
+                     in-room {:.2} dB, smoothness {:.2}, bass extension {:.0} Hz. Early reflections \
+                     average {} baffle directions; sound power is on-axis minus the directivity index.",
+                    report.score.preference,
+                    report.score.nbd_on,
+                    report.score.nbd_pir,
+                    report.score.sm_pir,
+                    report.score.lfx_hz,
+                    preference::early_reflection_angles_deg().len()
+                ));
+                cta2034 = Some(report);
+            }
+        }
+    }
+
     SimulateResult {
         revision: request.revision,
         frequencies_hz: freqs,
@@ -1806,6 +1889,7 @@ pub fn simulate_with_progress(
         window_flatness_db,
         directivity_index_db,
         in_room,
+        cta2034,
     }
 }
 

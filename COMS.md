@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Preference-as-target or BEM / woofers next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/cta2034-preference-e85b` (stacks on passive R/L/C PR). Level 3.
+
+**Done this session:** CTA-2034 / Olive preference rating on every listening-window run (early reflections, relative SP, PIR, score on the page). Criton ASR: LFX 42.5 Hz, preference 4.31 vs published 4.68 (formula with published terms recovers 4.68). Passive shortfall still ranks. Passive R/L/C tune was the prior item (PR #12).
+
+**Open, in order:** (1) Use preference as the ranked score / redefine the target. (2) BEM; larger budget woofers; browser speed; non-box page fields; multi-source generator harden. (3) Real PLA/TPU damping — do not invent. (4) Criton leftovers only if a source appears.
+
+**Pitfalls:** Listening-window sims now also run sound power + ~46 ER directions (slower; sealed-test window ~226 ms natively). Do not invent damping. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `preference` 5 passed; `window` 3 passed; clippy `-D warnings` on sim. Full `tools/cloud-check.sh` pending this branch.
+
+**Next step:** item 1 — preference as the ranked target, or item 2 (BEM / woofers / speed).
+
 ### 2026-11-15 — Cursor — Handoff: start here. Research plan or real damping next
 
 - **To:** next lead session (Claude or Cursor)
@@ -104,6 +120,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-15: CTA-2034 / Olive preference rating on listening-window runs (page + PIR graph), done by Cursor (PR on branch). Criton ASR preference 4.31 vs pub 4.68.
 - 2026-11-15: Passive R/L/C value optimizer ("Tune the passive board"), done by Cursor (PR on branch). Mis-tuned first-order shortfall 8.34 → 5.66.
 - 2026-11-15: CSS Criton 3TD-X kit copy vs ASR CTA-2034 (mid/treble ~2 dB RMS; bass relatively high), done on `main` by Cursor. Skyline skipped for lack of a Klippel measurement.
 - 2026-11-15: Any number of vents, add-a-driver on the page, Play up to 16 drivers; three Dayton mounting drawings filled in. Laptop check skipped. Done on `main` by Cursor.

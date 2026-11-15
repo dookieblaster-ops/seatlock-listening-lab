@@ -1015,6 +1015,17 @@ export default function App() {
               {sim.window_flatness_db.toFixed(1)} dB. The score takes the worse.
             </p>
           ) : null}
+          {sim.cta2034 ? (
+            <p
+              data-testid="preference-score"
+              title="Olive preference rating from CTA-2034 curves (listening window, early reflections, sound power, and the predicted in-room response). Higher is better; published kit scores are often about 2 to 7."
+            >
+              Preference rating {sim.cta2034.score.preference.toFixed(2)} (CTA-2034 / Olive). Bass
+              extension {sim.cta2034.score.lfx_hz.toFixed(0)} Hz. Narrow-band deviation on-axis{" "}
+              {sim.cta2034.score.nbd_on.toFixed(2)} dB, predicted in-room {sim.cta2034.score.nbd_pir.toFixed(2)}{" "}
+              dB. Smoothness {sim.cta2034.score.sm_pir.toFixed(2)}.
+            </p>
+          ) : null}
           <div className="row">
             <button type="button" onClick={() => compareInputRef.current?.click()}>
               Compare with another design
@@ -1183,6 +1194,18 @@ export default function App() {
               overlay={sim.summed_spl_db}
               unit="dB SPL"
               testId="in-room-graph"
+              fidelity={fidelityText(sim.fidelity)}
+            />
+          )}
+          {sim.cta2034 && (
+            <Graph
+              title="Predicted in-room (CTA-2034)"
+              explanation="The CTA-2034 predicted in-room response: 12% listening window, 44% early reflections, and 44% sound power. The level straight ahead is drawn in brown. The preference rating comes from this family of curves."
+              freqs={sim.frequencies_hz}
+              values={sim.cta2034.predicted_in_room_db}
+              overlay={sim.summed_spl_db}
+              unit="dB"
+              testId="cta2034-pir-graph"
               fidelity={fidelityText(sim.fidelity)}
             />
           )}
