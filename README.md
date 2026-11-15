@@ -1,6 +1,6 @@
 # Seatlock Listening Lab
 
-Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a cabinet, both its outer form and its internal geometry, from stock materials, 3D-printed parts, or a mix, sets up a digital crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them. The lab does not only check shapes the user draws: it generates novel and complex cabinets itself, inside and outside, with different components in different positions and facing different ways, and models what each does to the sound (section 2.6).
+Seatlock Listening Lab is a speaker design simulator that runs in the browser: a DIY hi-fi playground. The user picks real, purchasable drivers, shapes a cabinet, both its outer form and its internal geometry, from stock materials, 3D-printed parts, or a mix, sets up a digital or passive crossover and digital correction, and the lab shows and plays what that speaker would do and what it would cost to build. It is a place to try unconventional ideas, such as novel cabinet shapes and rear-facing DML panels, before spending money on them. The lab does not only check shapes the user draws: it generates novel and complex cabinets itself, inside and outside, with different components in different positions and facing different ways, and models what each does to the sound (section 2.6).
 
 The goal is hi-fi sound for the least money. Anyone can build a hi-fi system from expensive components; this lab is for doing it cheaply. Cheap off-the-shelf drivers and materials, digital processing, and printed geometry stand in for expensive drivers, large boxes, and passive crossover parts. Quality components and conventional materials stay in the catalog as a reference, so every cheap design can be compared with a conventional build of the same speaker. The simulator's job is to show which trades work before any money is spent.
 
@@ -83,7 +83,7 @@ music or test signal
 
 A **radiator** is anything that turns one amplifier channel into sound. The first kind is a cone or dome driver mounted in the cabinet, together with the cabinet air behind it: box, ports, lines, and chambers, all taken from the 3D cabinet geometry. Section 5.9 adds DML panels, and section 3.3 keeps the door open for more.
 
-"Digital isolated crossover" means every radiator has its own DSP channel and its own amplifier channel. Radiators are electrically isolated from each other. There are no passive crossover parts between an amplifier and what it drives.
+"Digital isolated crossover" means every radiator has its own DSP channel and its own amplifier channel. Radiators are electrically isolated from each other. That is the default path and the one listen mode and export target. A design may instead use a **passive crossover** (section 7): one amplifier feeds an R/L/C network that splits the signal to the drivers, for kit copies and for users who want to simulate or later optimize a passive board.
 
 ### 2.2 What the user does
 
@@ -781,6 +781,23 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 - Changing a parameter during playback crossfades between old and new settings over about 20 ms.
 - Export for real hardware: for each radiator, a text file of biquad coefficients at a chosen sample rate, and FIR filters as mono WAV files. Hardware-specific formats wait for the owner's choice of playback hardware (`STATUS.md`).
 
+**Passive crossover** (as built, 2026-11-15). A design may set `dsp.passive` to an R/L/C network from one amplifier to the drivers, the way a kit crossover board works. At each frequency the lab solves the network with each driver's own terminal impedance (coil plus the box load) as the load, and that complex voltage drives the radiator in place of a digital crossover block. Gain, delay, and polarity on each radiator still apply. Digital crossover or EQ blocks listed on the radiators are left out of the graphs when `passive` is set, with a label line. Listen mode still plays the digital chain until a later pass turns the passive transfers into filters it can run sample by sample. Optimizing the R/L/C values to chase a score is queued with the Level 3 optimizer.
+
+```jsonc
+"passive": {
+  "source": ["amp", "gnd"],
+  "elements": [
+    { "kind": "L", "a": "amp", "b": "w", "henry": 0.0015 },
+    { "kind": "C", "a": "w", "b": "gnd", "farad": 10e-6 },
+    { "kind": "driver", "a": "w", "b": "gnd", "radiator": 0 },
+    { "kind": "C", "a": "amp", "b": "t", "farad": 3.3e-6 },
+    { "kind": "driver", "a": "t", "b": "gnd", "radiator": 1 }
+  ]
+}
+```
+
+Kinds: `R` (`ohm`), `L` (`henry`), `C` (`farad`), and `driver` (`radiator` index into `speaker.radiators`). Checked against a series resistor into an equal load (half voltage), and against first-order LR low-pass and CR high-pass on a resistive load at the −3 dB frequency.
+
 ## 8. Correction and auto EQ
 
 Purpose: get the most out of cheap hardware and never ask it for more than it can do. Inputs are the simulated response per radiator and summed (later a measured one), the limits of section 5.7, and the target.
@@ -997,7 +1014,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
 - E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, `tube` with printed end caps (a hybrid build), and `sheet_box` cut from sheet stock with a cut list; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
-- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter. CHK-DSP-2.
+- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter; passive R/L/C networks for kit-style crossovers (as built for graphs and scores; listen mode and value search still digital-first). CHK-DSP-2.
 - G: C3 and C4; EQ per radiator and for the whole speaker.
 - H: all radiators playing; A/B between two designs at matched level; live limit indicators.
 - I: optimizer over continuous variables for chosen drivers; cost-against-quality plot; cost beside every score; the cheap-against-reference comparison of section 9.2.

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-15 (imported-cabinet walls)
+Updated: 2026-11-15 (passive crossover)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -43,6 +43,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Braces** (Cursor, 2026-11-15). A `brace` solid (`min_m` / `max_m`) takes air, prints, fills the 3D grid, and splits each wall face it reaches into smaller supported plates. On `sealed-test`, a left–right bar raises the left wall's first resonance from 284 Hz to 571 Hz (cabinet floor 337 Hz from unsplit front/back). README 5.11 and 6.2 updated.
 - **Partitions vibrate** (Cursor, 2026-11-15). Faces between chambers are solid printed plates driven by `(P_a - P_b)` in the lumped network (mutual admittance); they do not radiate outside. Waveguide falls back to the quick network when partitions are active. Two sealed chambers: partition ~492 Hz, heard (~0.6 dB vs rigid at resonance).
 - **Imported-cabinet walls vibrate** (Cursor, 2026-11-15). A mesh cabinet's flat axis-aligned outer walls are plates: air bounds from the solid, thickness measured through the plastic, layers from the design's print material and wall build. Sand-filled imported `sealed-test` matches the same box within 0.06 dB. Curved/slanted skin and per-part wall materials are still left out.
+- **Passive crossover** (Cursor, 2026-11-15, owner go-ahead). A design may set `dsp.passive` to an R/L/C netlist from one amp to the drivers; each driver's voltage comes from the network solved with its own impedance (box load included). Graphs and scores use it; listen mode still plays the digital chain; optimizing part values is queued. Closed-form checks: series R, LR low-pass, CR high-pass; sim: direct wire matches no filter; first-order two-way splits bass/treble.
 - **Level 3 as a whole is not complete.** Done: the room estimate, the outside in 3D, the panel speaker, folded and tapered lines with their editor, and both halves of the Level 3 end-to-end check (the full 3D part of `folded-line` runs on request: it takes minutes). Not started: losses in the 3D model, the 3D wave views, coupled chambers with loops, fill, passive radiators, drivers mounted on ducts, curved outer shapes, FIR filters, corrections C5, C6, C7, and C10, the Level 3 optimizer, real exciters and panel materials in the catalog, and the `folded-line` half of the end-to-end check. The list with details is in the newest handoff in `COMS.md`.
 - **Laptop:** `./start.sh` runs to the end on the owner's Linux Mint laptop (owner, 2026-11-10). `./check.sh` has not been run there.
 - **Agent coordination:** each chat is a session that starts from the newest handoff in `COMS.md` (README section 1.4). The paste for a new chat is in `docs/new-chat.md`. No claude.ai project is needed. Lead sessions may be Claude or Cursor cloud; the newest handoff in `COMS.md` is the source of truth for what to do next. Older COMS threads are in `docs/coms-archive.md`.
@@ -65,6 +66,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
 0. Wall vibration remainder: real PLA/TPU damping figures (imported-cabinet walls, MDF/plywood, braces, partitions done 2026-11-15).
+0p. Passive crossover follow-ups: listen-mode filters from the network; page editor for the netlist; optimize R/L/C toward a score; C-Note MT kit copy vs ASR curves (owner interest 2026-11-15).
 1. Research plan (README 2.6): CTA-2034 preference score; multi-source generator hardening; BEM; larger budget woofers; browser speed; non-box page fields.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -90,6 +92,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-15, Cursor cloud: partitions as two-sided plates. `Partition` in `walls.rs`; mutual Y in `lumped_network_with_walls`; waveguide skips when partitions active. Acoustics network test + `walls` partition test (492 Hz, 0.6 dB). `walls` 10 passed; `network` 4 passed. fmt; clippy `-D warnings`.
 - 2026-11-15, Cursor cloud: fresh-session handoff package. Consolidated "start here" in `COMS.md`; older threads moved to `docs/coms-archive.md`; paste in `docs/new-chat.md`; README 1.4 and Level 3 C updated for Cursor leads, braces, and partitions.
 - 2026-11-15, Cursor cloud: imported mesh cabinets vibrate. `cabinet_walls` for `mesh` finds air AABB, measures face thickness through the solid, reuses chamber-face plates; sand-filled imported vs box worst 0.06 dB. `imported` 7 passed; `walls` 10 passed. fmt; clippy `-D warnings` on sim tests.
+- 2026-11-15, Cursor cloud: passive crossover. `seatlock_acoustics::passive` MNA for R/L/C + driver loads; `dsp.passive` in the design; simulate uses network voltages instead of digital crossover blocks. Unit tests 3 passed; `seatlock-sim --test passive` 2 passed. fmt; clippy `-D warnings`. TS bindings regenerated.
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
 - 2026-11-10, Cursor's shelf fix: at the 95 dB target sealed-test under `baffle` keeps a 2.0 dB shelf. CHK-E2E-1 moved from bass limit 125 Hz, evenness 7.4 dB, clean level 83 dB to 113 Hz, 7.4 dB, 83 dB. A test-only 80 dB target keeps a shelf of at least 3 dB and improves evenness.

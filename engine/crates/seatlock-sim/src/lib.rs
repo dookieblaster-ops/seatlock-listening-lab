@@ -1040,6 +1040,91 @@ pub fn simulate_with_progress(
                 .to_string()
         });
     }
+    // Passive crossover (README section 7): parse now; voltages are filled after each
+    // radiator's impedance is known (below).
+    let passive_net = match &design.dsp.passive {
+        Some(raw) => match seatlock_acoustics::PassiveNetwork::from_value(raw) {
+            Ok(net) => Some(net),
+            Err(err) => {
+                issues.push(Issue::error("bad_passive", err, "dsp.passive"));
+                return fail(issues, fidelity);
+            }
+        },
+        None => None,
+    };
+    // First pass when passive: evaluate every radiator for its terminal impedance.
+    let mut passive_voltages: Option<std::collections::HashMap<usize, Vec<Complex64>>> = None;
+    if let Some(ref net) = passive_net {
+        let mut driver_z: Vec<Vec<Complex64>> = vec![Vec::new(); design.speaker.radiators.len()];
+        for (index, part) in design.speaker.radiators.iter().enumerate() {
+            let Ok(radiator) = registry.create_radiator(&part.kind, &part.fields) else {
+                continue;
+            };
+            let loads_box = radiator.loads_box() && driver_loads_box(part);
+            let node = radiator_nodes.get(index).copied().flatten().unwrap_or(0);
+            let node_z = match other_nodes.iter().find(|(n, _, _)| n + 1 == node) {
+                Some((_, z, _)) => z,
+                None => &z_ab,
+            };
+            let sharing = sharing_counts.get(&node).copied().unwrap_or(1).max(1);
+            let shared_z: Vec<Complex64>;
+            let node_z = if sharing > 1 && loads_box {
+                shared_z = node_z.iter().map(|z| z * sharing as f64).collect();
+                &shared_z
+            } else {
+                node_z
+            };
+            let eval = radiator.evaluate(&freqs, if loads_box { node_z } else { &silent });
+            driver_z[index] = eval.impedance;
+        }
+        let mut by_radiator: std::collections::HashMap<usize, Vec<Complex64>> =
+            std::collections::HashMap::new();
+        let mut amp_z_mid = Complex64::new(0.0, 0.0);
+        let mid = freqs.len() / 2;
+        for (bin, freq) in freqs.iter().enumerate() {
+            let z_row: Vec<Complex64> = (0..design.speaker.radiators.len())
+                .map(|i| {
+                    driver_z
+                        .get(i)
+                        .and_then(|z| z.get(bin))
+                        .copied()
+                        .unwrap_or(Complex64::new(1e9, 0.0))
+                })
+                .collect();
+            let sample = match net.solve(*freq, &z_row) {
+                Ok(sample) => sample,
+                Err(err) => {
+                    issues.push(Issue::error("bad_passive", err, "dsp.passive"));
+                    return fail(issues, fidelity);
+                }
+            };
+            if bin == mid {
+                amp_z_mid = sample.amp_impedance_ohm;
+            }
+            for (radiator, voltage) in sample.voltage {
+                by_radiator
+                    .entry(radiator)
+                    .or_insert_with(|| vec![Complex64::new(0.0, 0.0); freqs.len()])[bin] = voltage;
+            }
+        }
+        fidelity.ignored.push(format!(
+            "Passive crossover: R, L, and C between one amplifier and the drivers set each \
+             driver's voltage from the network and each driver's own impedance; digital \
+             crossover blocks on each radiator are left out. At {:.0} Hz the amplifier sees \
+             about {:.1} ohm.",
+            freqs.get(mid).copied().unwrap_or(1000.0),
+            amp_z_mid.norm()
+        ));
+        if design.dsp.per_radiator.iter().any(|c| !c.blocks.is_empty()) {
+            fidelity.ignored.push(
+                "This design also lists digital filters on the radiators; with a passive \
+                 crossover those blocks are not used on the graphs (gain, delay, and polarity \
+                 still are)."
+                    .into(),
+            );
+        }
+        passive_voltages = Some(by_radiator);
+    }
     let mut prepared: Vec<Prepared> = Vec::new();
     for (index, part) in design.speaker.radiators.iter().enumerate() {
         let radiator = match registry.create_radiator(&part.kind, &part.fields) {
@@ -1073,7 +1158,24 @@ pub fn simulate_with_progress(
         issues.append(&mut eval.warnings);
         let chain = design.dsp.per_radiator.get(index);
         let mut blocks_h = whole.clone();
-        if let Some(chain) = chain {
+        // Passive network voltage across this driver, or digital filter blocks.
+        if let Some(ref voltages) = passive_voltages {
+            if let Some(v) = voltages.get(&index) {
+                multiply_into(&mut blocks_h, v);
+            } else if passive_net.is_some() {
+                issues.push(Issue::warning(
+                    "passive_open",
+                    format!(
+                        "Radiator {index} is not a load in the passive network, so it gets no \
+                         drive from the amplifier."
+                    ),
+                    "dsp.passive",
+                ));
+                for h in &mut blocks_h {
+                    *h = Complex64::new(0.0, 0.0);
+                }
+            }
+        } else if let Some(chain) = chain {
             let extra = chain_response(
                 &chain.blocks,
                 sample_rate,
@@ -1083,6 +1185,8 @@ pub fn simulate_with_progress(
                 &freqs,
             );
             multiply_into(&mut blocks_h, &extra);
+        }
+        if let Some(chain) = chain {
             let samples = (chain.delay_s + geometric_delay_s(design, index)) * sample_rate;
             let whole = samples.floor().max(0.0);
             let fraction = samples - whole;

@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Passive crossover for graphs and scores
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner go-ahead: passive crossovers for simulation and (later) optimization; interest in C-Note MT vs real measurements.
+
+**Done this session:** (1) `dsp.passive` R/L/C netlist from one amp to driver loads; MNA solve with each driver's terminal Z (box included); voltages drive radiators instead of digital crossover blocks. (2) README 7 + product wording; closed-form R / LR / CR checks; sim direct-wire match and first-order two-way split. (3) Listen mode still digital; no page editor yet; no R/L/C optimizer yet.
+
+**Last check:** `cargo test -p seatlock-acoustics --lib passive`: 3 passed. `cargo test -p seatlock-sim --test passive`: 2 passed. fmt; clippy `-D warnings` on core/acoustics/sim. TS bindings regenerated. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) C-Note MT digital copy using `dsp.passive` + ASR CTA-2034 curves (compare). (2) Passive follow-ups: listen-mode from network; page netlist editor; optimize R/L/C toward a score. (3) Research plan: CTA-2034 preference score as the lab's own; BEM; … (4) Wall remainder: real PLA/TPU damping. (5) Optional LCM self-check shrink; waveguide partitions.
+
+**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. When `passive` is set, digital blocks on radiators are ignored (label says so). Amp is an ideal voltage source. No mutual inductance / transformer models yet.
+
+**Next step:** C-Note MT kit copy with passive network vs ASR curves, or CTA-2034 preference score.
+
 ### 2026-11-15 — Cursor — Handoff: start here. Imported-cabinet walls vibrate
 
 - **To:** next lead session (Claude or Cursor)
@@ -59,7 +75,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Do not invent PLA/TPU loss factors. Mesh walls are axis-aligned flats only. Waveguide + partitions → lumped only. Walls off in engine default and in `correction_plan` on purpose.
 
-**Next step:** CTA-2034 preference score (product-visible), or real damping figures if a sourced number is open in the session.
+**Next step:** superseded by the passive-crossover handoff above.
 
 ### 2026-11-15 — Cursor — Handoff: start here. Fresh lead session (Level 3)
 
@@ -90,6 +106,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; listen/optimize/C-Note follow.
 - 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on `main` by Cursor.
 - 2026-11-15: Board archived to `docs/coms-archive.md` for a fresh lead session; handoff package in `docs/new-chat.md`.
 - 2026-11-15: Partitions between chambers vibrate (mutual admittance in lumped network), done on `main` by Cursor.

@@ -3,4 +3,10 @@ import type { CorrectionSettings } from "./CorrectionSettings";
 import type { KindPart } from "./KindPart";
 import type { PerRadiatorDsp } from "./PerRadiatorDsp";
 
-export type DspSection = { sample_rate_hz: number, whole_speaker: Array<KindPart>, per_radiator: Array<PerRadiatorDsp>, correction: CorrectionSettings, };
+export type DspSection = { sample_rate_hz: number, whole_speaker: Array<KindPart>, per_radiator: Array<PerRadiatorDsp>, correction: CorrectionSettings, 
+/**
+ * Passive R/L/C network from one amplifier to the drivers (README section 7). When set,
+ * it sets each radiator's drive voltage; digital crossover blocks on each radiator are
+ * left out of the graphs (gain, delay, and polarity still apply).
+ */
+passive: Record<string, unknown> | null, };

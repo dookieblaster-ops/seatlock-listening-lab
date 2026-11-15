@@ -5,6 +5,7 @@ mod cone;
 pub mod dml;
 pub mod laminate;
 pub mod network;
+pub mod passive;
 pub mod plate;
 mod point;
 mod radiation;
@@ -21,6 +22,7 @@ pub use baffle::{
     outline_perimeter_m, piston_directivity, polygon_outline, rectangular_outline, EdgePoint,
 };
 pub use cone::{derive_mechanical, terminal_at, Mechanical, Published, Terminal};
+pub use passive::{PassiveNetwork, PassiveSample};
 pub use point::{baffle_gain, pressure_from_volume_velocity};
 pub use radiation::{BaffleRadiation, PointRadiation, EDGE_NOTE, POINT_FALLBACK_NOTE, SHADOW_NOTE};
 pub use response::blend_measured_curve;
