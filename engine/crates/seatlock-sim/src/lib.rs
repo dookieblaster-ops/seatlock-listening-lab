@@ -592,12 +592,9 @@ pub fn simulate_with_progress(
                 displacement += port.displaced_m3;
             }
             // Plastic placed in the air takes its volume too.
-            if let Ok((placed, _)) = solids::solids(design) {
+            if let Ok(placed) = solids::solids(design) {
                 let in_air = |p: [f64; 3]| outer.contains_air(p).unwrap_or(false);
-                displacement += placed
-                    .iter()
-                    .map(|solid| solid.plastic_m3(&in_air))
-                    .sum::<f64>();
+                displacement += placed.plastic_m3(&in_air);
             }
             let volume = (gross - displacement).max(0.0);
             let ports = design_ports(design);
@@ -1767,7 +1764,7 @@ pub(crate) fn cabinet_grid_of(
     }
     // A moulded duct's mouth: two cells deep, enough to carry the opening's faces.
     bores.extend(ports::moulded_mouths(outer, 2.0 * dx));
-    let (placed, _) = solids::solids(design)?;
+    let placed = solids::solids(design)?;
     voxels::cabinet_grid(
         outer,
         &chamber_list,
@@ -2685,16 +2682,17 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
         shells.push(port.shell);
         bores.push(port.bore);
     }
-    // Plastic placed in the air (`voxels` solids): the part of it that lies in the air.
-    let (placed, other_solids) = match solids::solids(design) {
+    // Plastic placed in the air (`voxels` and `brace` solids): the part of it that lies in
+    // the air.
+    let placed = match solids::solids(design) {
         Ok(found) => found,
         Err(problem) => {
             warnings.push(problem);
             can_export = false;
-            (Vec::new(), Vec::new())
+            solids::Placed::default()
         }
     };
-    for (id, kind) in &other_solids {
+    for (id, kind) in &placed.unknown {
         warnings.push(format!(
             "Solid {id} ({kind}) is of a kind this build does not make yet: it is left out of \
              the results, the print file, and the cost."
@@ -2704,7 +2702,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
         shape.contains_air(p).unwrap_or(false)
             && (chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p)))
     };
-    let placed_m3: f64 = placed.iter().map(|s| s.plastic_m3(&in_air_at)).sum();
+    let placed_m3 = placed.plastic_m3(&in_air_at);
     if placed_m3 > 0.0 {
         let air = if chamber_list.is_empty() {
             shape.air_tree()
@@ -2721,8 +2719,8 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
                 let blocks = || {
                     seatlock_geom::csg_union(
                         placed
-                            .iter()
-                            .flat_map(solids::Voxels::boxes)
+                            .print_boxes()
+                            .into_iter()
                             .map(|(min, max)| seatlock_geom::csg_box(min, max))
                             .collect(),
                     )
@@ -2796,7 +2794,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
                 .collect();
         let solid_at = |p: [f64; 3]| -> bool {
             let plastic = shape.contains_solid(p).unwrap_or(false)
-                || (in_air_at(p) && placed.iter().any(|s| s.contains(p)))
+                || (in_air_at(p) && placed.contains(p))
                 || (!chamber_list.is_empty()
                     && shape.contains_air(p).unwrap_or(false)
                     && !chamber_list.iter().any(|c| c.contains(p)));
@@ -2876,7 +2874,7 @@ pub fn geometry_report_with(design: &DesignFile, voxels: bool) -> Result<Geometr
         voxel_air_volume_m3: if voxels {
             seatlock_geom::voxel_air_volume_where(shape.as_ref(), 0.005, &|p| {
                 (chamber_list.is_empty() || chamber_list.iter().any(|c| c.contains(p)))
-                    && !placed.iter().any(|s| s.contains(p))
+                    && !placed.contains(p)
             })?
         } else {
             0.0

@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Braces split wall spans
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued standing queue item 0.
+
+**Done this session:** (1) `brace` solids: parse `min_m`/`max_m`; take air, print, fill 3D grid; each wall face a brace reaches is split into smaller supported plates (`wall_tiles` in `walls.rs`). (2) README 5.11 and 6.2 updated. (3) Test: `sealed-test` left wall 284→571 Hz with a left–right bar; air volume drops by the brace; no "unknown solid" warning. Imported mesh cabinets still report rigid walls.
+
+**Last check:** `cargo test -p seatlock-sim --test walls --test imported`: walls 9 passed; imported 7 passed. fmt; clippy `-D warnings` on sim tests. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Standing queue: partitions as two-sided plates between chambers; imported-cabinet walls; PLA/TPU real damping figures. (2) Research plan: CTA-2034 preference score; BEM; multi-source generator; larger woofers; browser speed; non-box fields. (3) Optional: shrink LCM 3D self-check ~25 %.
+
+**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Brace cuts near a plate edge are ignored (sliver guard). Window braces / braces that only take volume without touching a face are not a wall split. Partitions are still held still.
+
+**Next step:** partitions as two-sided plates, or CTA-2034 preference score.
+
 ### 2026-11-15 — Cursor — Handoff: start here. LCM tilt placed; MDF/plywood walls vibrate
 
 - **To:** next lead session (Claude or Cursor)

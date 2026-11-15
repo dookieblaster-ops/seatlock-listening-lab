@@ -156,7 +156,7 @@ pub fn cabinet_grid(
     shape: &dyn OuterShape,
     chambers: &[Chamber],
     bores: &[Bore],
-    placed: &[crate::solids::Voxels],
+    placed: &crate::solids::Placed,
     driver: &DriverPlacement,
     dx: f64,
 ) -> Result<CabinetGrid, String> {
@@ -363,7 +363,7 @@ pub fn cabinet_grid(
         let p = lattice.center(lattice.coords(cell));
         if shape.contains_cabinet(p)? {
             let air = !solid_mark[cell]
-                && !placed.iter().any(|solid| solid.contains(p))
+                && !placed.contains(p)
                 && shape.contains_air(p)?
                 && (chambers.is_empty() || chambers.iter().any(|chamber| chamber.contains(p)));
             *slot = if air { INSIDE } else { SOLID };

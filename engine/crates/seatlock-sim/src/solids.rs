@@ -1,9 +1,10 @@
-//! Plastic placed inside the cabinet's air, cell by cell: the internal element `voxels`
-//! (README section 6.2). It is what "Shape the inside" writes into a design.
+//! Plastic placed inside the cabinet's air: `voxels` (README section 6.2, what "Shape the
+//! inside" writes) and `brace` bars that take air, print, and split the walls they join.
 //!
 //! ```text
 //! { "id": "shaped", "kind": "voxels", "min_m": [x, y, z], "dx_m": 0.01, "size": [nx, ny, nz],
 //!   "cells": "12 3 40 5" }
+//! { "id": "brace-1", "kind": "brace", "min_m": [0.008, 0.080, 0.120], "max_m": [0.152, 0.100, 0.130] }
 //! ```
 //!
 //! `cells` is run-length encoded in the order `(i * ny + j) * nz + k`: so many cells of air,
@@ -20,6 +21,52 @@ pub struct Voxels {
     pub dx_m: f64,
     pub size: [usize; 3],
     pub solid: Vec<bool>,
+}
+
+/// A rectangular bar of plastic inside the air (README 6.2). It takes volume, prints, and
+/// fills the 3D grid like `voxels`; walls it reaches split into smaller plates (README 5.11).
+#[derive(Clone, Debug)]
+pub struct Brace {
+    pub id: String,
+    pub min_m: [f64; 3],
+    pub max_m: [f64; 3],
+}
+
+/// The id and the kind of a solid this build does not make.
+pub type Unknown = (String, String);
+
+/// Every solid the design places in its air.
+#[derive(Clone, Debug, Default)]
+pub struct Placed {
+    pub voxels: Vec<Voxels>,
+    pub braces: Vec<Brace>,
+    pub unknown: Vec<Unknown>,
+}
+
+impl Placed {
+    pub fn plastic_m3(&self, in_air: &dyn Fn([f64; 3]) -> bool) -> f64 {
+        self.voxels
+            .iter()
+            .map(|solid| solid.plastic_m3(in_air))
+            .sum::<f64>()
+            + self
+                .braces
+                .iter()
+                .map(|brace| brace.plastic_m3(in_air))
+                .sum::<f64>()
+    }
+
+    pub fn contains(&self, p: [f64; 3]) -> bool {
+        self.voxels.iter().any(|solid| solid.contains(p))
+            || self.braces.iter().any(|brace| brace.contains(p))
+    }
+
+    /// Boxes to merge into the print tree: voxel merges, then each brace as one box.
+    pub fn print_boxes(&self) -> Vec<([f64; 3], [f64; 3])> {
+        let mut out: Vec<_> = self.voxels.iter().flat_map(Voxels::boxes).collect();
+        out.extend(self.braces.iter().map(|b| (b.min_m, b.max_m)));
+        out
+    }
 }
 
 pub fn encode(solid: &[bool]) -> String {
@@ -61,14 +108,19 @@ pub fn element(id: &str, min_m: [f64; 3], dx_m: f64, size: [usize; 3], solid: &[
             "cells": encode(solid) })
 }
 
-/// The design's `voxels` solids, and the ids and kinds of solids of any other kind, which
-/// this build leaves out.
-/// The id and the kind of a solid this build does not make.
-pub type Unknown = (String, String);
+fn triple(raw: &Value, name: &str) -> Option<[f64; 3]> {
+    let list: Vec<f64> = raw
+        .get(name)?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_f64)
+        .collect();
+    (list.len() == 3).then_some([list[0], list[1], list[2]])
+}
 
-pub fn solids(design: &DesignFile) -> Result<(Vec<Voxels>, Vec<Unknown>), String> {
-    let mut out = Vec::new();
-    let mut unknown = Vec::new();
+/// The design's placed solids: voxels, braces, and any other kind left out with a warning.
+pub fn solids(design: &DesignFile) -> Result<Placed, String> {
+    let mut out = Placed::default();
     for (index, raw) in design.speaker.enclosure.solids.iter().enumerate() {
         let id = raw
             .get("id")
@@ -76,45 +128,80 @@ pub fn solids(design: &DesignFile) -> Result<(Vec<Voxels>, Vec<Unknown>), String
             .map(str::to_string)
             .unwrap_or_else(|| format!("{}", index + 1));
         let kind = raw.get("kind").and_then(Value::as_str).unwrap_or("");
-        if kind != "voxels" {
-            unknown.push((id, kind.to_string()));
-            continue;
+        match kind {
+            "voxels" => {
+                let min = triple(raw, "min_m").ok_or(format!("Solid {id} has no min_m."))?;
+                let size = triple(raw, "size").ok_or(format!("Solid {id} has no size."))?;
+                let dx_m = raw
+                    .get("dx_m")
+                    .and_then(Value::as_f64)
+                    .filter(|dx| *dx > 0.0)
+                    .ok_or(format!("Solid {id} has no dx_m."))?;
+                let size = [size[0] as usize, size[1] as usize, size[2] as usize];
+                let cells = size[0] * size[1] * size[2];
+                if cells == 0 || cells > 50_000_000 {
+                    return Err(format!("Solid {id} has no usable size."));
+                }
+                let solid = decode(
+                    raw.get("cells").and_then(Value::as_str).unwrap_or(""),
+                    cells,
+                )
+                .map_err(|problem| format!("Solid {id}: {problem}"))?;
+                out.voxels.push(Voxels {
+                    id,
+                    min_m: min,
+                    dx_m,
+                    size,
+                    solid,
+                });
+            }
+            "brace" => {
+                let min = triple(raw, "min_m").ok_or(format!("Solid {id} has no min_m."))?;
+                let max = triple(raw, "max_m").ok_or(format!("Solid {id} has no max_m."))?;
+                if (0..3).any(|i| max[i] <= min[i]) {
+                    return Err(format!("Solid {id} has no size."));
+                }
+                out.braces.push(Brace {
+                    id,
+                    min_m: min,
+                    max_m: max,
+                });
+            }
+            _ => out.unknown.push((id, kind.to_string())),
         }
-        let triple = |name: &str| -> Option<Vec<f64>> {
-            let list: Vec<f64> = raw
-                .get(name)?
-                .as_array()?
-                .iter()
-                .filter_map(Value::as_f64)
-                .collect();
-            (list.len() == 3).then_some(list)
-        };
-        let min = triple("min_m").ok_or(format!("Solid {id} has no min_m."))?;
-        let size = triple("size").ok_or(format!("Solid {id} has no size."))?;
-        let dx_m = raw
-            .get("dx_m")
-            .and_then(Value::as_f64)
-            .filter(|dx| *dx > 0.0)
-            .ok_or(format!("Solid {id} has no dx_m."))?;
-        let size = [size[0] as usize, size[1] as usize, size[2] as usize];
-        let cells = size[0] * size[1] * size[2];
-        if cells == 0 || cells > 50_000_000 {
-            return Err(format!("Solid {id} has no usable size."));
-        }
-        let solid = decode(
-            raw.get("cells").and_then(Value::as_str).unwrap_or(""),
-            cells,
-        )
-        .map_err(|problem| format!("Solid {id}: {problem}"))?;
-        out.push(Voxels {
-            id,
-            min_m: [min[0], min[1], min[2]],
-            dx_m,
-            size,
-            solid,
-        });
     }
-    Ok((out, unknown))
+    Ok(out)
+}
+
+impl Brace {
+    pub fn contains(&self, p: [f64; 3]) -> bool {
+        (0..3).all(|i| p[i] > self.min_m[i] && p[i] < self.max_m[i])
+    }
+
+    pub fn size_m(&self) -> [f64; 3] {
+        std::array::from_fn(|i| self.max_m[i] - self.min_m[i])
+    }
+
+    /// The plastic that lies where `in_air` holds, from 8 x 8 x 8 samples.
+    pub fn plastic_m3(&self, in_air: &dyn Fn([f64; 3]) -> bool) -> f64 {
+        const N: usize = 8;
+        let size = self.size_m();
+        let mut hits = 0usize;
+        for a in 0..N {
+            for b in 0..N {
+                for d in 0..N {
+                    let sub = [a, b, d];
+                    let p: [f64; 3] = std::array::from_fn(|axis| {
+                        self.min_m[axis] + (sub[axis] as f64 + 0.5) / N as f64 * size[axis]
+                    });
+                    if in_air(p) {
+                        hits += 1;
+                    }
+                }
+            }
+        }
+        hits as f64 * size[0] * size[1] * size[2] / (N * N * N) as f64
+    }
 }
 
 impl Voxels {

@@ -269,6 +269,122 @@ fn unit(a: [f64; 3]) -> [f64; 3] {
     [a[0] / n, a[1] / n, a[2] / n]
 }
 
+/// One rectangular plate of a wall after braces have split it: size and centre in the wall's
+/// along/across frame, relative to the wall's centre.
+struct WallTile {
+    width: f64,
+    height: f64,
+    mid_u: f64,
+    mid_v: f64,
+}
+
+/// Split a wall plate where braces reach it. A brace that runs most of the way across the
+/// plate is a shelf or stud; a small end-on contact (a cross-brace into this wall) still cuts
+/// the plate's longer side through the contact. Returns the tiles and how many braces cut.
+#[allow(clippy::too_many_arguments)]
+fn wall_tiles(
+    span_w: f64,
+    span_h: f64,
+    braces: &[crate::solids::Brace],
+    centre: [f64; 3],
+    outward: [f64; 3],
+    along: [f64; 3],
+    across: [f64; 3],
+    wall_m: f64,
+) -> (Vec<WallTile>, usize) {
+    let half_w = span_w / 2.0;
+    let half_h = span_h / 2.0;
+    let mut u_cuts = Vec::new();
+    let mut v_cuts = Vec::new();
+    let mut used = 0usize;
+    for brace in braces {
+        let mut out_lo = f64::MAX;
+        let mut out_hi = f64::MIN;
+        let mut u_lo = f64::MAX;
+        let mut u_hi = f64::MIN;
+        let mut v_lo = f64::MAX;
+        let mut v_hi = f64::MIN;
+        for &x in &[brace.min_m[0], brace.max_m[0]] {
+            for &y in &[brace.min_m[1], brace.max_m[1]] {
+                for &z in &[brace.min_m[2], brace.max_m[2]] {
+                    let rel = sub([x, y, z], centre);
+                    let o = dot(rel, outward);
+                    out_lo = out_lo.min(o);
+                    out_hi = out_hi.max(o);
+                    let u = dot(rel, along);
+                    let v = dot(rel, across);
+                    u_lo = u_lo.min(u);
+                    u_hi = u_hi.max(u);
+                    v_lo = v_lo.min(v);
+                    v_hi = v_hi.max(v);
+                }
+            }
+        }
+        // Outer face ~0 on this frame; inner face ~-wall_m. The brace touches when its
+        // outward-most face sits near the inner face.
+        let touches = (out_hi + wall_m).abs() < 0.5 * wall_m
+            || (out_hi > -1.5 * wall_m && out_hi < 0.25 * wall_m && out_lo < -0.5 * wall_m);
+        if !touches {
+            continue;
+        }
+        if u_hi < -half_w || u_lo > half_w || v_hi < -half_h || v_lo > half_h {
+            continue;
+        }
+        let u_mid = ((u_lo + u_hi) / 2.0).clamp(-0.95 * half_w, 0.95 * half_w);
+        let v_mid = ((v_lo + v_hi) / 2.0).clamp(-0.95 * half_h, 0.95 * half_h);
+        let du = u_hi - u_lo;
+        let dv = v_hi - v_lo;
+        let cut_v =
+            du >= 0.5 * span_w || (du < 0.5 * span_w && dv < 0.5 * span_h && span_h >= span_w);
+        let cut_u = !cut_v
+            && (dv >= 0.5 * span_h || (du < 0.5 * span_w && dv < 0.5 * span_h && span_w > span_h));
+        // Keep a cut only when both resulting plates still have a usable span (not a
+        // sliver against one edge). A cut through the middle is the usual case.
+        if cut_v && (half_h - v_mid.abs()) > 0.05 * span_h {
+            v_cuts.push(v_mid);
+            used += 1;
+        } else if cut_u && (half_w - u_mid.abs()) > 0.05 * span_w {
+            u_cuts.push(u_mid);
+            used += 1;
+        }
+    }
+    u_cuts.sort_by(|a, b| a.total_cmp(b));
+    v_cuts.sort_by(|a, b| a.total_cmp(b));
+    u_cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    v_cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let mut u_edges = vec![-half_w];
+    u_edges.extend(u_cuts);
+    u_edges.push(half_w);
+    let mut v_edges = vec![-half_h];
+    v_edges.extend(v_cuts);
+    v_edges.push(half_h);
+    let mut tiles = Vec::new();
+    for ui in 0..u_edges.len() - 1 {
+        for vi in 0..v_edges.len() - 1 {
+            let width = u_edges[ui + 1] - u_edges[ui];
+            let height = v_edges[vi + 1] - v_edges[vi];
+            if width <= wall_m || height <= wall_m {
+                continue;
+            }
+            tiles.push(WallTile {
+                width,
+                height,
+                mid_u: (u_edges[ui] + u_edges[ui + 1]) / 2.0,
+                mid_v: (v_edges[vi] + v_edges[vi + 1]) / 2.0,
+            });
+        }
+    }
+    if tiles.is_empty() {
+        tiles.push(WallTile {
+            width: span_w,
+            height: span_h,
+            mid_u: 0.0,
+            mid_v: 0.0,
+        });
+    }
+    (tiles, used)
+}
+
 /// A figure from a stock record: the number itself, or the middle of a published range.
 fn stock_figure(
     record: &Value,
@@ -414,10 +530,14 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
         }
     };
     let stack = WallStack::from_layers(&layers)?;
+    let braces = crate::solids::solids(design)
+        .map(|p| p.braces)
+        .unwrap_or_default();
     let size = outer.outer_size_m()?;
     let middle = [size[0] / 2.0, size[1] / 2.0, size[2] / 2.0];
     let mut walls = Vec::new();
     let mut approximated = false;
+    let mut braces_used = 0usize;
     // A wall that carries a sound source of its own (a panel speaker) is left still: the
     // source covers it.
     let covered: Vec<&str> = design
@@ -494,30 +614,39 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
         if span_w <= wall_m || span_h <= wall_m {
             continue;
         }
-        let panel = WallPanel::new(span_w, span_h, &stack)?;
-        let element_area = panel.element_area_m2();
-        let patches = panel
-            .element_centers_m()
-            .iter()
-            .map(|[x, y]| {
-                let (x, y) = (x + mid_offset[0], y + mid_offset[1]);
-                SourcePatch {
-                    position_m: [
-                        centre[0] + x * along[0] + y * across[0],
-                        centre[1] + x * along[1] + y * across[1],
-                        centre[2] + x * along[2] + y * across[2],
-                    ],
-                    outward,
-                    area_m2: element_area,
-                }
-            })
-            .collect();
-        walls.push(PlacedWall {
-            surface,
-            chamber: 0,
-            panel,
-            patches,
-        });
+        let (tiles, used) = wall_tiles(
+            span_w, span_h, &braces, centre, outward, along, across, wall_m,
+        );
+        braces_used += used;
+        for tile in tiles {
+            let panel = WallPanel::new(tile.width, tile.height, &stack)?;
+            let element_area = panel.element_area_m2();
+            let patches = panel
+                .element_centers_m()
+                .iter()
+                .map(|[x, y]| {
+                    let (x, y) = (
+                        x + mid_offset[0] + tile.mid_u,
+                        y + mid_offset[1] + tile.mid_v,
+                    );
+                    SourcePatch {
+                        position_m: [
+                            centre[0] + x * along[0] + y * across[0],
+                            centre[1] + x * along[1] + y * across[1],
+                            centre[2] + x * along[2] + y * across[2],
+                        ],
+                        outward,
+                        area_m2: element_area,
+                    }
+                })
+                .collect();
+            walls.push(PlacedWall {
+                surface: surface.clone(),
+                chamber: 0,
+                panel,
+                patches,
+            });
+        }
     }
     if walls.is_empty() {
         return Err("the cabinet has no flat wall the model can take".into());
@@ -542,10 +671,22 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
             stack.mass_per_area
         ),
     );
+    if braces_used > 0 {
+        notes.push(format!(
+            "{braces_used} brace contact(s) split wall plates into smaller supported plates, \
+             raising their resonances; braces take air and print as plastic."
+        ));
+    } else if !braces.is_empty() {
+        notes.push(
+            "The design has braces that do not reach a vibrating wall face, so they take air \
+             and print but do not split a wall."
+                .into(),
+        );
+    }
     notes.push(
         "Wall vibration leaves out the air's load on the walls, standing waves' pressure \
-         pattern on them, the driver's frame shaking the baffle, and the holes and braces in \
-         the walls; curved skin does not vibrate in this model."
+         pattern on them, the driver's frame shaking the baffle, and holes in the walls; \
+         curved skin does not vibrate in this model."
             .into(),
     );
     if approximated {
@@ -634,9 +775,13 @@ pub fn chamber_walls(
         .ok_or("the cabinet gives no wall thickness")?;
     let (layers, mut notes) = wall_layers(design, wall_m)?;
     let stack = WallStack::from_layers(&layers)?;
+    let braces = crate::solids::solids(design)
+        .map(|p| p.braces)
+        .unwrap_or_default();
     let covered = covered_surfaces(design);
     let mut walls = Vec::new();
     let mut held = 0usize;
+    let mut braces_used = 0usize;
     for (index, chamber) in chambers.iter().enumerate() {
         for axis in 0..3 {
             for high in [false, true] {
@@ -701,36 +846,47 @@ pub fn chamber_walls(
                 if span_w <= wall_m || span_h <= wall_m {
                     continue;
                 }
-                let panel = WallPanel::new(span_w, span_h, &stack)?;
-                let area = panel.element_area_m2();
-                let mut along = [0.0; 3];
-                along[u_axis] = 1.0;
-                let mut across = [0.0; 3];
-                across[v_axis] = 1.0;
+                // Skin centre for radiation (outer face), while brace attachment uses the
+                // chamber face as centre (inner face of the wall).
                 let skin = [
                     centre[0] + thickness * outward[0],
                     centre[1] + thickness * outward[1],
                     centre[2] + thickness * outward[2],
                 ];
-                let patches = panel
-                    .element_centers_m()
-                    .iter()
-                    .map(|[x, y]| SourcePatch {
-                        position_m: [
-                            skin[0] + x * along[0] + y * across[0],
-                            skin[1] + x * along[1] + y * across[1],
-                            skin[2] + x * along[2] + y * across[2],
-                        ],
-                        outward,
-                        area_m2: area,
-                    })
-                    .collect();
-                walls.push(PlacedWall {
-                    surface,
-                    chamber: index,
-                    panel,
-                    patches,
-                });
+                let mut along = [0.0; 3];
+                along[u_axis] = 1.0;
+                let mut across = [0.0; 3];
+                across[v_axis] = 1.0;
+                let (tiles, used) = wall_tiles(
+                    span_w, span_h, &braces, skin, outward, along, across, wall_m,
+                );
+                braces_used += used;
+                for tile in tiles {
+                    let panel = WallPanel::new(tile.width, tile.height, &stack)?;
+                    let area = panel.element_area_m2();
+                    let patches = panel
+                        .element_centers_m()
+                        .iter()
+                        .map(|[x, y]| {
+                            let (x, y) = (x + tile.mid_u, y + tile.mid_v);
+                            SourcePatch {
+                                position_m: [
+                                    skin[0] + x * along[0] + y * across[0],
+                                    skin[1] + x * along[1] + y * across[1],
+                                    skin[2] + x * along[2] + y * across[2],
+                                ],
+                                outward,
+                                area_m2: area,
+                            }
+                        })
+                        .collect();
+                    walls.push(PlacedWall {
+                        surface: surface.clone(),
+                        chamber: index,
+                        panel,
+                        patches,
+                    });
+                }
             }
         }
     }
@@ -765,10 +921,15 @@ pub fn chamber_walls(
              (partitions between two chambers do not vibrate in this model)."
         ));
     }
+    if braces_used > 0 {
+        notes.push(format!(
+            "{braces_used} brace contact(s) split wall plates into smaller supported plates."
+        ));
+    }
     notes.push(
         "Wall vibration leaves out the air's load on the walls, standing waves' pressure \
-         pattern on them, the driver's frame shaking the baffle, and the holes and braces in \
-         the walls; curved skin does not vibrate in this model."
+         pattern on them, the driver's frame shaking the baffle, and holes in the walls; \
+         curved skin does not vibrate in this model."
             .into(),
     );
     Ok(CabinetWalls { walls, notes })

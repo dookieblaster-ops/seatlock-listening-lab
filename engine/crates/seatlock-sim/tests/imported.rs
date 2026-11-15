@@ -88,6 +88,30 @@ pub fn imported_sealed_test() -> Value {
 }
 
 #[test]
+fn an_imported_cabinet_keeps_rigid_walls() {
+    let mut value = imported_sealed_test();
+    value["build"]["wall"] =
+        json!({ "kind": "filled", "skin_m": 0.0016, "fill": "quikrete-play-sand" });
+    let result = simulate(
+        &serde_json::from_value(value).unwrap(),
+        &SimulateRequest {
+            walls: true,
+            ..Default::default()
+        },
+        &builtin(),
+    );
+    assert!(result
+        .fidelity
+        .ignored
+        .iter()
+        .any(|l| l.starts_with("Walls are rigid")));
+    assert!(result
+        .issues
+        .iter()
+        .any(|i| i.code == "wall_build_not_heard"));
+}
+
+#[test]
 fn an_imported_box_sounds_like_the_same_box_built_as_a_box() {
     let plain: seatlock_core::DesignFile = serde_json::from_value(example()).unwrap();
     let imported: seatlock_core::DesignFile =

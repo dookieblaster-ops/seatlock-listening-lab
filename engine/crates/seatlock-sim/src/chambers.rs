@@ -130,11 +130,11 @@ pub fn chambers(design: &DesignFile) -> Result<Vec<Chamber>, String> {
             region: None,
         });
     }
-    let (placed, _) = crate::solids::solids(design)?;
+    let placed = crate::solids::solids(design)?;
     for chamber in &mut out {
         let inside =
             |p: [f64; 3]| (0..3).all(|i| p[i] > chamber.min_m[i] && p[i] < chamber.max_m[i]);
-        chamber.plastic_m3 = placed.iter().map(|solid| solid.plastic_m3(&inside)).sum();
+        chamber.plastic_m3 = placed.plastic_m3(&inside);
     }
     Ok(out)
 }

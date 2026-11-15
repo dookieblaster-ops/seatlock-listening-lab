@@ -211,27 +211,6 @@ fn each_wall_build_is_heard_and_says_what_it_assumed() {
         .any(|i| i.code == "wall_build_not_heard"));
 }
 
-#[test]
-fn a_cabinet_whose_walls_are_not_modeled_says_so() {
-    let mut value = example("mdf-box");
-    value["build"]["wall"] =
-        json!({ "kind": "filled", "skin_m": 0.0016, "fill": "quikrete-play-sand" });
-    let request = SimulateRequest {
-        walls: true,
-        ..SimulateRequest::default()
-    };
-    let result = simulate(&design(&value), &request, &builtin());
-    assert!(result
-        .fidelity
-        .ignored
-        .iter()
-        .any(|l| l.starts_with("Walls are rigid") && l.contains("no published density")));
-    assert!(result
-        .issues
-        .iter()
-        .any(|i| i.code == "wall_build_not_heard"));
-}
-
 /// The low-frequency spring identity of the check above for any cabinet: with `point`
 /// radiation, walls equal the rigid cabinet whose air is larger by the walls' compliance,
 /// less the share the walls give back. `enlarge` makes the rigid cabinet larger by a volume.
@@ -366,7 +345,10 @@ fn mdf_and_plywood_sheet_boxes_vibrate() {
         let walls = cabinet_walls(&file, outer.as_ref()).unwrap();
         assert_eq!(walls.walls.len(), 6, "{stock}");
         assert!(
-            walls.notes.iter().any(|n| n.contains("published as a range")),
+            walls
+                .notes
+                .iter()
+                .any(|n| n.contains("published as a range")),
             "{stock}: {:?}",
             walls.notes
         );
@@ -525,6 +507,93 @@ fn each_chamber_pushes_on_its_own_walls() {
         let want = level_at(&larger, &rigid, freq) + give_back;
         assert!((got - want).abs() < 0.01, "{freq} Hz: {got} against {want}");
     }
+}
+
+/// A brace bar across the chamber reaches opposite walls, splits those plates, raises the
+/// lowest wall resonance, takes air, and does not raise the "unknown solid" warning.
+#[test]
+fn a_brace_splits_the_walls_it_reaches_and_takes_air() {
+    let mut value = example("sealed-test");
+    let file = design(&value);
+    let registry = builtin();
+    let outer = registry
+        .create_outer(
+            &file.speaker.enclosure.outer.kind,
+            &file.speaker.enclosure.outer.fields,
+        )
+        .unwrap();
+    let plain = cabinet_walls(&file, outer.as_ref()).unwrap();
+    let plain_first = plain.first_resonance_hz();
+    let plain_air = simulate(&file, &SimulateRequest::default(), &registry)
+        .interior_volume_m3
+        .unwrap();
+
+    // Left–right bar at mid height (README 6.2's brace shape), spanning the inside width.
+    value["speaker"]["enclosure"]["solids"] = json!([{
+        "id": "brace-1",
+        "kind": "brace",
+        "min_m": [0.008, 0.085, 0.120],
+        "max_m": [0.152, 0.095, 0.130]
+    }]);
+    let braced_file = design(&value);
+    let braced = cabinet_walls(&braced_file, outer.as_ref()).unwrap();
+    let braced_first = braced.first_resonance_hz();
+    let left_plain = plain
+        .walls
+        .iter()
+        .filter(|w| w.surface == "left")
+        .map(|w| w.panel.first_resonance_hz())
+        .fold(f64::INFINITY, f64::min);
+    let left_braced = braced
+        .walls
+        .iter()
+        .filter(|w| w.surface == "left")
+        .map(|w| w.panel.first_resonance_hz())
+        .fold(f64::INFINITY, f64::min);
+    println!(
+        "sealed-test: cabinet {plain_first:.0} → {braced_first:.0} Hz, left wall {left_plain:.0} → \
+         {left_braced:.0} Hz, {} plates against {}",
+        braced.walls.len(),
+        plain.walls.len()
+    );
+    // Halving the taller span raises that wall by about √2; front/back then set the cabinet
+    // floor, so the whole-cabinet rise is smaller.
+    assert!(
+        left_braced > 1.3 * left_plain,
+        "brace should raise the left wall: {left_braced} against {left_plain}"
+    );
+    assert!(
+        braced.walls.len() > plain.walls.len(),
+        "brace should split walls into more plates"
+    );
+    assert!(braced
+        .notes
+        .iter()
+        .any(|n| n.contains("brace") && n.contains("split")));
+
+    let result = simulate(
+        &braced_file,
+        &SimulateRequest {
+            walls: true,
+            ..SimulateRequest::default()
+        },
+        &registry,
+    );
+    assert!(
+        result
+            .issues
+            .iter()
+            .all(|i| !i.message.contains("does not make yet")),
+        "brace must not be an unknown solid: {:?}",
+        result.issues
+    );
+    let braced_air = result.interior_volume_m3.unwrap();
+    let brace_m3 = 0.144 * 0.010 * 0.010;
+    assert!(
+        (plain_air - braced_air - brace_m3).abs() < 0.15 * brace_m3,
+        "brace should take about {:.6} m3 of air: plain {plain_air}, braced {braced_air}",
+        brace_m3
+    );
 }
 
 /// The `two-chamber` bandpass: both chambers' walls are heard, and its partition is held.
