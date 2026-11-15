@@ -71,6 +71,21 @@ fn the_tebm_uses_erins_printed_parameters_and_names_the_sensitivity() {
     assert!(merged["published"].get("sens_db_1w").is_none());
     // No printed break-up peak height on that review.
     assert_eq!(seatlock_acoustics::breakup(&record), None);
+    // Independent acoustic sensitivity scales radiated level; Vas stays for compliance.
+    let (policy_note, scale) = seatlock_acoustics::sensitivity_level_policy(&merged);
+    let policy_note = policy_note.expect("disagreement note");
+    assert!(
+        policy_note.contains("independent sensitivity"),
+        "{policy_note}"
+    );
+    assert!(
+        policy_note.contains("level follows the independent figure"),
+        "{policy_note}"
+    );
+    assert!(
+        (20.0 * scale.log10() + 4.0).abs() < 0.5,
+        "scale {scale} should be about -4 dB"
+    );
 }
 
 #[test]

@@ -224,17 +224,14 @@ fn the_lcm_matches_erins_shape_within_known_limits() {
     assert!((erin_f6 - 33.7).abs() < 0.5, "erin f6 {erin_f6}");
     assert!((erin_f3 - 36.7).abs() < 1.0, "erin f3 from file {erin_f3}");
     assert!(erin_bass.abs() < 1.0, "erin bass-mid {erin_bass}");
-    // The lab's known shape fault: bass still below midband. Erin's DATS T/S for the BMR
-    // (2026-11-15) closed about 1 dB of the earlier ~2.3 dB step; the BMR band is still about
-    // 2 dB above the woofer's. The remaining gap is the acoustic average (~77 dB at 2.83 V)
-    // against the Vas path the lab keeps; Erin's FR is graph-only, and the response-file blend
-    // only shapes above the piston hand-over (~3 kHz), so it cannot place midband level.
+    // After Erin's DATS T/S and his acoustic average (~77 dB at 2.83 V) for the BMR
+    // (owner 2026-11-15), the lab's bass sits above midband (~+2.4 dB vs Erin's +0.3): the
+    // BMR band is about 2 dB below the woofer's. The independent level scale matches that
+    // free-air figure; the leftover relative step is likely the woofer model, baffle, and
+    // that "about 77 dB" being a band average on Erin's test baffle, not a half-space eta0.
+    assert!(lab_bass > 1.0 && lab_bass < 3.5, "lab bass-mid {lab_bass}");
     assert!(
-        lab_bass < -0.5 && lab_bass > -2.5,
-        "lab bass-mid {lab_bass}"
-    );
-    assert!(
-        (tweeter_band - woofer_band - 1.9).abs() < 1.0,
+        (tweeter_band - woofer_band + 2.1).abs() < 1.0,
         "BMR–woofer gap {}",
         tweeter_band - woofer_band
     );

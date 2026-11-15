@@ -33,4 +33,4 @@ Cabinet files downloaded 2026-11-13; Erin's curves 2026-11-14.
 
 - The polyfill the build notes put in the tweeter's chamber (the quick and detailed models do not model fill).
 - Wall vibration (imported cabinets keep rigid walls).
-- The BMR's midband level: Erin's DATS T/S closed about 1 dB of the earlier bass-to-mid step; the lab is still about 1.2 dB low vs Erin's near-level curve. Erin's acoustic average (~77 dB at 2.83 V) is several dB below the Vas path the lab keeps; the FR on that review is graph-only, and a response-file blend only shapes above ~3 kHz. See `erin/README.md` and STATUS question 12.
+- The BMR's midband level: with Erin's DATS T/S and his acoustic average (~77 dB at 2.83 V) setting the piston level (owner 2026-11-15), the lab's bass sits about 2.4 dB above midband where Erin is near level — the BMR band is about 2 dB below the woofer's. See `erin/README.md`.

@@ -49,7 +49,7 @@
         "sd_m2": 0.00107986,
         "sens_db_2v83": 77.0
       },
-      "note": "DATS v2 with added mass: Effective Diameter 37.08 mm (stored as Sd), BL 2.134 Tm, Ms 1.316 g, Cms 0.903 mm/N, DATS-reported dBSPL 78.08 dB/1W/1m (Thiele-Small estimate). Acoustic average about 77 dB at 2.83 V/1 m is from the review prose. Frequency response is graph-only on that page (no FRD); a hint of break-up at 18 kHz with no printed peak height, so no breakup entry. The simulation keeps Vas when it disagrees with the printed sensitivity (README 9.1)."
+      "note": "DATS v2 with added mass: Effective Diameter 37.08 mm (stored as Sd), BL 2.134 Tm, Ms 1.316 g, Cms 0.903 mm/N, DATS-reported dBSPL 78.08 dB/1W/1m (Thiele-Small estimate). Acoustic average about 77 dB at 2.83 V/1 m is from the review prose and sets the piston level (owner 2026-11-15); Vas still sets compliance. Frequency response is graph-only on that page (no FRD); a hint of break-up at 18 kHz with no printed peak height, so no breakup entry."
     }
   ],
   "response_file": null,

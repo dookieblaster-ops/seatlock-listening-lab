@@ -59,6 +59,10 @@ struct ConeRadiator {
     driver_id: String,
     loads_box: bool,
     has_xmax: bool,
+    /// Scales radiated volume velocity so free-air level matches an independent
+    /// acoustic sensitivity when that figure disagrees with Vas (owner 2026-11-15).
+    /// Excursion, current, and impedance stay on the Vas path.
+    level_scale: f64,
     note: Option<String>,
 }
 
@@ -72,7 +76,7 @@ impl Radiator for ConeRadiator {
         for (index, freq) in freqs_hz.iter().enumerate() {
             let zab = z_ab.get(index).copied().unwrap_or(Complex64::new(0.0, 0.0));
             let terminal = terminal_at(&self.published, &mech, zab, 1.0, *freq);
-            volume_velocity.push(terminal.volume_velocity);
+            volume_velocity.push(terminal.volume_velocity * self.level_scale);
             impedance.push(terminal.impedance);
             excursion_m.push(terminal.excursion_m);
             current_a.push(terminal.current_a);
@@ -171,7 +175,8 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
     if let Some(note) = printed_disagreement(&record) {
         notes.push(note);
     }
-    if let Some(note) = sensitivity_disagreement(&record) {
+    let (sens_note, level_scale) = sensitivity_level_policy(&record);
+    if let Some(note) = sens_note {
         notes.push(note);
     }
     Ok(Box::new(ConeRadiator {
@@ -180,6 +185,7 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
         driver_id,
         loads_box,
         has_xmax,
+        level_scale,
         note: if notes.is_empty() {
             None
         } else {
@@ -425,8 +431,24 @@ fn vas_from_sensitivity(sens_db_1w: f64, fs_hz: f64, qes: f64) -> f64 {
     eta0 * C0.powi(3) * qes / (4.0 * PI * PI * fs_hz.powi(3))
 }
 
-/// Printed sensitivity more than 1.5 dB from the Vas path. Vas is kept.
+/// Printed sensitivity more than 1.5 dB from the Vas path (maker-only case).
 pub fn sensitivity_disagreement(record: &Value) -> Option<String> {
+    sensitivity_level_policy(record).0
+}
+
+fn independent_prints_sensitivity(record: &Value) -> bool {
+    record
+        .get("independent")
+        .and_then(Value::as_array)
+        .and_then(|list| list.first())
+        .and_then(|entry| entry.get("values"))
+        .is_some_and(|values| {
+            values.get("sens_db_1w").and_then(Value::as_f64).is_some()
+                || values.get("sens_db_2v83").and_then(Value::as_f64).is_some()
+        })
+}
+
+fn sensitivity_versus_vas(record: &Value) -> Option<(f64, f64, f64)> {
     let published = record.get("published")?;
     let vas = published
         .get("vas_m3")
@@ -456,13 +478,37 @@ pub fn sensitivity_disagreement(record: &Value) -> Option<String> {
         2.83,
         1.0,
     );
-    let difference = (from_vas - printed_2v83).abs();
-    if difference > 1.5 {
-        Some(format!(
-            "The printed sensitivity is {difference:.1} dB away from the Vas calculation, so the simulation keeps Vas."
-        ))
+    Some((printed_2v83, from_vas, (from_vas - printed_2v83).abs()))
+}
+
+/// How printed sensitivity and Vas interact for the cone model.
+///
+/// Maker-only: when they disagree by more than 1.5 dB, Vas is kept and the level follows Vas
+/// (README 5.1). Independent measurement that prints a sensitivity (owner 2026-11-15): Vas
+/// still sets compliance and the box shape, and radiated volume velocity is scaled so
+/// free-air half-space level matches that independent figure. Returns `(note, level_scale)`.
+pub fn sensitivity_level_policy(record: &Value) -> (Option<String>, f64) {
+    let Some((printed_2v83, from_vas, difference)) = sensitivity_versus_vas(record) else {
+        return (None, 1.0);
+    };
+    if difference <= 1.5 {
+        return (None, 1.0);
+    }
+    if independent_prints_sensitivity(record) {
+        let scale = 10_f64.powf((printed_2v83 - from_vas) / 20.0);
+        (
+            Some(format!(
+                "The independent sensitivity is {difference:.1} dB away from the Vas calculation; Vas sets the box compliance and the level follows the independent figure ({printed_2v83:.1} dB at 2.83 V / 1 m against {from_vas:.1} dB from Vas)."
+            )),
+            scale,
+        )
     } else {
-        None
+        (
+            Some(format!(
+                "The printed sensitivity is {difference:.1} dB away from the Vas calculation, so the simulation keeps Vas."
+            )),
+            1.0,
+        )
     }
 }
 

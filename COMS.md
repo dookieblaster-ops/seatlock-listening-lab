@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Q12 yes; BMR level scale in; 3D self-check next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Owner answered STATUS question 12: yes.
+
+**Done this session:** (1) `sensitivity_level_policy`: when an independent measurement prints a sensitivity more than 1.5 dB from Vas, keep Vas for compliance and scale radiated volume velocity to that figure; maker-only disagreement still keeps Vas with no scale. (2) README 5.1 and 9.1 updated. (3) LCM recheck: bass-mid +2.40 dB (Erin +0.30), BMR–woofer −2.1 dB, mid RMS 1.58 dB. The free-air 77 dB scale overshoots the relative LCM balance.
+
+**Last check:** `cargo test -p seatlock-sim --test independent --test lcm`: independent 4 passed; lcm 3 passed, 1 ignored. fmt; clippy `-D warnings` on acoustics+sim tests. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) The 3D self-check's 249 % at low frequency on the LCM. (2) Leftover LCM relative tilt after the BMR level scale (woofer model / baffle / band-average 77 dB). (3) Standing queue (MDF/plywood, braces, CTA-2034 score, boundary elements, …).
+
+**Pitfalls:** do not digitize Erin's FR graph. Do not undo Q12 without a new owner answer. Level scale must not change excursion/current (only volume velocity); `driver_impedance_scale` ratios stay valid because free and loaded U share the scale.
+
+**Next step:** queue item 1 (LCM 3D self-check 249 %).
+
 ### 2026-11-15 — Cursor — Handoff: start here. TEBM independent T/S in; ask Q12 then 3D self-check
 
 - **To:** next lead session (Claude or Cursor)
@@ -587,6 +603,7 @@ If time runs short, stop after item 2 or 3 with everything committed, and write 
 
 ## Resolved
 
+- 2026-11-15: STATUS question 12 answered yes; independent acoustic sensitivity scales BMR piston level while Vas keeps compliance, done on `main` by Cursor.
 - 2026-11-14: Erin's LCM CTA-2034 curves kept under CC BY-NC-SA; bass-to-midrange step placed as BMR vs woofer level, done on `main` by Cursor.
 - 2026-11-14: Full check completed on the LCM commit; Clippy for stable 1.100 fixed; cloud-check installs Playwright Chromium on Cursor; hole-marking controls on the page for imported models, done on `main` by Cursor.
 - 2026-11-13: The LCM Nearfield Monitor imported from its designer's files, with holes, air spaces, and moulded ducts in the importer, done on `main` by Claude.
