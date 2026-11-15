@@ -93,6 +93,7 @@ fn a_baffle_run_reports_cta2034_preference() {
             enclosure: "waveguide".into(),
             radiation: "baffle".into(),
             listening_window: true,
+            cta2034: true,
             walls: false,
             ..SimulateRequest::default()
         },

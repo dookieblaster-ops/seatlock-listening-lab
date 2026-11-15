@@ -70,6 +70,11 @@ pub struct SimulateRequest {
     /// straight ahead.
     #[serde(default)]
     pub listening_window: bool,
+    /// Form CTA-2034 early reflections, predicted in-room response, and Olive's preference
+    /// rating (README 2.6). Implies sound power. The page asks for it; the optimizer does not
+    /// (too many directions per candidate).
+    #[serde(default)]
+    pub cta2034: bool,
     /// Include the air's losses at the walls (README sections 5.4 and 5.5): in the detailed
     /// model's ducts, and in the 3D model as one average over the cabinet.
     #[serde(default)]
@@ -114,6 +119,7 @@ impl Default for SimulateRequest {
             fdtd_dx_m: None,
             sound_power: false,
             listening_window: false,
+            cta2034: false,
             losses: false,
             walls: false,
             exterior_dx_m: None,
@@ -1566,9 +1572,8 @@ pub fn simulate_with_progress(
     let mut sound_power_db: Option<Vec<f64>> = None;
     let mut directivity_index_db: Option<Vec<f64>> = None;
     let images = room.images(listener, size);
-    // Sound power (and the directivity index) also feed the CTA-2034 preference rating when
-    // the listening window is asked for (README 2.6).
-    let wants_power = room.needs_sound_power() || request.sound_power || request.listening_window;
+    // Sound power (and the directivity index) also feed the CTA-2034 preference rating.
+    let wants_power = room.needs_sound_power() || request.sound_power || request.cta2034;
     if !prepared.is_empty() && (!images.is_empty() || wants_power) {
         let mut driven: Vec<Vec<Complex64>> = Vec::with_capacity(all_patches.len());
         for (place, item) in prepared.iter().enumerate() {
@@ -1796,7 +1801,14 @@ pub fn simulate_with_progress(
     // CTA-2034 curves and Olive preference (README 2.6): needs the listening window, sound
     // power (for DI → relative SP), and early-reflection directions under the baffle model.
     let mut cta2034: Option<Cta2034Report> = None;
-    if request.listening_window && request.radiation != "exterior" && !prepared.is_empty() {
+    if request.cta2034 && request.radiation != "exterior" && !prepared.is_empty() {
+        if listening_window_db.is_none() {
+            fidelity.ignored.push(
+                "CTA-2034 preference needs the listening window; turn listening_window on with \
+                 cta2034."
+                    .into(),
+            );
+        }
         if let (Some(lw), Some(di)) = (&listening_window_db, &directivity_index_db) {
             let distance = design.speaker.listening.distance_m;
             let mut energy = vec![0.0; freqs.len()];

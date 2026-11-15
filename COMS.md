@@ -55,9 +55,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Open, in order:** (1) Use preference as the ranked score / redefine the target. (2) BEM; larger budget woofers; browser speed; non-box page fields; multi-source generator harden. (3) Real PLA/TPU damping — do not invent. (4) Criton leftovers only if a source appears.
 
-**Pitfalls:** Listening-window sims now also run sound power + ~46 ER directions (slower; sealed-test window ~226 ms natively). Do not invent damping. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Page sets `cta2034: true` (sound power + ~46 ER directions). Scores/optimizer leave it off so candidates stay fast. Do not invent damping. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `preference` 5 passed; `window` 3 passed; clippy `-D warnings` on sim. Full `tools/cloud-check.sh` pending this branch.
+**Last check:** `preference` 3 passed; `window` 3 passed; clippy `-D warnings` on sim/wasm. Re-running cloud-check after gating CTA off the optimizer path.
 
 **Next step:** item 1 — preference as the ranked target, or item 2 (BEM / woofers / speed).
 

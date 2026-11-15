@@ -109,6 +109,8 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         radiation: "baffle",
         // Evenness is judged a little off to the sides too (README 11.1).
         listening_window: true,
+        // CTA-2034 curves and Olive preference rating (README 2.6).
+        cta2034: true,
         // The air's loss at duct walls (README 5.4).
         losses: true,
         // Cabinet walls vibrate and are heard (README 5.11).

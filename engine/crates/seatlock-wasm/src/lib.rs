@@ -30,6 +30,8 @@ struct CallRequest {
     #[serde(default)]
     listening_window: Option<bool>,
     #[serde(default)]
+    cta2034: Option<bool>,
+    #[serde(default)]
     losses: Option<bool>,
     #[serde(default)]
     walls: Option<bool>,
@@ -77,6 +79,8 @@ struct SimRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     listening_window: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    cta2034: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     losses: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     walls: Option<bool>,
@@ -118,6 +122,7 @@ fn parse_request(request: &str) -> CallRequest {
         voltage_v: None,
         frequencies_hz: None,
         listening_window: None,
+        cta2034: None,
         losses: None,
         walls: None,
         correction: None,
@@ -255,6 +260,7 @@ fn full_3d(request: &str) -> String {
         fdtd_dx_m: parsed.fdtd_dx_m,
         sound_power: false,
         listening_window: true,
+        cta2034: false,
         losses: true,
         walls: true,
         exterior_dx_m: parsed.exterior_dx_m,
@@ -304,6 +310,7 @@ fn dispatch(method: &str, request: &str) -> String {
                 voltage_v: parsed.voltage_v,
                 frequencies_hz: parsed.frequencies_hz,
                 listening_window: parsed.listening_window,
+                cta2034: parsed.cta2034,
                 losses: parsed.losses,
                 walls: parsed.walls,
             })
