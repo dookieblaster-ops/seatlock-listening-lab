@@ -45,35 +45,37 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. Passive listen-mode next
+### 2026-11-15 — Cursor — Handoff: start here. Passive page editor next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`. Level 3. C-Note MT vs ASR and `dsp.passive` graphs are on `main`. Owner said **Go** after that; then asked only to refresh this board (no code change this turn).
+- **Context:** `main`. Level 3. Passive listen-mode landed this session.
 
-**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. Passive R/L/C networks drive graphs and scores (`dsp.passive`). Kit copy `designs/imports/c-note/` compares to ASR CTA-2034 (mid/treble ~2 dB RMS after midband align; bass relative gap noted). Listen mode still plays the digital chain when `passive` is set. No page netlist editor; no R/L/C optimizer yet.
+**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. `dsp.passive` drives graphs, scores, and listen mode (network in the convolver impulses; leftover digital radiator blocks not played; filter text says loads are frozen at sim Z). Kit copy `designs/imports/c-note/` vs ASR. No page netlist editor; no R/L/C optimizer yet.
+
+**Done this session:** (1) `listen_package` / `impulse_responses`: keep `dsp.passive` in the acoustic IR; skip per-radiator digital blocks in worklet channels when passive is set; label frozen loads. (2) Test `listen_impulses_carry_the_passive_network` on the first-order two-way fixture. (3) README §7 / §10 / Level 3 F wording.
 
 **Open, in order (do the first without a new owner answer):**
 
-1. **Passive listen-mode:** turn each radiator's passive transfer `H(f)` (network voltage / amp) into the listen impulse / convolver path (`listen_package` / `impulse_responses` in `seatlock-sim`), so Play hears the kit network, not empty digital blocks. Label when loads are frozen at sim Z. Check with C-Note or the first-order two-way fixture.
-2. **Passive page editor** for the netlist (add/edit R/L/C/driver nodes).
-3. **Optimize R/L/C** toward a score (Level 3 optimizer track).
-4. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
-5. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
-6. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
+1. **Passive page editor** for the netlist (add/edit R/L/C/driver nodes).
+2. **Optimize R/L/C** toward a score (Level 3 optimizer track).
+3. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
+4. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
+5. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
 
 **Owner questions waiting (ask only when they start to matter):** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone). Q11 and Q12 answered — do not re-ask. Do not undo Q12. Do not digitize FR graphs.
 
-**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. ND25FW Q from maker DATS in the FRD package; Sd from VCdia (sheet N/A). ASR curves are relative; kit F3 ads are absolute. Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
+**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs and for listen playback (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. Listen impulses freeze Z(f) from the sim; they do not re-solve the network per audio block. Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
 
-**Last check (C-Note stretch):** `c_note` 3, `responses` 2, `sourced_drivers` ok; fmt; clippy on touched crates. Full `tools/cloud-check.sh` not re-run.
+**Last check:** `cargo test -p seatlock-sim --test passive`: 3 passed. `listen_package` check ok. fmt; clippy `-D warnings` on sim/acoustics. Full `tools/cloud-check.sh` not re-run.
 
-**Next step:** item 1 — passive listen-mode from the network.
+**Next step:** item 1 — passive page netlist editor.
 
 ## Resolved
 
+- 2026-11-15: Passive listen-mode (network in listen impulses; digital radiator blocks skipped), done on `main` by Cursor.
 - 2026-11-15: C-Note MT kit copy with `dsp.passive` vs ASR CTA-2034 (mid/treble ~2 dB RMS), done on `main` by Cursor (PR #11).
-- 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; listen/editor/optimize still open.
+- 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; editor/optimize still open.
 - 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on `main` by Cursor.
 - 2026-11-15: Board archived to `docs/coms-archive.md` for a fresh lead session; handoff package in `docs/new-chat.md`.
 - 2026-11-15: Partitions between chambers vibrate (mutual admittance in lumped network), done on `main` by Cursor.

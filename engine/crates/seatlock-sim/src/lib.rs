@@ -3696,8 +3696,18 @@ pub fn listen_package(
     } else {
         design.dsp.sample_rate_hz as f64
     };
+    let passive = design.dsp.passive.is_some();
     let mut channels = Vec::new();
     let mut lines = Vec::new();
+    if passive {
+        lines.push(
+            "Passive crossover: the R/L/C network is part of each radiator's listen impulse \
+             (amplifier voltage to the listening position). Driver loads are frozen at the \
+             impedance the simulator used at each frequency. Digital crossover or EQ blocks on \
+             each radiator are not played; gain, delay, and polarity still are."
+                .into(),
+        );
+    }
     let radiators = design.speaker.radiators.len().max(1);
     for index in 0..radiators {
         let mut stages = Vec::new();
@@ -3714,15 +3724,25 @@ pub fn listen_package(
             &mut lines,
         );
         if let Some(chain) = design.dsp.per_radiator.get(index) {
-            append_parts(
-                &chain.blocks,
-                sample_rate_hz,
-                correction_on,
-                &mut stages,
-                &mut gain,
-                &mut delay,
-                &mut lines,
-            );
+            // Graphs leave per-radiator digital blocks out when a passive network is set
+            // (README section 7); listen mode must match so Play hears the kit network.
+            if !passive {
+                append_parts(
+                    &chain.blocks,
+                    sample_rate_hz,
+                    correction_on,
+                    &mut stages,
+                    &mut gain,
+                    &mut delay,
+                    &mut lines,
+                );
+            } else if !chain.blocks.is_empty() {
+                lines.push(
+                    "Digital filters on this radiator are left out of playback (passive \
+                     crossover is in the impulse)."
+                        .into(),
+                );
+            }
             if chain.delay_s.abs() > 1e-9 {
                 let samples = (chain.delay_s * sample_rate_hz).round().max(0.0) as usize;
                 delay += samples;
@@ -3738,7 +3758,17 @@ pub fn listen_package(
             }
         }
         if stages.is_empty() && (gain - 1.0).abs() < 1e-9 && delay == 0 {
-            lines.push("No filters on this radiator. The signal reaches it unchanged.".to_string());
+            if passive {
+                lines.push(
+                    "No digital filters on this radiator. The passive network is in the listen \
+                     impulse."
+                        .into(),
+                );
+            } else {
+                lines.push(
+                    "No filters on this radiator. The signal reaches it unchanged.".to_string(),
+                );
+            }
         }
         channels.push(serde_json::json!({
             "coeffs": stages,
@@ -3920,8 +3950,11 @@ fn impulse_responses(
     for bin in 1..=n / 2 {
         freqs.push(bin as f64 * sample_rate_hz / n as f64);
     }
-    // The impulse is from amplifier voltage to pressure. The DSP chain runs in the
-    // real-time kernel, so it is not part of this response.
+    // The impulse is from amplifier voltage to pressure at the listening position.
+    // Digital DSP (whole-speaker and per-radiator blocks, gain, delay, polarity) runs in
+    // the real-time kernel, so it is stripped here. A passive R/L/C network stays: it is
+    // the kit hardware path, not the worklet, and its H(f) is baked into each radiator's
+    // impulse with driver loads frozen at the simulator's Z(f) (README sections 7 and 10).
     let mut acoustic = design.clone();
     acoustic.dsp.whole_speaker.clear();
     for chain in &mut acoustic.dsp.per_radiator {
@@ -3930,6 +3963,7 @@ fn impulse_responses(
         chain.delay_s = 0.0;
         chain.invert = false;
     }
+    // Keep acoustic.dsp.passive as-is.
     let result = simulate(
         &acoustic,
         &SimulateRequest {
