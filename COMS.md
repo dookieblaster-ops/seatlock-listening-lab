@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/imported-cabinet-walls-71c7` (merge to `main`). Level 3. Continued standing queue item 0.
+- **Context:** `main`. Level 3. Continued standing queue item 0.
 
 **Done this session:** (1) Imported `mesh` cabinets: air AABB from the solid, each axis-aligned outer face a plate with thickness measured through the plastic, layers from `build.material` / `build.wall`. (2) Sand-filled imported `sealed-test` matches the same parametric box within 0.06 dB; six faces; fidelity says walls vibrate. (3) README 5.11 / Level 3 C / open-items updated. Curved/slanted skin and per-part wall materials still out.
 
@@ -90,7 +90,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
-- 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on branch by Cursor.
+- 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on `main` by Cursor.
 - 2026-11-15: Board archived to `docs/coms-archive.md` for a fresh lead session; handoff package in `docs/new-chat.md`.
 - 2026-11-15: Partitions between chambers vibrate (mutual admittance in lumped network), done on `main` by Cursor.
 - 2026-11-15: Brace solids take air/print and split wall spans, done on `main` by Cursor.
