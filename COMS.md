@@ -49,6 +49,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
+- **Context:** `main`. Level 3. Owner chose the CSS Criton 3TD-X over the Skyline kit because ASR published a Klippel measurement.
+
+**Done this session:** Criton 3TD-X kit copy. Catalog `css-ldw7`, `css-ldw6`, `css-ld25x` (reference tier, so the generator does not propose them as budget parts). Design with the May 2024 passive schematic, two parallel woofers, sealed top chamber. ASR curves stored. Comparison: mid/treble ~2 dB RMS; bass relative to midband about 5 dB high in the lab.
+
+**Open, in order:** (1) Optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed. (3) Real PLA/TPU damping — do not invent. (4) Optional Criton follow-ups: kit flared port, called-out partition height, cabinet fill, maker FRD if a number file is found.
+
+**Pitfalls:** partition height is the midpoint between the mid and upper woofer, not a dimension on the drawing. Port is the drawing's 3 in × 8 in substitute, height on the back not called out. LD25X sensitivity 90 dB is from SoundImports; the spec sheet omits it. LDW7 bolt circle "6.67" has no unit on the listing (taken as inches). Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `cargo test -p seatlock-sim --test criton` 2 passed. Full `tools/cloud-check.sh` not re-run on this commit.
+
+**Next step:** optimize R/L/C toward a score.
+
+### 2026-11-15 — Cursor — Handoff: start here. Optimize passive R/L/C next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
 - **Context:** `main`. Level 3. Owner asked to skip the laptop check and do the other Level 0–2 quality items, plus more drivers and vents.
 
 **Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. Passive boards edit on the page and play. A design may have any number of vents and drivers; Play follows up to 16 drivers. ND25FA-4, RST28F-4, and RS225-4 now have mounting sizes from their drawings. No R/L/C optimizer yet.
@@ -72,6 +88,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-15: CSS Criton 3TD-X kit copy vs ASR CTA-2034 (mid/treble ~2 dB RMS; bass relatively high), done on `main` by Cursor. Skyline skipped for lack of a Klippel measurement.
 - 2026-11-15: Any number of vents, add-a-driver on the page, Play up to 16 drivers; three Dayton mounting drawings filled in. Laptop check skipped. Done on `main` by Cursor.
 - 2026-11-15: Passive page netlist editor (ohm / mH / µF), done on `main` by Cursor.
 - 2026-11-15: Passive listen-mode (network in listen impulses; digital radiator blocks skipped), done on `main` by Cursor.

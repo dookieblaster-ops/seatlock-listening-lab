@@ -1,0 +1,45 @@
+{
+  "id": "css-ld25x",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "CSS",
+  "model": "LD25X",
+  "kind": "tweeter",
+  "sealed_back": true,
+  "published": {
+    "fs_hz": 865.0,
+    "qes": 1.85,
+    "qms": 4.21,
+    "vas_m3": 0.00001,
+    "re_ohm": 6.4,
+    "le_h": 0.000066,
+    "sd_m2": 0.00053,
+    "pe_w": 75.0,
+    "mms_kg": 0.00018,
+    "cms_m_per_n": 0.0002,
+    "bl_tm": 2.76,
+    "sens_db_2v83": 90.0
+  },
+  "published_notes": {
+    "sens_db_2v83": "The Parts Express spec sheet opened 2026-11-15 does not print sensitivity. 90 dB at 2.83 V / 1 m is from the SoundImports listing opened the same day.",
+    "le_h": "Spec sheet: Le at 10 kHz is 0.066 mH.",
+    "xmax_m": "Not printed on the spec sheet or the SoundImports listing."
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.047498,
+    "outer_diameter_m": 0.073914,
+    "depth_m": 0.030988,
+    "source": {
+      "url": "https://www.soundimports.eu/en/css-ld25x.html",
+      "title": "SoundImports CSS LD25X listing: cutout 1.87 in, outside 2.91 in, depth 1.22 in. Bolt circle is not printed.",
+      "read_on": "2026-11-15"
+    }
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://cdnimages.opentip.com/Docs/PEX/290-3007--css-ld25x-spec-sheet.pdf",
+    "title": "CSS LD25X specification sheet (Parts Express 290-3007)",
+    "read_on": "2026-11-15"
+  },
+  "price": null
+}

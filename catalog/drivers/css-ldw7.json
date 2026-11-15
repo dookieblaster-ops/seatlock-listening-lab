@@ -1,0 +1,42 @@
+{
+  "id": "css-ldw7",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "CSS",
+  "model": "LDW7",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 30.0,
+    "qes": 0.39,
+    "qms": 9.0,
+    "vas_m3": 0.03086,
+    "re_ohm": 6.4,
+    "le_h": 0.00017,
+    "sd_m2": 0.0131,
+    "xmax_m": 0.0055,
+    "pe_w": 80.0,
+    "mms_kg": 0.0219,
+    "cms_m_per_n": 0.0013,
+    "bl_tm": 8.2,
+    "sens_db_2v83": 86.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.15291,
+    "outer_diameter_m": 0.18202,
+    "bolt_circle_m": 0.169418,
+    "bolt_count": 6,
+    "depth_m": 0.08204,
+    "source": {
+      "url": "https://www.soundimports.eu/en/css-ldw7.html",
+      "title": "SoundImports CSS LDW7 listing, read 2026-11-15. Bolt circle is printed as 6.67 with no unit; taken as inches because it lies between the 152.91 mm cutout and the 182.02 mm flange.",
+      "read_on": "2026-11-15"
+    }
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.soundimports.eu/en/css-ldw7.html",
+    "title": "SoundImports CSS LDW7 Bass-midwoofer specifications",
+    "read_on": "2026-11-15"
+  },
+  "price": null
+}

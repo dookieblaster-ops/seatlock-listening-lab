@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "name": "criton-3td-x",
+  "notes": "CSS Criton 3TD-X tower kit copy. Outer 215.9 × 1054.1 × 342.9 mm, 19.05 mm walls, from the 10 May 2024 drawing. Two LDW7 woofers in parallel on the woofer branch, LDW6 and LD25X in a sealed top chamber. Partition height is the midpoint between the mid and upper-woofer centers (the drawing does not call the partition out as its own dimension). Port is the drawing's substitute tube: 3 in ID × 8 in, on the back; height on the back is not dimensioned here (placed at 0.15 m). Inductor DCR from the schematic is in series with each coil. Kit pair price $1999 on the CSS page is not split onto the drivers.",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "box",
+        "width_m": 0.215899,
+        "height_m": 1.054097,
+        "depth_m": 0.342899,
+        "wall_m": 0.01905,
+        "edge_radius_m": 0.0
+      },
+      "chambers": [
+        {
+          "id": "bass",
+          "min_m": [0.01905, 0.01905, 0.01905],
+          "max_m": [0.196849, 0.323849, 0.695323],
+          "fill": null
+        },
+        {
+          "id": "top",
+          "min_m": [0.01905, 0.01905, 0.695323],
+          "max_m": [0.196849, 0.323849, 1.035047],
+          "fill": null
+        }
+      ],
+      "ducts": [
+        {
+          "id": "port",
+          "from": "bass",
+          "to": "outside",
+          "path_m": [
+            [0.10795, 0.139699, 0.15],
+            [0.10795, 0.342899, 0.15]
+          ],
+          "section": {
+            "shape": "round",
+            "start_m": [0.0762],
+            "end_m": [0.0762]
+          }
+        }
+      ],
+      "mounts": [
+        { "id": "woofer-low", "surface": "front", "at_m": [0.10795, 0.406399], "rear_into": "bass", "recess_m": 0.0 },
+        { "id": "woofer-high", "surface": "front", "at_m": [0.10795, 0.603248], "rear_into": "bass", "recess_m": 0.0 },
+        { "id": "mid", "surface": "front", "at_m": [0.10795, 0.787398], "rear_into": "top", "recess_m": 0.0 },
+        { "id": "tweeter", "surface": "front", "at_m": [0.10795, 0.908047], "rear_into": "top", "recess_m": 0.0 }
+      ],
+      "solids": []
+    },
+    "radiators": [
+      { "kind": "cone", "driver_id": "css-ldw7", "mount": "woofer-low" },
+      { "kind": "cone", "driver_id": "css-ldw7", "mount": "woofer-high" },
+      { "kind": "cone", "driver_id": "css-ldw6", "mount": "mid" },
+      { "kind": "cone", "driver_id": "css-ld25x", "mount": "tweeter" }
+    ],
+    "listening": { "distance_m": 1.0 }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [
+      { "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null },
+      { "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null },
+      { "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null },
+      { "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null }
+    ],
+    "passive": {
+      "source": ["amp", "gnd"],
+      "elements": [
+        { "kind": "R", "a": "amp", "b": "t1", "ohm": 1.5 },
+        { "kind": "C", "a": "t1", "b": "t2", "farad": 5.6e-6 },
+        { "kind": "L", "a": "t2", "b": "t2l", "henry": 0.0004 },
+        { "kind": "R", "a": "t2l", "b": "gnd", "ohm": 0.28 },
+        { "kind": "R", "a": "t2", "b": "t3", "ohm": 2.0 },
+        { "kind": "R", "a": "t3", "b": "gnd", "ohm": 22.0 },
+        { "kind": "driver", "a": "t3", "b": "gnd", "radiator": 3 },
+        { "kind": "R", "a": "amp", "b": "m1", "ohm": 1.0 },
+        { "kind": "C", "a": "m1", "b": "m2", "farad": 7.5e-5 },
+        { "kind": "L", "a": "m2", "b": "m2l", "henry": 0.003 },
+        { "kind": "R", "a": "m2l", "b": "gnd", "ohm": 1.4 },
+        { "kind": "L", "a": "m2", "b": "m3", "henry": 0.00075 },
+        { "kind": "R", "a": "m3", "b": "m4", "ohm": 0.286 },
+        { "kind": "C", "a": "m4", "b": "gnd", "farad": 1.0e-5 },
+        { "kind": "R", "a": "m4", "b": "m5", "ohm": 3.0 },
+        { "kind": "driver", "a": "m5", "b": "gnd", "radiator": 2 },
+        { "kind": "L", "a": "amp", "b": "w1", "henry": 0.003 },
+        { "kind": "R", "a": "w1", "b": "w2", "ohm": 0.349 },
+        { "kind": "C", "a": "w2", "b": "w3", "farad": 1.25e-4 },
+        { "kind": "R", "a": "w3", "b": "gnd", "ohm": 1.0 },
+        { "kind": "driver", "a": "w2", "b": "gnd", "radiator": 0 },
+        { "kind": "driver", "a": "w2", "b": "gnd", "radiator": 1 }
+      ]
+    },
+    "correction": {
+      "enabled": false,
+      "protected_band_hz": [3000.0, 5000.0],
+      "max_filters": 8
+    }
+  },
+  "electronics": {
+    "amplifiers": ["test-amp-a"],
+    "dsp_device": null
+  },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": true,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}

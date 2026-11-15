@@ -1,0 +1,41 @@
+{
+  "id": "css-ldw6",
+  "status": "sourced",
+  "tier": "reference",
+  "maker": "CSS",
+  "model": "LDW6",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 50.0,
+    "qes": 0.44,
+    "qms": 11.1,
+    "vas_m3": 0.0093,
+    "re_ohm": 4.8,
+    "le_h": 0.0009,
+    "sd_m2": 0.0093,
+    "pe_w": 60.0,
+    "mms_kg": 0.009,
+    "cms_m_per_n": 0.00076,
+    "bl_tm": 6.8,
+    "sens_db_2v83": 88.4
+  },
+  "published_notes": {
+    "xmax_m": "Not printed on the SoundImports listing opened 2026-11-15."
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.115,
+    "outer_diameter_m": 0.153,
+    "source": {
+      "url": "https://www.soundimports.eu/en/css-ldw6.html",
+      "title": "SoundImports CSS LDW6 listing: cutout 115 mm, outside 153 mm. Bolt circle and depth are not printed there.",
+      "read_on": "2026-11-15"
+    }
+  },
+  "response_file": null,
+  "source": {
+    "url": "https://www.soundimports.eu/en/css-ldw6.html",
+    "title": "SoundImports CSS LDW6 Bass-midwoofer specifications",
+    "read_on": "2026-11-15"
+  },
+  "price": null
+}
