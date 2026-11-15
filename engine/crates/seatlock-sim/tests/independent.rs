@@ -48,6 +48,32 @@ fn a_measured_value_replaces_the_makers_and_the_note_names_both() {
 }
 
 #[test]
+fn the_tebm_uses_erins_printed_parameters_and_names_the_sensitivity() {
+    let record = seatlock_core::catalog::driver("tectonic-tebm35c10-4").unwrap();
+    assert!(record
+        .get("response_file")
+        .and_then(Value::as_str)
+        .is_none());
+    let (merged, note) = seatlock_acoustics::with_independent(&record);
+    assert_eq!(merged["published"]["fs_hz"].as_f64(), Some(146.0));
+    assert_eq!(merged["published"]["vas_m3"].as_f64(), Some(0.000148));
+    assert_eq!(merged["published"]["sens_db_2v83"].as_f64(), Some(77.0));
+    // Maker sheet still has its own figures.
+    assert_eq!(record["published"]["fs_hz"].as_f64(), Some(166.0));
+    assert_eq!(record["published"]["sens_db_1w"].as_f64(), Some(80.0));
+    let note = note.unwrap();
+    assert!(note.contains("Erin's Audio Corner"), "{note}");
+    assert!(
+        note.contains("sensitivity at 2.83 V 77 dB (maker 80 dB at 1 W)"),
+        "{note}"
+    );
+    assert!(note.contains("resonance 146 Hz (maker 166 Hz)"), "{note}");
+    assert!(merged["published"].get("sens_db_1w").is_none());
+    // No printed break-up peak height on that review.
+    assert_eq!(seatlock_acoustics::breakup(&record), None);
+}
+
+#[test]
 fn the_measured_travel_sets_the_bass_limit() {
     // Where cone travel is the first limit, the clean level is the level at the drive voltage
     // raised until the cone moves 2.1 mm, the measured travel, not the maker's 5.3 mm.

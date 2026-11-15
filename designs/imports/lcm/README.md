@@ -24,7 +24,7 @@ Cabinet files downloaded 2026-11-13; Erin's curves 2026-11-14.
 
 ## What the design says
 
-- Drivers: Tang Band W3-1876S (3 in. woofer) and Tectonic TEBM35C10-4 (35 mm BMR), both in the catalog from their makers' sheets.
+- Drivers: Tang Band W3-1876S (3 in. woofer) and Tectonic TEBM35C10-4 (35 mm BMR). The BMR also carries Erin's printed DATS T/S and acoustic average sensitivity (graph FR only; no FRD).
 - DSP: Linkwitz-Riley 48 dB/octave at 200 Hz; tweeter -6 dB; high shelf +2.5 dB at 10 kHz (slope 1.0: the project's own slope was not decoded). Correction is off, so the lab plays the designer's settings only.
 - Holes marked on the model: the woofer and tweeter holes (filled by the drivers), the two wire holes in the back (sealed in the build notes), and the port's slot mouth (open).
 - Build: PLA at 30 % infill, the designer's stated minimum.
@@ -33,4 +33,4 @@ Cabinet files downloaded 2026-11-13; Erin's curves 2026-11-14.
 
 - The polyfill the build notes put in the tweeter's chamber (the quick and detailed models do not model fill).
 - Wall vibration (imported cabinets keep rigid walls).
-- The BMR's real bending behaviour above its piston range: there is no measured response file for it yet. That, and the makers' sensitivity figures, are the likely cause of the lab's bass sitting about 2 dB below the midrange where Erin's measurement is level (`erin/README.md`).
+- The BMR's midband level: Erin's DATS T/S closed about 1 dB of the earlier bass-to-mid step; the lab is still about 1.2 dB low vs Erin's near-level curve. Erin's acoustic average (~77 dB at 2.83 V) is several dB below the Vas path the lab keeps; the FR on that review is graph-only, and a response-file blend only shapes above ~3 kHz. See `erin/README.md` and STATUS question 12.

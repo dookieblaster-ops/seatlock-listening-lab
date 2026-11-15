@@ -21,6 +21,6 @@ Against the lab's `lcm-evo` everyday model, after aligning midband means (300 Hz
 
 - Erin's on-axis bass (40 to 270 Hz) is about level with its midband (+0.3 dB).
 - The lab's is about 2.3 dB low there. Midband shape against Erin is within about 1.6 dB RMS; above 2 kHz about 2.2 dB RMS.
-- Cause of the bass-to-midrange step: in the lab the BMR's band (400 to 2000 Hz) sits about 2.9 dB above the woofer's (80 to 180 Hz), even with the designer's −6 dB on the tweeter channel. Likely drivers: the makers' sensitivity figures, sealed-box loading of the small woofer, and the BMR modeled as a piston with no measured curve yet.
+- Cause of the bass-to-midrange step: with Erin's DATS T/S on the BMR (2026-11-15), the lab's on-axis bass-mid is about −1.2 dB (was −2.3 dB) vs Erin's +0.3 dB; the BMR band (400 to 2000 Hz) sits about 1.9 dB above the woofer's (80 to 180 Hz). Remaining gap: Erin's acoustic average (~77 dB at 2.83 V/1 m) vs the Vas-derived piston level the lab keeps; FR is graph-only; blend would not move midband absolute level anyway (hand-over ~3 kHz). STATUS question 12.
 
 Downloaded 2026-11-14.

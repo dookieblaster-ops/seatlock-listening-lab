@@ -189,7 +189,7 @@ fn parse_cone(fields: &Map<String, Value>) -> Result<Box<dyn Radiator>, String> 
 }
 
 /// Names of the values an independent measurement may replace, with how each is shown.
-const MEASURED_FIELDS: [(&str, &str, f64, &str); 9] = [
+const MEASURED_FIELDS: [(&str, &str, f64, &str); 11] = [
     ("fs_hz", "resonance", 1.0, "Hz"),
     ("qes", "Qes", 1.0, ""),
     ("qms", "Qms", 1.0, ""),
@@ -199,6 +199,8 @@ const MEASURED_FIELDS: [(&str, &str, f64, &str); 9] = [
     ("sd_m2", "cone area", 10000.0, "cm^2"),
     ("xmax_m", "usable cone travel", 1000.0, "mm"),
     ("pe_w", "power handling", 1.0, "W"),
+    ("sens_db_1w", "sensitivity at 1 W", 1.0, "dB"),
+    ("sens_db_2v83", "sensitivity at 2.83 V", 1.0, "dB"),
 ];
 
 /// The record with the first independent measurement's values put in place of the maker's
@@ -222,8 +224,32 @@ pub fn with_independent(record: &Value) -> (Value, Option<String>) {
             let Some(value) = values.get(key).and_then(Value::as_f64) else {
                 continue;
             };
-            let maker = sheet.get(key).and_then(Value::as_f64);
+            let maker = sheet.get(key).and_then(Value::as_f64).or_else(|| {
+                // Sensitivity may be printed at the other voltage; name that figure so the
+                // note still shows what the maker's sheet said.
+                match key {
+                    "sens_db_1w" => sheet.get("sens_db_2v83").and_then(Value::as_f64),
+                    "sens_db_2v83" => sheet.get("sens_db_1w").and_then(Value::as_f64),
+                    _ => None,
+                }
+            });
+            let maker_unit = if maker.is_some() && sheet.get(key).is_none() {
+                match key {
+                    "sens_db_1w" => "dB at 2.83 V",
+                    "sens_db_2v83" => "dB at 1 W",
+                    _ => unit,
+                }
+            } else {
+                unit
+            };
             sheet.insert(key.into(), Value::from(value));
+            // One sensitivity figure replaces the other so the lab does not keep the maker's
+            // 1 W number beside an independent 2.83 V number (sensitivity_1w_db prefers 1 W).
+            if key == "sens_db_1w" {
+                sheet.remove("sens_db_2v83");
+            } else if key == "sens_db_2v83" {
+                sheet.remove("sens_db_1w");
+            }
             let shown = |v: f64| {
                 format!("{:.3}", v * scale)
                     .trim_end_matches('0')
@@ -233,7 +259,11 @@ pub fn with_independent(record: &Value) -> (Value, Option<String>) {
             changed.push(
                 match maker {
                     Some(m) => {
-                        format!("{name} {} {unit} (maker {} {unit})", shown(value), shown(m))
+                        format!(
+                            "{name} {} {unit} (maker {} {maker_unit})",
+                            shown(value),
+                            shown(m)
+                        )
                     }
                     None => format!("{name} {} {unit} (maker: not printed)", shown(value)),
                 }

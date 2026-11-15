@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. TEBM independent T/S in; ask Q12 then 3D self-check
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`. Level 3. Continued queue item 1 from the post below.
+
+**Done this session:** (1) Searched for a numeric TEBM35C10-4 response: Erin's review has DATS T/S and prose sensitivity; FR is PNG only; HiFiCompass has TEBM65 not TEBM35; maker sheet graphs only; no FRD. (2) `catalog/drivers/tectonic-tebm35c10-4.json` `independent` from Erin (fs 146, Qes 1.109, Qms 3.848, Vas 0.148 L, Re 4.181, Le 0.07819 mH, Sd from 37.08 mm, sens_db_2v83 77). (3) `with_independent` replaces sensitivity fields and drops the other voltage. (4) LCM recheck: bass-mid −1.18 dB (was −2.25), BMR–woofer +1.9 dB (was +2.9). Remaining gap = acoustic 77 dB vs Vas-kept piston; blend cannot fix midband. STATUS question 12 asked.
+
+**Last check:** `cargo test -p seatlock-sim --test independent --test lcm`: independent 4 passed; lcm 3 passed, 1 ignored. `cargo fmt`; clippy `-D warnings` on acoustics+sim tests. Full `tools/cloud-check.sh` not re-run this short session.
+
+**Open, in order:** (1) Owner answer to STATUS question 12 (use Erin's 77 dB for BMR piston level?). (2) The 3D self-check's 249 % at low frequency on the LCM. (3) Standing queue (MDF/plywood, braces, CTA-2034 score, boundary elements, …).
+
+**Pitfalls:** do not digitize Erin's FR graph (README 9.1). Do not invent a sensitivity fix without Q12. `response_file` blend starts at k·a≈1 (~3 kHz for this BMR) and keeps model absolute level at the hand-over.
+
+**Next step:** if the owner answers Q12 yes, implement acoustic-level override for that independent figure and recheck LCM; else take queue item 2 (3D self-check).
+
 ### 2026-11-14 — Cursor — Handoff: start here. Erin's LCM curves in; BMR level is the bass step
 
 - **To:** next lead session (Claude or Cursor)
