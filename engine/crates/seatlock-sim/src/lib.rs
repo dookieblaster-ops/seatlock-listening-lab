@@ -486,10 +486,10 @@ pub fn simulate_with_progress(
                     let mut sample = seatlock_acoustics::VentedSample {
                         z_ab: solved.z_ab,
                         h_sum: Complex64::new(0.0, 0.0),
-                        h_each: [Complex64::new(0.0, 0.0); 4],
-                        port_count: solved.h_out.len().min(4),
+                        h_each: vec![Complex64::new(0.0, 0.0); solved.h_out.len()],
+                        port_count: solved.h_out.len(),
                     };
-                    for (index, h) in solved.h_out.iter().take(4).enumerate() {
+                    for (index, h) in solved.h_out.iter().enumerate() {
                         sample.h_each[index] = *h;
                         sample.h_sum += *h;
                     }
@@ -534,10 +534,18 @@ pub fn simulate_with_progress(
                             }
                             let sample = &mut samples[bin];
                             sample.z_ab = solved.z_in;
-                            sample.h_each = [Complex64::new(0.0, 0.0); 4];
+                            let slots = network
+                                .opening_order
+                                .iter()
+                                .copied()
+                                .max()
+                                .map(|slot| slot + 1)
+                                .unwrap_or(0);
+                            sample.h_each = vec![Complex64::new(0.0, 0.0); slots];
+                            sample.port_count = slots;
                             sample.h_sum = Complex64::new(0.0, 0.0);
                             for (slot, h) in network.opening_order.iter().zip(&solved.openings) {
-                                if *slot < 4 {
+                                if *slot < sample.h_each.len() {
                                     sample.h_each[*slot] = *h;
                                     sample.h_sum += *h;
                                 }
@@ -655,14 +663,21 @@ pub fn simulate_with_progress(
                         } else {
                             solve(&network.root, *freq)
                         };
+                        let slots = network
+                            .opening_order
+                            .iter()
+                            .copied()
+                            .max()
+                            .map(|slot| slot + 1)
+                            .unwrap_or(0);
                         let mut sample = seatlock_acoustics::VentedSample {
                             z_ab: wave.z_in,
                             h_sum: Complex64::new(0.0, 0.0),
-                            h_each: [Complex64::new(0.0, 0.0); 4],
-                            port_count: ports.len().min(4),
+                            h_each: vec![Complex64::new(0.0, 0.0); slots],
+                            port_count: slots,
                         };
                         for (slot, h) in network.opening_order.iter().zip(&wave.openings) {
-                            if *slot < 4 {
+                            if *slot < sample.h_each.len() {
                                 sample.h_each[*slot] = *h;
                                 sample.h_sum += *h;
                             }
@@ -717,10 +732,14 @@ pub fn simulate_with_progress(
                             }
                             sample.z_ab = z_ab[bin];
                             sample.h_sum = Complex64::new(0.0, 0.0);
-                            for (port, h) in run.h.iter().enumerate().take(4) {
+                            if sample.h_each.len() < run.h.len() {
+                                sample.h_each.resize(run.h.len(), Complex64::new(0.0, 0.0));
+                            }
+                            for (port, h) in run.h.iter().enumerate() {
                                 sample.h_each[port] = h[bin];
                                 sample.h_sum += h[bin];
                             }
+                            sample.port_count = sample.h_each.len();
                         }
                     } else {
                         fidelity.ignored.push(

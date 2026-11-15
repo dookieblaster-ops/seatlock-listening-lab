@@ -796,7 +796,7 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 }
 ```
 
-Kinds: `R` (`ohm`), `L` (`henry`), `C` (`farad`), and `driver` (`radiator` index into `speaker.radiators`). Checked against a series resistor into an equal load (half voltage), and against first-order LR low-pass and CR high-pass on a resistive load at the −3 dB frequency.
+Kinds: `R` (`ohm`), `L` (`henry`), `C` (`farad`), and `driver` (`radiator` index into `speaker.radiators`). A driver load may sit between any two nodes, so two woofers can be wired in series (one current through both, as in a dual-woofer tower) or each driver can have its own branch. Checked against a series resistor into an equal load (half voltage), two equal drivers in series (half voltage each, amplifier sees the sum), and against first-order LR low-pass and CR high-pass on a resistive load at the −3 dB frequency.
 
 ## 8. Correction and auto EQ
 
@@ -907,7 +907,7 @@ Cost is shown beside performance at all times. Every figure in it traces to a ca
 
 The user hears the simulated speaker and switches between designs.
 
-- The AudioWorklet runs the design's own DSP chain in the `seatlock-rt` kernel and outputs one channel per radiator. This is the part that would run on real hardware.
+- The AudioWorklet runs the design's own DSP chain in the `seatlock-rt` kernel and outputs one channel per radiator, up to 16. This is the part that would run on real hardware. The simulation itself does not cap how many drivers or vents a design may have.
 - The virtual speaker follows it. Each radiator's channel is convolved with that radiator's simulated impulse response, from amplifier voltage to pressure at the listening position, and the results are summed. The engine computes the impulse responses. Use one `ConvolverNode` per radiator with `normalize = false`, because the default rescales the response. When the design uses a passive R/L/C network (`dsp.passive`), that network is part of the impulse (not the worklet), and per-radiator digital crossover blocks are left out of playback; the filter text says so.
 - Sources are an audio file the user opens and built-in test signals: pink noise, sweeps, tones. Do not bundle music.
 - A/B: two designs are loaded at once and switched with a short crossfade, at matched level by default.
@@ -1014,7 +1014,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
 - E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, `tube` with printed end caps (a hybrid build), and `sheet_box` cut from sheet stock with a cut list; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
-- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter; passive R/L/C networks for kit-style crossovers (graphs, scores, listen impulses, and page netlist editor as built; C-Note MT kit copy vs ASR; value search still open). CHK-DSP-2.
+- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter; passive R/L/C networks for kit-style crossovers (graphs, scores, listen impulses, and the page netlist editor as built; C-Note MT kit copy vs ASR). Optimizing those part values is Level 3, with the optimizer. CHK-DSP-2.
 - G: C3 and C4; EQ per radiator and for the whole speaker.
 - H: all radiators playing; A/B between two designs at matched level; live limit indicators.
 - I: optimizer over continuous variables for chosen drivers; cost-against-quality plot; cost beside every score; the cheap-against-reference comparison of section 9.2.
@@ -1107,6 +1107,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - "Shape the inside" runs section 5.5's shaping in a worker, at 20 mm or 10 mm blocks, with progress and a stop button. It shows the unevenness before and after, the plastic added, and the level from the inside's shape for both, and "Use this inside" puts the plastic into the design.
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
 - A passive crossover board is edited on the page: turn it on or off, name the amplifier nodes, and add or change resistors (ohm), inductors (mH), capacitors (µF), and which driver each load is.
+- Extra drivers are added on the page (each with its own opening). Vents are air paths that open outside; add as many as the experiment needs. Play follows up to 16 drivers.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
 - Materials are chosen from the catalog by name: the print material (foaming filaments marked), the wall build (solid, two skins filled with sand or gypsum cement, or two skins with a second filament; each heard through the wall model of section 5.11), a panel's material or its layers (with Sandwich and Plywood presets), and an imported damping part's material.

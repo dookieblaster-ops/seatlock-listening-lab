@@ -408,4 +408,28 @@ mod tests {
         assert!(low < 0.12, "{low}");
         assert!((high - 1.0).abs() < 0.02, "{high}");
     }
+
+    /// Two woofers in series (Skyline-style tower): the same current, half the voltage each
+    /// when their impedances match, and the amplifier sees the sum.
+    #[test]
+    fn two_drivers_in_series_share_the_voltage() {
+        let net = PassiveNetwork::from_value(&json!({
+            "source": ["amp", "gnd"],
+            "elements": [
+                { "kind": "driver", "a": "amp", "b": "join", "radiator": 0 },
+                { "kind": "driver", "a": "join", "b": "gnd", "radiator": 1 }
+            ]
+        }))
+        .unwrap();
+        let z = [Complex64::new(4.0, 0.0), Complex64::new(4.0, 0.0)];
+        let sample = net.solve(80.0, &z).unwrap();
+        let top = sample.voltage[&0];
+        let bottom = sample.voltage[&1];
+        assert!((top.re - 0.5).abs() < 1e-9 && top.im.abs() < 1e-9, "{top}");
+        assert!(
+            (bottom.re - 0.5).abs() < 1e-9 && bottom.im.abs() < 1e-9,
+            "{bottom}"
+        );
+        assert!((sample.amp_impedance_ohm.re - 8.0).abs() < 1e-6);
+    }
 }

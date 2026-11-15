@@ -843,7 +843,7 @@ fn nd25_simulates_without_a_cone_travel_limit() {
 }
 
 #[test]
-fn nd25_on_the_front_is_not_exported() {
+fn nd25_on_the_front_exports_from_the_sheet_drawing() {
     let mut text = read_example();
     text = text.replace("test-woofer-a", "dayton-nd25fa-4");
     let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
@@ -852,11 +852,11 @@ fn nd25_on_the_front_is_not_exported() {
         report
             .warnings
             .iter()
-            .any(|line| line.contains("mounting size not published")),
+            .all(|line| !line.contains("mounting size not published")),
         "{:?}",
         report.warnings
     );
-    assert!(!report.can_export_print);
+    assert!(report.can_export_print, "{:?}", report.warnings);
 }
 
 #[test]

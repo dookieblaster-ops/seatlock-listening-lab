@@ -73,7 +73,7 @@ export function useListen() {
         await context.audioWorklet.addModule("/rt-worklet.js");
         workletReady.current = true;
       }
-      const count = Math.max(1, Math.min(4, prepared.channels.length));
+      const count = Math.max(1, Math.min(16, prepared.channels.length));
       const node = new AudioWorkletNode(context, "seatlock-rt", {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -129,7 +129,7 @@ export function useListen() {
       }
       const prepared = await prepare(context.sampleRate);
       const wasmBytes = await fetch("/seatlock_rt.wasm").then((response) => response.arrayBuffer());
-      const count = Math.max(1, Math.min(4, prepared.channels.length));
+      const count = Math.max(1, Math.min(16, prepared.channels.length));
       const node = new AudioWorkletNode(context, "seatlock-rt", {
         numberOfInputs: 1,
         numberOfOutputs: 1,

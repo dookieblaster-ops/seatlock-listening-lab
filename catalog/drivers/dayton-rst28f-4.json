@@ -16,6 +16,18 @@
     "pe_w": 80.0,
     "sens_db_2v83": 93.5
   },
+  "mounting": {
+    "cutout_diameter_m": 0.072,
+    "outer_diameter_m": 0.1045,
+    "bolt_circle_m": 0.090,
+    "bolt_count": 4,
+    "depth_m": 0.057,
+    "source": {
+      "url": "https://www.parts-express.com/pedocs/specs/275-141--dayton-audio-rst28f-4-specification-sheet.pdf",
+      "title": "RST28F-4 sheet drawing, mm: flange Ø104.5, Ø90 through the four holes (Ø4.5, Ø9 counterbore), body Ø72 taken as the cutout, overall depth 57.",
+      "read_on": "2026-11-15"
+    }
+  },
   "response_file": "catalog/drivers/responses/dayton-rst28f-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/275-141--dayton-audio-rst28f-4-specification-sheet.pdf",

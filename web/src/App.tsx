@@ -455,6 +455,128 @@ export default function App() {
           {driverLines.map((line) => (
             <p key={line} data-testid="driver-note">{line}</p>
           ))}
+          {design.speaker.radiators.map((item, index) =>
+            index === 0 || item.kind === "dml_panel" ? null : (
+              <div className="grid" key={`extra-driver-${index}`} data-testid={`extra-driver-${index}`}>
+                <TextField
+                  label={`Driver ${index + 1} face`}
+                  value={String(
+                    design.speaker.enclosure.mounts.find((mount) => mount.id === item.mount)?.surface ?? "front",
+                  )}
+                  onChange={(value) => {
+                    const next = structuredClone(design);
+                    const mount = next.speaker.enclosure.mounts.find((row) => row.id === item.mount);
+                    if (mount) {
+                      mount.surface = value;
+                    }
+                    void publish(next, designName);
+                  }}
+                />
+                <NumberField
+                  label={`Driver ${index + 1} across the face (mm)`}
+                  value={mm(
+                    Number(
+                      (
+                        design.speaker.enclosure.mounts.find((mount) => mount.id === item.mount)?.at_m as
+                          | number[]
+                          | undefined
+                      )?.[0] ?? 0,
+                    ),
+                  )}
+                  onChange={(value) => {
+                    const next = structuredClone(design);
+                    const mount = next.speaker.enclosure.mounts.find((row) => row.id === item.mount);
+                    if (mount) {
+                      const at = Array.isArray(mount.at_m) ? [...(mount.at_m as number[])] : [0, 0];
+                      at[0] = value / 1000;
+                      mount.at_m = at;
+                    }
+                    void publish(next, designName);
+                  }}
+                />
+                <NumberField
+                  label={`Driver ${index + 1} up the face (mm)`}
+                  value={mm(
+                    Number(
+                      (
+                        design.speaker.enclosure.mounts.find((mount) => mount.id === item.mount)?.at_m as
+                          | number[]
+                          | undefined
+                      )?.[1] ?? 0,
+                    ),
+                  )}
+                  onChange={(value) => {
+                    const next = structuredClone(design);
+                    const mount = next.speaker.enclosure.mounts.find((row) => row.id === item.mount);
+                    if (mount) {
+                      const at = Array.isArray(mount.at_m) ? [...(mount.at_m as number[])] : [0, 0];
+                      at[1] = value / 1000;
+                      mount.at_m = at;
+                    }
+                    void publish(next, designName);
+                  }}
+                />
+                <button
+                  type="button"
+                  data-testid={`remove-driver-${index}`}
+                  onClick={() => {
+                    const next = structuredClone(design);
+                    const mountId = String(next.speaker.radiators[index]?.mount ?? "");
+                    next.speaker.radiators.splice(index, 1);
+                    next.dsp.per_radiator.splice(index, 1);
+                    if (
+                      mountId &&
+                      !next.speaker.radiators.some((radiator) => String(radiator.mount) === mountId)
+                    ) {
+                      next.speaker.enclosure.mounts = next.speaker.enclosure.mounts.filter(
+                        (row) => String(row.id) !== mountId,
+                      );
+                    }
+                    void publish(next, designName);
+                  }}
+                >
+                  Remove driver {index + 1}
+                </button>
+              </div>
+            ),
+          )}
+          <button
+            type="button"
+            data-testid="add-driver"
+            title="Adds another driver, its own opening, and its own processing channel. Vents are air paths that lead outside; add as many as you need."
+            onClick={() => {
+              const next = structuredClone(design);
+              const n = next.speaker.radiators.length + 1;
+              const id = `driver-${n}`;
+              const width = Number(next.speaker.enclosure.outer.width_m ?? 0.16);
+              const height = Number(next.speaker.enclosure.outer.height_m ?? 0.25);
+              next.speaker.enclosure.mounts.push({
+                id,
+                surface: "front",
+                at_m: [width / 2, Math.min(Math.max(0.04, height - 0.04), 0.04 + 0.04 * n)],
+                rear_into: "main",
+                recess_m: 0,
+              });
+              next.speaker.radiators.push({
+                kind: "cone",
+                driver_id: String(next.speaker.radiators[0]?.driver_id ?? "test-woofer-a"),
+                mount: id,
+              });
+              next.dsp.per_radiator.push({
+                blocks: [],
+                delay_s: 0,
+                gain_db: 0,
+                invert: false,
+                limiter: null,
+              });
+              void publish(next, designName);
+            }}
+          >
+            Add another driver
+          </button>
+          <p>
+            Vents are air paths that open outside. Add as many as the experiment needs; each one is heard.
+          </p>
           <h3>Processing</h3>
           <div className="grid">
             <NumberField label="Sample rate (Hz)" value={design.dsp.sample_rate_hz} onChange={(value) => updateNumber("dsp.sample_rate_hz", value)} />

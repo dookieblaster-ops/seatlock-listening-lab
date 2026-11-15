@@ -208,6 +208,71 @@ fn listen_impulses_carry_the_passive_network() {
     );
 }
 
+/// A tower-style passive board: two woofers in series on a low-pass, a midrange and a
+/// tweeter on high-pass branches. Bass reaches both woofers; the tweeter stays quiet there.
+#[test]
+fn a_series_woofer_pair_and_two_other_drivers_split() {
+    let mut value = example("sealed-test");
+    let mounts = vec![
+        json!({ "id": "w1", "surface": "front", "at_m": [0.08, 0.06], "rear_into": "main", "recess_m": 0.0 }),
+        json!({ "id": "w2", "surface": "front", "at_m": [0.08, 0.12], "rear_into": "main", "recess_m": 0.0 }),
+        json!({ "id": "mid", "surface": "front", "at_m": [0.08, 0.18], "rear_into": "main", "recess_m": 0.0 }),
+        json!({ "id": "tw", "surface": "front", "at_m": [0.08, 0.22], "rear_into": "main", "recess_m": 0.0 }),
+    ];
+    let radiators: Vec<_> = ["w1", "w2", "mid", "tw"]
+        .iter()
+        .map(|id| json!({ "kind": "cone", "driver_id": "test-woofer-a", "mount": id }))
+        .collect();
+    let chains: Vec<_> = (0..4)
+        .map(|_| json!({ "blocks": [], "delay_s": 0.0, "gain_db": 0.0, "invert": false, "limiter": null }))
+        .collect();
+    value["speaker"]["enclosure"]["mounts"] = json!(mounts);
+    value["speaker"]["radiators"] = json!(radiators);
+    value["dsp"]["per_radiator"] = json!(chains);
+    let l = 0.002;
+    let c = 10e-6;
+    value["dsp"]["passive"] = json!({
+        "source": ["amp", "gnd"],
+        "elements": [
+            { "kind": "L", "a": "amp", "b": "wf", "henry": l },
+            { "kind": "driver", "a": "wf", "b": "join", "radiator": 0 },
+            { "kind": "driver", "a": "join", "b": "gnd", "radiator": 1 },
+            { "kind": "C", "a": "amp", "b": "mf", "farad": c },
+            { "kind": "driver", "a": "mf", "b": "gnd", "radiator": 2 },
+            { "kind": "C", "a": "amp", "b": "tf", "farad": c / 4.0 },
+            { "kind": "driver", "a": "tf", "b": "gnd", "radiator": 3 }
+        ]
+    });
+    let result = simulate(
+        &design(&value),
+        &SimulateRequest {
+            frequencies_hz: Some(vec![80.0, 8000.0]),
+            radiation: "point".into(),
+            walls: false,
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert!(
+        result
+            .issues
+            .iter()
+            .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        result.issues
+    );
+    assert_eq!(result.radiators.len(), 4);
+    let woofer_a = result.radiators[0].spl_db[0];
+    let woofer_b = result.radiators[1].spl_db[0];
+    let tweeter = result.radiators[3].spl_db[0];
+    println!("series tower 80 Hz: woofers {woofer_a:.1} / {woofer_b:.1}, tweeter {tweeter:.1}");
+    assert!(
+        (woofer_a - woofer_b).abs() < 1.0,
+        "{woofer_a} vs {woofer_b}"
+    );
+    assert!(woofer_a > tweeter + 6.0, "{woofer_a} vs {tweeter}");
+}
+
 /// Level of a pure tone in an impulse, via a one-bin DFT (dB re 1).
 fn tone_level_db(impulse: &[f64], sample_rate_hz: f64, freq_hz: f64) -> f64 {
     let n = impulse.len() as f64;

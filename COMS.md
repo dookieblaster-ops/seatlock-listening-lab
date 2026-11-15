@@ -49,29 +49,30 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`. Level 3. Passive page editor landed this session.
+- **Context:** `main`. Level 3. Owner asked to skip the laptop check and do the other Level 0–2 quality items, plus more drivers and vents.
 
-**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. `dsp.passive` drives graphs, scores, and listen mode; the page edits the R/L/C netlist (ohm / mH / µF). Kit copy `designs/imports/c-note/` vs ASR. No R/L/C optimizer yet.
+**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. Passive boards edit on the page and play. A design may have any number of vents and drivers; Play follows up to 16 drivers. ND25FA-4, RST28F-4, and RS225-4 now have mounting sizes from their drawings. No R/L/C optimizer yet.
 
-**Done this session:** (1) `PassiveEditor` under Processing: enable/disable, amp nodes, add/edit/remove R/L/C/driver loads. (2) Vitest for starter networks; e2e on C-Note (edit resistor, add inductor, turn off) and sealed-test (turn on). (3) README §7 / §14 / §15 / glossary; section 15 no longer says passive is out of scope.
+**Done this session:** (1) Removed the four-opening cap in the quick and detailed models. (2) Page button "Add another driver" (opening + channel). Play kernel raised from 4 to 16 channels. (3) "Add a driver in series" for a dual-woofer tower (Skyline-style: two woofers, one current, plus a mid and a tweeter). (4) Mounting from the three Dayton drawings. (5) README: R/L/C value search is Level 3. The Skyline kit's own drivers and crossover drawing are not copied in.
 
 **Open, in order (do the first without a new owner answer):**
 
 1. **Optimize R/L/C** toward a score (Level 3 optimizer track).
 2. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
 3. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
-4. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
+4. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree. Laptop `./check.sh` skipped at the owner's request.
 
 **Owner questions waiting (ask only when they start to matter):** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone). Q11 and Q12 answered — do not re-ask. Do not undo Q12. Do not digitize FR graphs.
 
-**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs and for listen playback (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. Listen impulses freeze Z(f) from the sim. Page shows L in mH and C in µF (stored as henry / farad). Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
+**Pitfalls:** ND25FA cutout is the drawn Ø45 rear body (a Ø56 ring is also on the sheet; bolt-circle diameter is not printed). RST28F cutout is the drawn Ø72 body; Ø90 is the hole circle. Play stops at 16 drivers; the simulator does not. When `passive` is set, digital radiator blocks are left out. Cloud check: `tools/cloud-check.sh`.
 
-**Last check:** vitest `PassiveEditor` 2 passed; playwright `e2e/passive.spec.ts` 2 passed; `tsc --noEmit` ok; wasm rebuild for the page. Full `tools/cloud-check.sh` not re-run.
+**Last check:** `tools/cloud-check.sh` passed (engine 227, browser 41) before the series-woofer tests. After that: series unit test and the four-driver tower sim test passed; vitest `PassiveEditor` 3; `tsc` ok. Laptop check skipped.
 
 **Next step:** item 1 — optimize R/L/C toward a score.
 
 ## Resolved
 
+- 2026-11-15: Any number of vents, add-a-driver on the page, Play up to 16 drivers; three Dayton mounting drawings filled in. Laptop check skipped. Done on `main` by Cursor.
 - 2026-11-15: Passive page netlist editor (ohm / mH / µF), done on `main` by Cursor.
 - 2026-11-15: Passive listen-mode (network in listen impulses; digital radiator blocks skipped), done on `main` by Cursor.
 - 2026-11-15: C-Note MT kit copy with `dsp.passive` vs ASR CTA-2034 (mid/treble ~2 dB RMS), done on `main` by Cursor (PR #11).

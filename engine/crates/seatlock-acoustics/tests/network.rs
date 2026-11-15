@@ -125,3 +125,30 @@ fn a_bandpass_sends_everything_out_through_its_vent_at_low_frequency() {
     let low = lumped_network(&[0.008, 0.012], &ducts, 0, 0.5);
     assert!((low.h_out[0] - 1.0).norm() < 1e-3, "{}", low.h_out[0]);
 }
+
+#[test]
+fn six_ports_each_keep_their_own_flow() {
+    let ports: Vec<PortSpec> = (0..6)
+        .map(|i| PortSpec {
+            area_m2: 4.0e-4 + i as f64 * 1.0e-4,
+            length_eff_m: 0.08 + i as f64 * 0.01,
+        })
+        .collect();
+    let ducts: Vec<Duct> = ports
+        .iter()
+        .map(|p| Duct {
+            from: 0,
+            to: None,
+            area_m2: p.area_m2,
+            length_eff_m: p.length_eff_m,
+        })
+        .collect();
+    let reference = vented_sample(0.02, &ports, 50.0, false);
+    let network = lumped_network(&[0.02], &ducts, 0, 50.0);
+    assert_eq!(reference.h_each.len(), 6);
+    assert_eq!(network.h_out.len(), 6);
+    for k in 0..6 {
+        assert!((network.h_out[k] - reference.h_each[k]).norm() < 1e-12);
+        assert!(reference.h_each[k].norm() > 0.0);
+    }
+}

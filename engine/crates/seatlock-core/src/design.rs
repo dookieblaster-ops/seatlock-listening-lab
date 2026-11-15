@@ -130,7 +130,7 @@ pub struct DspSection {
     /// Passive R/L/C network from one amplifier to the drivers (README section 7). When set,
     /// it sets each radiator's drive voltage; digital crossover blocks on each radiator are
     /// left out of the graphs (gain, delay, and polarity still apply).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", ts(type = "Record<string, unknown> | null"))]
     pub passive: Option<Value>,
     #[serde(default, flatten)]

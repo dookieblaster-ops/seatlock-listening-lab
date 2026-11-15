@@ -349,18 +349,53 @@ fn sensitivity_inverts_chk_drv_2_back_to_vas() {
 }
 
 #[test]
-fn unprinted_mounting_sizes_are_left_out() {
-    for id in ["dayton-nd25fa-4", "dayton-rst28f-4", "dayton-rs225-4"] {
-        let record = seatlock_core::catalog::driver(id).expect(id);
-        assert!(
-            record.pointer("/mounting/cutout_diameter_m").is_none(),
-            "{id} stores a cut-out"
-        );
-        assert!(
-            record.pointer("/mounting/bolt_count").is_none(),
-            "{id} stores a bolt count"
-        );
-    }
+fn sheet_drawings_supply_mounting_sizes() {
+    // Read from the maker's drawings on 2026-11-15 (mm on the sheet).
+    let nd = seatlock_core::catalog::driver("dayton-nd25fa-4").unwrap();
+    assert_eq!(
+        nd.pointer("/mounting/outer_diameter_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.066)
+    );
+    assert_eq!(
+        nd.pointer("/mounting/cutout_diameter_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.045)
+    );
+    assert_eq!(
+        nd.pointer("/mounting/bolt_count").and_then(|v| v.as_u64()),
+        Some(4)
+    );
+    let rst = seatlock_core::catalog::driver("dayton-rst28f-4").unwrap();
+    assert_eq!(
+        rst.pointer("/mounting/outer_diameter_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.1045)
+    );
+    assert_eq!(
+        rst.pointer("/mounting/cutout_diameter_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.072)
+    );
+    assert_eq!(
+        rst.pointer("/mounting/bolt_count").and_then(|v| v.as_u64()),
+        Some(4)
+    );
+    let rs = seatlock_core::catalog::driver("dayton-rs225-4").unwrap();
+    assert_eq!(
+        rs.pointer("/mounting/cutout_diameter_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.184)
+    );
+    assert_eq!(
+        rs.pointer("/mounting/bolt_circle_m")
+            .and_then(|v| v.as_f64()),
+        Some(0.209)
+    );
+    assert_eq!(
+        rs.pointer("/mounting/depth_m").and_then(|v| v.as_f64()),
+        Some(0.092)
+    );
     // The DC28F-8's sizes were read on 2026-11-12 from the seller's listing as a search
     // extract, so they are stored and marked unconfirmed; its bolt circle is still unknown.
     let dc28f = seatlock_core::catalog::driver("dayton-dc28f-8").unwrap();

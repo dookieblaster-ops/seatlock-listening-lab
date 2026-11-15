@@ -7,7 +7,7 @@ use core::f64::consts::TAU;
 use seatlock_dsp::biquad_step;
 
 const FRAMES: usize = 128;
-const CHANNELS: usize = 4;
+const CHANNELS: usize = 16;
 const STAGES: usize = 16;
 const DELAY: usize = 512;
 

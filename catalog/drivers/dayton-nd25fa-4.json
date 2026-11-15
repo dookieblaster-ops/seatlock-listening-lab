@@ -16,6 +16,17 @@
     "pe_w": 20.0,
     "sens_db_2v83": 90.0
   },
+  "mounting": {
+    "cutout_diameter_m": 0.045,
+    "outer_diameter_m": 0.066,
+    "bolt_count": 4,
+    "depth_m": 0.0359,
+    "source": {
+      "url": "https://www.parts-express.com/pedocs/specs/275-059--dayton-audio-ND25FA-4-specifications.pdf",
+      "title": "ND25FA-4 sheet drawing, mm: flange Ø66, rear body Ø45 (used as the cutout), four Ø4.2 holes, overall depth 35.9. A Ø56 ring is also drawn; its bolt-circle diameter is not printed as its own number.",
+      "read_on": "2026-11-15"
+    }
+  },
   "response_file": "catalog/drivers/responses/dayton-nd25fa-4.json",
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/275-059--dayton-audio-ND25FA-4-specifications.pdf",

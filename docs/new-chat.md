@@ -33,7 +33,7 @@ After **Check COMS.md** / **Go**, the newest handoff says to continue from the f
 1. **Optimize R/L/C** toward a score
 2. Then research-plan / walls / optional cleanup (see `COMS.md`)
 
-Already on `main`: `dsp.passive` for graphs, scores, listen impulses, and the page netlist editor; C-Note MT kit copy vs ASR (`designs/imports/c-note/`).
+Already on `main`: `dsp.passive` for graphs, scores, listen impulses, and the page netlist editor; any number of vents and an add-driver control (Play follows up to 16); C-Note MT kit copy vs ASR (`designs/imports/c-note/`).
 
 ## What “done” looks like for a lead turn
 

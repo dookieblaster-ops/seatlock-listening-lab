@@ -44,7 +44,7 @@ class SeatlockRtProcessor extends AudioWorkletProcessor {
   bindOutput() {
     const memory = this.exports.memory;
     this.views = [];
-    for (let channel = 0; channel < 4; channel += 1) {
+    for (let channel = 0; channel < 16; channel += 1) {
       this.views.push(
         new Float32Array(memory.buffer, this.outPtr + channel * this.capacity * 4, this.capacity),
       );

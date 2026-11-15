@@ -19,6 +19,18 @@
     "cms_m_per_n": 0.00072,
     "bl_tm": 6.38
   },
+  "mounting": {
+    "cutout_diameter_m": 0.184,
+    "outer_diameter_m": 0.223,
+    "bolt_circle_m": 0.209,
+    "bolt_count": 6,
+    "depth_m": 0.092,
+    "source": {
+      "url": "https://www.parts-express.com/pedocs/specs/295-376-dayton-audio-rs225-4-spec-sheet-revised.pdf",
+      "title": "RS225-4 sheet drawing, mm: cutout 184, flange 223, bolt circle 209, six Ø5.5 holes, overall depth 92.",
+      "read_on": "2026-11-15"
+    }
+  },
   "response_file": null,
   "source": {
     "url": "https://www.parts-express.com/pedocs/specs/295-376-dayton-audio-rs225-4-spec-sheet-revised.pdf",

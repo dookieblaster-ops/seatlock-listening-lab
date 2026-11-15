@@ -517,9 +517,6 @@ fn build(
             chambers[index].id
         ));
     }
-    if ports.len() > 4 {
-        return Err("More than four ducts lead outside; the lab handles four so far.".into());
-    }
     Ok(AirNetwork {
         chambers,
         volumes_m3: volumes,

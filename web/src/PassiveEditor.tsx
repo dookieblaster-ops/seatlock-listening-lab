@@ -65,6 +65,35 @@ function storeValue(kind: string, display: number): Record<string, number> {
   return { ohm: display };
 }
 
+/** Put another driver in series with the last driver load (two woofers, one current). */
+export function addSeriesDriver(network: PassiveNetwork, radiatorCount: number): PassiveNetwork {
+  const elements = network.elements.map((row) => ({ ...row }));
+  const used = new Set(
+    elements.filter((row) => row.kind === "driver").map((row) => Number(row.radiator)),
+  );
+  let radiator = 0;
+  while (used.has(radiator) && radiator < Math.max(1, radiatorCount)) {
+    radiator += 1;
+  }
+  if (radiator >= Math.max(1, radiatorCount)) {
+    radiator = Math.max(0, radiatorCount - 1);
+  }
+  let last = -1;
+  elements.forEach((row, index) => {
+    if (row.kind === "driver") {
+      last = index;
+    }
+  });
+  if (last < 0) {
+    elements.push({ kind: "driver", a: network.source[0], b: network.source[1], radiator });
+    return { ...network, elements };
+  }
+  const join = `series-${radiator}`;
+  elements[last] = { ...elements[last], b: join };
+  elements.push({ kind: "driver", a: join, b: network.source[1], radiator });
+  return { ...network, elements };
+}
+
 function blankPart(kind: string, radiatorCount: number): Record<string, unknown> {
   if (kind === "driver") {
     return { kind: "driver", a: "amp", b: "gnd", radiator: Math.max(0, radiatorCount - 1) };
@@ -211,6 +240,14 @@ export function PassiveEditor({ value, radiatorCount, onChange }: PassiveEditorP
             );
           })}
           <div className="grid">
+            <button
+              type="button"
+              data-testid="passive-add-series"
+              title="Two woofers that share one current, the way a tower kit wires a pair in series. The new driver sits below the last driver load."
+              onClick={() => onChange(addSeriesDriver(network, radiatorCount))}
+            >
+              Add a driver in series
+            </button>
             {(["R", "L", "C", "driver"] as const).map((kind) => (
               <button
                 key={kind}
