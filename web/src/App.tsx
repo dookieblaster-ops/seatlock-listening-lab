@@ -8,6 +8,7 @@ import { CostPanel } from "./CostPanel";
 import { CostQuality } from "./CostQuality";
 import { Generate } from "./Generate";
 import { printToScad } from "./openscad";
+import { PassiveEditor, type PassiveNetwork } from "./PassiveEditor";
 import { ShapeInside } from "./ShapeInside";
 import type { Issue } from "./generated/Issue";
 import { displayGrid, Graph, nearestValue } from "./Graph";
@@ -48,6 +49,8 @@ type Design = {
       invert: boolean;
       limiter: unknown;
     }>;
+    /** Passive R/L/C board from one amp to the drivers (README section 7). */
+    passive?: PassiveNetwork | null;
     correction: { enabled: boolean; protected_band_hz: number[]; max_filters: number };
   };
   electronics: { amplifiers: string[]; dsp_device: string | null };
@@ -473,6 +476,15 @@ export default function App() {
             }} />
             Flip polarity
           </label>
+          <PassiveEditor
+            value={design.dsp.passive ?? null}
+            radiatorCount={design.speaker.radiators.length}
+            onChange={(passive) => {
+              const next = structuredClone(design);
+              next.dsp.passive = passive;
+              void publish(next, designName);
+            }}
+          />
           <label className="check">
             <input type="checkbox" checked={design.dsp.correction.enabled} onChange={(event) => {
               const next = structuredClone(design);

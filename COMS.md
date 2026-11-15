@@ -45,34 +45,34 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. Passive page editor next
+### 2026-11-15 — Cursor — Handoff: start here. Optimize passive R/L/C next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`. Level 3. Passive listen-mode landed this session.
+- **Context:** `main`. Level 3. Passive page editor landed this session.
 
-**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. `dsp.passive` drives graphs, scores, and listen mode (network in the convolver impulses; leftover digital radiator blocks not played; filter text says loads are frozen at sim Z). Kit copy `designs/imports/c-note/` vs ASR. No page netlist editor; no R/L/C optimizer yet.
+**Where the product stands (one screen):** Levels 0–2 complete. Level 3 in progress. `dsp.passive` drives graphs, scores, and listen mode; the page edits the R/L/C netlist (ohm / mH / µF). Kit copy `designs/imports/c-note/` vs ASR. No R/L/C optimizer yet.
 
-**Done this session:** (1) `listen_package` / `impulse_responses`: keep `dsp.passive` in the acoustic IR; skip per-radiator digital blocks in worklet channels when passive is set; label frozen loads. (2) Test `listen_impulses_carry_the_passive_network` on the first-order two-way fixture. (3) README §7 / §10 / Level 3 F wording.
+**Done this session:** (1) `PassiveEditor` under Processing: enable/disable, amp nodes, add/edit/remove R/L/C/driver loads. (2) Vitest for starter networks; e2e on C-Note (edit resistor, add inductor, turn off) and sealed-test (turn on). (3) README §7 / §14 / §15 / glossary; section 15 no longer says passive is out of scope.
 
 **Open, in order (do the first without a new owner answer):**
 
-1. **Passive page editor** for the netlist (add/edit R/L/C/driver nodes).
-2. **Optimize R/L/C** toward a score (Level 3 optimizer track).
-3. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
-4. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
-5. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
+1. **Optimize R/L/C** toward a score (Level 3 optimizer track).
+2. **Research plan (README 2.6):** CTA-2034 preference rating as the lab's score; BEM; multi-source generator harden; larger budget woofers; browser speed; non-box page fields.
+3. **Wall remainder:** real PLA/TPU damping figures (tap test / DMA — do not invent). Imported mesh flats, MDF/plywood, braces, partitions already vibrate.
+4. **Optional:** 1/2 in MDF stock for C-Note; dimensioned baffle holes; inductor DCR; shrink LCM 3D self-check; partition coupling inside the waveguide tree.
 
 **Owner questions waiting (ask only when they start to matter):** 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone). Q11 and Q12 answered — do not re-ask. Do not undo Q12. Do not digitize FR graphs.
 
-**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs and for listen playback (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. Listen impulses freeze Z(f) from the sim; they do not re-solve the network per audio block. Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
+**Pitfalls:** when `passive` is set, digital blocks on radiators are ignored for graphs and for listen playback (label says so). Amp is an ideal voltage source. No mutual inductance / transformers. Listen impulses freeze Z(f) from the sim. Page shows L in mH and C in µF (stored as henry / farad). Cloud check: `tools/cloud-check.sh`. Stable Rust ~1.100.
 
-**Last check:** `cargo test -p seatlock-sim --test passive`: 3 passed. `listen_package` check ok. fmt; clippy `-D warnings` on sim/acoustics. Full `tools/cloud-check.sh` not re-run.
+**Last check:** vitest `PassiveEditor` 2 passed; playwright `e2e/passive.spec.ts` 2 passed; `tsc --noEmit` ok; wasm rebuild for the page. Full `tools/cloud-check.sh` not re-run.
 
-**Next step:** item 1 — passive page netlist editor.
+**Next step:** item 1 — optimize R/L/C toward a score.
 
 ## Resolved
 
+- 2026-11-15: Passive page netlist editor (ohm / mH / µF), done on `main` by Cursor.
 - 2026-11-15: Passive listen-mode (network in listen impulses; digital radiator blocks skipped), done on `main` by Cursor.
 - 2026-11-15: C-Note MT kit copy with `dsp.passive` vs ASR CTA-2034 (mid/treble ~2 dB RMS), done on `main` by Cursor (PR #11).
 - 2026-11-15: Passive R/L/C crossover for graphs and scores (`dsp.passive`), done on `main` by Cursor; editor/optimize still open.

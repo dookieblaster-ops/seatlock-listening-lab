@@ -781,7 +781,7 @@ These must agree (CHK-GEO-1). When they do not, the geometry code is wrong.
 - Changing a parameter during playback crossfades between old and new settings over about 20 ms.
 - Export for real hardware: for each radiator, a text file of biquad coefficients at a chosen sample rate, and FIR filters as mono WAV files. Hardware-specific formats wait for the owner's choice of playback hardware (`STATUS.md`).
 
-**Passive crossover** (as built, 2026-11-15). A design may set `dsp.passive` to an R/L/C network from one amplifier to the drivers, the way a kit crossover board works. At each frequency the lab solves the network with each driver's own terminal impedance (coil plus the box load) as the load, and that complex voltage drives the radiator in place of a digital crossover block. Gain, delay, and polarity on each radiator still apply. Digital crossover or EQ blocks listed on the radiators are left out of the graphs when `passive` is set, with a label line. Kit check: `designs/imports/c-note/` (Parts Express C-Note MT) against ASR CTA-2034 curves in `asr/` (CC BY-NC-SA). Listen mode folds each radiator's network transfer into that radiator's listen impulse (amplifier to the listening position), with driver loads frozen at the simulator's impedance at each frequency; the worklet does not play the leftover digital radiator blocks. A page editor for the netlist and optimizing R/L/C values toward a score are queued with the Level 3 optimizer.
+**Passive crossover** (as built, 2026-11-15). A design may set `dsp.passive` to an R/L/C network from one amplifier to the drivers, the way a kit crossover board works. At each frequency the lab solves the network with each driver's own terminal impedance (coil plus the box load) as the load, and that complex voltage drives the radiator in place of a digital crossover block. Gain, delay, and polarity on each radiator still apply. Digital crossover or EQ blocks listed on the radiators are left out of the graphs when `passive` is set, with a label line. Kit check: `designs/imports/c-note/` (Parts Express C-Note MT) against ASR CTA-2034 curves in `asr/` (CC BY-NC-SA). Listen mode folds each radiator's network transfer into that radiator's listen impulse (amplifier to the listening position), with driver loads frozen at the simulator's impedance at each frequency; the worklet does not play the leftover digital radiator blocks. The page edits the netlist (add, change, or remove R, L, C, and driver loads; values in ohm, mH, and µF). Optimizing R/L/C values toward a score is queued with the Level 3 optimizer.
 
 ```jsonc
 "passive": {
@@ -1014,7 +1014,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - C: `lumped` vented box; `waveguide` for ports and straight or tapered ducts; `baffle` radiation with edge diffraction, piston directivity, and separate source positions; published response curves. CHK-BOX-3, CHK-BOX-4, CHK-WG-1, CHK-WG-2, CHK-WG-3, CHK-RAD-1, CHK-RAD-2.
 - D: openings with exterior blocks; `H_k`; background jobs with progress and cancel; two-resolution uncertainty. CHK-FDTD-3, CHK-FDTD-4.
 - E: outer shapes with rounded and chamfered edges, a sloped baffle, `prism`, `tube` with printed end caps (a hybrid build), and `sheet_box` cut from sheet stock with a cut list; round and slot ports, several chambers, recesses and bolt holes from mounting data, split into printable parts, 3MF export, print time.
-- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter; passive R/L/C networks for kit-style crossovers (graphs, scores, and listen impulses as built; C-Note MT kit copy vs ASR; page editor and value search still open). CHK-DSP-2.
+- F: Butterworth and Linkwitz–Riley crossovers, fractional delay, automatic polarity, per-radiator limiter; passive R/L/C networks for kit-style crossovers (graphs, scores, listen impulses, and page netlist editor as built; C-Note MT kit copy vs ASR; value search still open). CHK-DSP-2.
 - G: C3 and C4; EQ per radiator and for the whole speaker.
 - H: all radiators playing; A/B between two designs at matched level; live limit indicators.
 - I: optimizer over continuous variables for chosen drivers; cost-against-quality plot; cost beside every score; the cheap-against-reference comparison of section 9.2.
@@ -1106,6 +1106,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 - Evenness is shown with its two parts: straight ahead, and a little off to the sides and up and down.
 - "Shape the inside" runs section 5.5's shaping in a worker, at 20 mm or 10 mm blocks, with progress and a stop button. It shows the unevenness before and after, the plastic added, and the level from the inside's shape for both, and "Use this inside" puts the plastic into the design.
 - The cabinet's inside is edited on the page: air spaces (chambers) by their corners, and air paths by their two ends, shape, sizes at each end (a taper), and their corners in mm, one per line.
+- A passive crossover board is edited on the page: turn it on or off, name the amplifier nodes, and add or change resistors (ohm), inductors (mH), capacitors (µF), and which driver each load is.
 - The app asks for `baffle` radiation by default, because a real cabinet loses bass to the baffle step. `point` in `half` space is for checks, which name their own model. "Run the outside in 3D" runs `exterior` radiation at 10 mm and then 5 mm in a worker and draws it over the everyday model, with the in-room curve when the design has a room. A design with a source that faces away from the listener gets a warning that sends the user to that button.
 - The screen holds design controls, the 3D view and graphs, score and cost, and a listen bar that is always within reach. Narrow screens stack them.
 - Materials are chosen from the catalog by name: the print material (foaming filaments marked), the wall build (solid, two skins filled with sand or gypsum cement, or two skins with a second filament; each heard through the wall model of section 5.11), a panel's material or its layers (with Sandwich and Plywood presets), and an imported damping part's material.
@@ -1123,12 +1124,13 @@ Say so in the interface wherever it matters.
 - Tweeter horns and waveguides, which need a different solver.
 - Damping fill in the quick and detailed models (the full 3D model has it for imported damping parts, with one flow-resistivity figure at every frequency, section 5.5), and each resonance's own wall loss (the 3D model applies one average, section 5.5).
 - Voice-coil heating over time, and distortion.
-- Passive crossovers are out of scope by design.
+- Mutual inductance and transformer models in a passive board (series R, L, and C and driver loads are in; section 7).
 
 ## 16. Glossary
 
 | Interface wording | Technical term | Meaning |
 | --- | --- | --- |
+| Passive crossover board | `dsp.passive` R/L/C network | Parts between one amplifier and the drivers that split the signal, the way a kit crossover PCB works. |
 | Driver | Loudspeaker drive unit | A single woofer, tweeter, or full-range unit. |
 | Sound source | Radiator | Anything driven by one amplifier channel that makes sound: a cone driver with its enclosure, or a DML panel. |
 | Panel speaker | DML panel, `dml_panel` | A stiff, light panel made to vibrate by an exciter. It radiates through many bending resonances at once. |
