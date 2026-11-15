@@ -51,13 +51,13 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 - **Status:** handoff
 - **Context:** `main`. Level 3. Owner chose the CSS Criton 3TD-X over the Skyline kit because ASR published a Klippel measurement.
 
-**Done this session:** Criton 3TD-X kit copy. Catalog `css-ldw7`, `css-ldw6`, `css-ld25x` (reference tier, so the generator does not propose them as budget parts). Design with the May 2024 passive schematic, two parallel woofers, sealed top chamber. ASR curves stored. Comparison: mid/treble ~2 dB RMS; bass relative to midband about 5 dB high in the lab.
+**Done this session:** Criton 3TD-X kit copy, then the cabinet from the assembly guide and the May 2024 drawing. Mid and tweeter share a sealed box on the front of the top (6 in deep, floor 13.5 in from the top). Woofer air is the rest, including behind that box. Port 3 × 8 in with its top at the 9 in side-view callout. Comparison after that: mid/treble still ~1.9 / 1.8 dB RMS; bass-mid lab +5.0 vs ASR −0.5.
 
-**Open, in order:** (1) Optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed. (3) Real PLA/TPU damping — do not invent. (4) Optional Criton follow-ups: kit flared port, called-out partition height, cabinet fill, maker FRD if a number file is found.
+**Open, in order:** (1) Optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed. (3) Real PLA/TPU damping — do not invent. (4) Optional Criton: lining in the everyday model, brace holes, the 0.47 µF part once it can be seen on the schematic, port flare, maker FRD.
 
-**Pitfalls:** partition height is the midpoint between the mid and upper woofer, not a dimension on the drawing. Port is the drawing's 3 in × 8 in substitute, height on the back not called out. LD25X sensitivity 90 dB is from SoundImports; the spec sheet omits it. LDW7 bolt circle "6.67" has no unit on the listing (taken as inches). Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** 6 in chamber depth is the short side of braces C and D (6.75 in from the outside front). The 13.5 in floor also matches two 6 in denim pads plus a 3/4 in brace. The 9 in callout is taken as the top of the 3 in port, not a centerline. LD25X sensitivity 90 dB is from SoundImports. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-sim --test criton` 2 passed. Full `tools/cloud-check.sh` not re-run on this commit.
+**Last check:** `cargo test -p seatlock-sim --test criton` 2 passed after the cabinet change. Full `tools/cloud-check.sh` not re-run.
 
 **Next step:** optimize R/L/C toward a score.
 

@@ -14,4 +14,4 @@ On the spinorama page: measured sensitivity 86.8 dB (300 Hz–3 kHz, 2.83 V, 1 m
 Against the lab's `criton-3td-x` everyday model with the kit passive network, after aligning midband means (300 Hz to 5 kHz):
 
 - Midband and treble shapes are within about 2 dB RMS of ASR.
-- Bass relative to that midband is about 5 dB higher in the lab than in the ASR file (lab about +5 dB, ASR about −0.5 dB).
+- Bass relative to that midband is about 5 dB higher in the lab than in the ASR file (lab about +5 dB, ASR about −0.5 dB), after the cabinet was set from the drawing and the assembly guide (front top box, woofer air behind it, 3 × 8 in port).

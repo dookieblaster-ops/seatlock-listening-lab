@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "criton-3td-x",
-  "notes": "CSS Criton 3TD-X tower kit copy. Outer 215.9 × 1054.1 × 342.9 mm, 19.05 mm walls, from the 10 May 2024 drawing. Two LDW7 woofers in parallel on the woofer branch, LDW6 and LD25X in a sealed top chamber. Partition height is the midpoint between the mid and upper-woofer centers (the drawing does not call the partition out as its own dimension). Port is the drawing's substitute tube: 3 in ID × 8 in, on the back; height on the back is not dimensioned here (placed at 0.15 m). Inductor DCR from the schematic is in series with each coil. Kit pair price $1999 on the CSS page is not split onto the drivers.",
+  "notes": "CSS Criton 3TD-X tower kit copy from the 10 May 2024 drawing and the assembly guide. Outer 215.9 × 1054.1 × 342.9 mm, 19.05 mm walls. The midrange and tweeter share a sealed box on the front of the top: 6 in deep (brace C/D) and 13.5 in down from the top (that height also fits the two 6 in denim pads plus the brace between them). Woofer air is the rest of the cabinet, including the space behind that box up to the top, joined by a short wide opening. Port 3 in ID × 8 in on the back; the side view's 9 in callout is taken as the top of that port. Inductor DCR from the schematic is in series with each coil. The 0.47 µF in the parts list is not placed: it is not readable on the schematic. Kit pair price $1999 is not split onto the drivers.",
   "speaker": {
     "enclosure": {
       "outer": {
@@ -16,24 +16,44 @@
         {
           "id": "bass",
           "min_m": [0.01905, 0.01905, 0.01905],
-          "max_m": [0.196849, 0.323849, 0.695323],
+          "max_m": [0.196849, 0.323849, 0.711198],
+          "fill": null
+        },
+        {
+          "id": "rear",
+          "min_m": [0.01905, 0.17145, 0.711198],
+          "max_m": [0.196849, 0.323849, 1.035047],
           "fill": null
         },
         {
           "id": "top",
-          "min_m": [0.01905, 0.01905, 0.695323],
-          "max_m": [0.196849, 0.323849, 1.035047],
+          "min_m": [0.01905, 0.01905, 0.711198],
+          "max_m": [0.196849, 0.17145, 1.035047],
           "fill": null
         }
       ],
       "ducts": [
         {
+          "id": "join",
+          "from": "bass",
+          "to": "rear",
+          "path_m": [
+            [0.10795, 0.24765, 0.691],
+            [0.10795, 0.24765, 0.731]
+          ],
+          "section": {
+            "shape": "rect",
+            "start_m": [0.1778, 0.1524],
+            "end_m": [0.1778, 0.1524]
+          }
+        },
+        {
           "id": "port",
           "from": "bass",
           "to": "outside",
           "path_m": [
-            [0.10795, 0.139699, 0.15],
-            [0.10795, 0.342899, 0.15]
+            [0.10795, 0.139699, 0.1905],
+            [0.10795, 0.342899, 0.1905]
           ],
           "section": {
             "shape": "round",
