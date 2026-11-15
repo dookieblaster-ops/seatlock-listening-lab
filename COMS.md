@@ -51,9 +51,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 - **Status:** handoff
 - **Context:** `main`. Level 3. Owner chose the CSS Criton 3TD-X over the Skyline kit because ASR published a Klippel measurement.
 
-**Done this session:** Criton 3TD-X kit copy, then the cabinet from the assembly guide and the May 2024 drawing. Mid and tweeter share a sealed box on the front of the top (6 in deep, floor 13.5 in from the top). Woofer air is the rest, including behind that box. Port 3 × 8 in with its top at the 9 in side-view callout. Comparison after that: mid/treble still ~1.9 / 1.8 dB RMS; bass-mid lab +5.0 vs ASR −0.5.
+**Done this session:** Criton cabinet from the drawing and assembly guide. Then a pass over YouTube and forums for the leftovers. No 3TD-X assembly video. CSS clips are the 1TD-X crossover and a 2-vs-3 depth remark (13.5 in, already used). ASR thread confirms the front sealed box and that fancy caps do not measure differently. The 0.47 µF is on the parts list and on the tweeter/mid board photo, but neither the schematic text nor the photo shows its two nodes. No flare size, lining resistivity, or brace-hole model. Design unchanged by that pass.
 
-**Open, in order:** (1) Optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed. (3) Real PLA/TPU damping — do not invent. (4) Optional Criton: lining in the everyday model, brace holes, the 0.47 µF part once it can be seen on the schematic, port flare, maker FRD.
+**Open, in order:** (1) Optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score, BEM, larger budget woofers, browser speed. (3) Real PLA/TPU damping — do not invent. (4) Criton leftovers only if a source appears: 0.47 µF nodes, port flare, lining resistivity, maker FRD.
 
 **Pitfalls:** 6 in chamber depth is the short side of braces C and D (6.75 in from the outside front). The 13.5 in floor also matches two 6 in denim pads plus a 3/4 in brace. The 9 in callout is taken as the top of the 3 in port, not a centerline. LD25X sensitivity 90 dB is from SoundImports. Do not digitize graphs. Do not undo Q12.
 
