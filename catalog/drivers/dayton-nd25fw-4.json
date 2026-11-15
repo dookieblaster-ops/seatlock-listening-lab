@@ -1,0 +1,49 @@
+{
+  "id": "dayton-nd25fw-4",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "ND25FW-4",
+  "kind": "tweeter",
+  "sealed_back": true,
+  "published": {
+    "fs_hz": 1350.0,
+    "qes": 2.487,
+    "qms": 3.638,
+    "re_ohm": 3.2,
+    "le_h": 4e-05,
+    "sd_m2": 0.0005067,
+    "pe_w": 20.0,
+    "sens_db_1w": 91.0
+  },
+  "published_notes": {
+    "qes": "Sheet prints Qes as N/A; value is from the maker's DATS export in the Graphs/FRD/ZMA package (TEXT/ND25FW-4_dats.txt / ND25FW-4_clio.txt), revision 09/03/2015.",
+    "qms": "Sheet prints Qms as N/A; value is from the maker's DATS export in the same package.",
+    "sd_m2": "Sheet prints Sd as N/A; record uses the printed 1 in voice-coil diameter as the radiating diameter (π r²). Excursion limits are not published."
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.073025,
+    "outer_diameter_m": 0.103886,
+    "depth_m": 0.039878,
+    "source": {
+      "url": "https://www.parts-express.com/Dayton-Audio-ND25FW-4-1-Soft-Dome-Neodymium-Tweeter-with-Waveguide-275-051",
+      "title": "Parts Express / listing copy: cutout 2.875 in, outside 4.09 in, depth 1.57 in",
+      "read_on": "2026-11-15",
+      "via": "search_extract"
+    }
+  },
+  "response_file": "catalog/drivers/responses/dayton-nd25fw-4.json",
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/275-051--dayton-audio-nd25fw-4-spec-sheet.pdf",
+    "title": "Dayton Audio ND25FW-4 specification sheet",
+    "read_on": "2026-11-15"
+  },
+  "price": {
+    "amount": 13.98,
+    "currency": "USD",
+    "vendor": "Parts Express (via OpenTip listing)",
+    "url": "https://www.opentip.com/Dayton-Audio-ND25FW-4-1-Soft-Dome-Neodymium-Tweeter-with-Waveguide-4-Ohm-p-7272035.html",
+    "read_on": "2026-11-15",
+    "via": "search_extract"
+  }
+}

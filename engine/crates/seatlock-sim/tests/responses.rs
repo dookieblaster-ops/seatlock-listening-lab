@@ -36,7 +36,7 @@ fn every_response_file_is_sourced_and_is_not_mistaken_for_a_driver() {
         assert!(points.windows(2).all(|w| w[1].0 > w[0].0), "{path}");
         assert!(points.last().unwrap().0 > 15000.0, "{path}");
     }
-    assert_eq!(with_curve, 11);
+    assert_eq!(with_curve, 12);
 }
 
 #[test]

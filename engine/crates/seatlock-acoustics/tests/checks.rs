@@ -485,7 +485,12 @@ fn sourced_drivers_match_printed_mechanics_or_would_warn() {
             }
         }
     }
-    for id in ["dayton-nd25fa-4", "dayton-dc28f-8", "dayton-rst28f-4"] {
+    for id in [
+        "dayton-nd25fa-4",
+        "dayton-nd25fw-4",
+        "dayton-dc28f-8",
+        "dayton-rst28f-4",
+    ] {
         let record = seatlock_core::catalog::driver(id).expect(id);
         let published = seatlock_acoustics::published_from_catalog(&record).expect(id);
         assert_eq!(published.xmax_m, 0.0);

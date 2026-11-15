@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. C-Note MT vs ASR
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/c-note-mt-71c7` → merge to `main`. Level 3. Owner go-ahead for C-Note with passive vs ASR.
+
+**Done this session:** (1) Catalog `dayton-nd25fw-4` (sheet + maker DATS Q + VCdia→Sd; FRD from maker package). (2) `designs/imports/c-note/c-note-mt.seatlock.json`: kit box/port/passive schematic (R1/C1/L2/C2/C3 tweeter; L1/C4 woofer). (3) ASR CTA-2034 in `asr/cea2034.json` (CC BY-NC-SA). (4) Tests `c_note`: sim OK, bass/treble split, shape vs ASR (mid 2.06 dB / treble 2.62 dB RMS; lab bass ~2.7 dB lower relative to midband).
+
+**Last check:** `cargo test -p seatlock-sim --test c_note --test responses`: c_note 3, responses 2. `cargo test -p seatlock-acoustics --test checks sourced_drivers`: ok. fmt; clippy `-D warnings` on touched crates. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Passive follow-ups: listen-mode from network; page netlist editor; optimize R/L/C toward a score. (2) Research plan: CTA-2034 preference score as the lab's own; BEM; … (3) Wall remainder: real PLA/TPU damping. (4) Optional: 1/2 in MDF stock; dimensioned C-Note baffle; inductor DCR; shrink LCM self-check.
+
+**Pitfalls:** do not digitize FR graphs. Do not undo Q12. ND25FW sheet omits Q/Sd — Q from maker DATS in the package; Sd from VCdia (noted). ASR curves are relative; kit F3 ads are absolute. When `passive` is set, digital blocks are ignored.
+
+**Next step:** merge this branch to `main`, then passive listen/editor/optimize or CTA-2034 preference score.
+
 ### 2026-11-15 — Cursor — Handoff: start here. Passive crossover for graphs and scores
 
 - **To:** next lead session (Claude or Cursor)
@@ -55,11 +71,11 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Last check:** `cargo test -p seatlock-acoustics --lib passive`: 3 passed. `cargo test -p seatlock-sim --test passive`: 2 passed. fmt; clippy `-D warnings` on core/acoustics/sim. TS bindings regenerated. Full `tools/cloud-check.sh` not re-run.
 
-**Open, in order:** (1) C-Note MT digital copy using `dsp.passive` + ASR CTA-2034 curves (compare). (2) Passive follow-ups: listen-mode from network; page netlist editor; optimize R/L/C toward a score. (3) Research plan: CTA-2034 preference score as the lab's own; BEM; … (4) Wall remainder: real PLA/TPU damping. (5) Optional LCM self-check shrink; waveguide partitions.
+**Open, in order:** superseded by the C-Note handoff above.
 
 **Pitfalls:** do not digitize Erin's FR. Do not undo Q12. When `passive` is set, digital blocks on radiators are ignored (label says so). Amp is an ideal voltage source. No mutual inductance / transformer models yet.
 
-**Next step:** C-Note MT kit copy with passive network vs ASR curves, or CTA-2034 preference score.
+**Next step:** superseded by the C-Note handoff above.
 
 ### 2026-11-15 — Cursor — Handoff: start here. Imported-cabinet walls vibrate
 
