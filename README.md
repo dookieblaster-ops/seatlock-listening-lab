@@ -52,16 +52,16 @@ A simulator is worth using only if its numbers can be trusted. These rules exist
 
 ### 1.4 Sessions, handoffs, and helpers
 
-Each chat is a separate session with no memory of the others. Sessions pass work to each other through `COMS.md`, not through chat the owner may not see. The owner starts a session by opening a new chat and sending: `Work on my GitHub repository dookieblaster-ops/seatlock-listening-lab. Attach it, then Check COMS.md.` No project is needed: the session attaches the repository itself. A chat that already has it needs only **Check COMS.md**.
+Each chat is a separate session with no memory of the others. Sessions pass work to each other through `COMS.md`, not through chat the owner may not see. The owner starts a session by opening a new chat and sending: `Work on my GitHub repository dookieblaster-ops/seatlock-listening-lab. Attach it, then Check COMS.md.` The same paste lives in `docs/new-chat.md`. No project is needed: the session attaches the repository itself. A chat that already has it needs only **Check COMS.md** (then **Go** to continue the queue).
 
 | Role | Who | Job |
 | --- | --- | --- |
-| Lead architect and engineer | A Claude session | Owns architecture, cross-track order, and changes to this specification, and writes the code. Ends every session with a handoff in `COMS.md`. Assigns work to helpers and reviews and merges their branches. |
-| Helper | Another coding agent: a Cursor agent (until 2026-11-10) or a second Claude chat | Implements the assignment the lead posted, on its own branch. Runs the checks, keeps commits small, and reports only verified results. Escalates gaps in the spec to the lead through `COMS.md`. Never merges into `main`. |
+| Lead architect and engineer | A Claude session, or a Cursor cloud agent (from 2026-11-14) | Owns architecture, cross-track order, and changes to this specification, and writes the code. Ends every session with a handoff in `COMS.md`. Assigns work to helpers and reviews and merges their branches. Pushes finished lead work to `main`. |
+| Helper | Another coding agent: a second Claude chat, or a Cursor agent on a branch | Implements the assignment the lead posted, on its own branch. Runs the checks, keeps commits small, and reports only verified results. Escalates gaps in the spec to the lead through `COMS.md`. Never merges into `main`. |
 
 Only one lead session works on `main` at a time. When a task needs a stronger model than the one in use, the lead tells the owner and posts a brief in `COMS.md` for that session; `STATUS.md` records which work is held for it.
 
-Message format, thread rules, and the live board are in `COMS.md`. Product decisions for the owner still belong in `STATUS.md` (section 1.1), not in `COMS.md`.
+Message format, thread rules, and the live board are in `COMS.md`. Older threads move to `docs/coms-archive.md`. Product decisions for the owner still belong in `STATUS.md` (section 1.1), not in `COMS.md`.
 
 ## 2. The product
 
@@ -165,6 +165,7 @@ Build and tooling rules:
 README.md          this specification
 STATUS.md          current state, decisions, next steps, questions for the owner
 COMS.md            handoffs between sessions and the board for helpers (section 1.4)
+docs/new-chat.md   paste for opening a fresh lead chat (section 1.4)
 AGENTS.md          pointer that sends coding agents to this file (CLAUDE.md imports it)
 start.sh           the one command the owner runs
 check.sh           the one command that runs every check
@@ -1004,7 +1005,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 - A: undo and redo; design history.
 - B: exciters and panel materials, damping materials, wall fills, and foaming filaments; stale-price warnings; alternative vendors per part.
-- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed cabinets with one or several chambers, sheet boxes whose sheet publishes stiffness and density, and tubes' end caps; section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
+- C: folded and tapered lines, coupled chambers, drivers mounted on ducts, damping fill, several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed cabinets with one or several chambers, including braces that split wall spans and partitions between chambers; sheet boxes whose sheet publishes stiffness and density; and tubes' end caps; section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a boundary-element model of the air around (and then inside) the cabinet, joined to the driver network, giving every direction from one solve per frequency (section 2.6); a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown.

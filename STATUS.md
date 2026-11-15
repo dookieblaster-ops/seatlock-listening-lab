@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-15 (partitions vibrate)
+Updated: 2026-11-15 (fresh-session handoff package)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -44,7 +44,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Partitions vibrate** (Cursor, 2026-11-15). Faces between chambers are solid printed plates driven by `(P_a - P_b)` in the lumped network (mutual admittance); they do not radiate outside. Waveguide falls back to the quick network when partitions are active. Two sealed chambers: partition ~492 Hz, heard (~0.6 dB vs rigid at resonance).
 - **Level 3 as a whole is not complete.** Done: the room estimate, the outside in 3D, the panel speaker, folded and tapered lines with their editor, and both halves of the Level 3 end-to-end check (the full 3D part of `folded-line` runs on request: it takes minutes). Not started: losses in the 3D model, the 3D wave views, coupled chambers with loops, fill, passive radiators, drivers mounted on ducts, curved outer shapes, FIR filters, corrections C5, C6, C7, and C10, the Level 3 optimizer, real exciters and panel materials in the catalog, and the `folded-line` half of the end-to-end check. The list with details is in the newest handoff in `COMS.md`.
 - **Laptop:** `./start.sh` runs to the end on the owner's Linux Mint laptop (owner, 2026-11-10). `./check.sh` has not been run there.
-- **Agent coordination:** each chat is a session that starts from the newest handoff in `COMS.md` (README section 1.4). The owner opens a new chat and sends "Work on my GitHub repository dookieblaster-ops/seatlock-listening-lab. Attach it, then Check COMS.md." No claude.ai project is needed. As of 2026-11-14 the owner also runs lead sessions in Cursor cloud; the newest handoff in `COMS.md` is the source of truth for what to do next.
+- **Agent coordination:** each chat is a session that starts from the newest handoff in `COMS.md` (README section 1.4). The paste for a new chat is in `docs/new-chat.md`. No claude.ai project is needed. Lead sessions may be Claude or Cursor cloud; the newest handoff in `COMS.md` is the source of truth for what to do next. Older COMS threads are in `docs/coms-archive.md`.
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
@@ -61,16 +61,16 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 ## Next steps
 
-The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md`. In short:
+The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
-1. The plan from the research (README 2.6; newest post in `COMS.md`): the generator for any number of sound sources (three-ways, several woofers); the CTA-2034 curves and a preference rating as the score; a boundary-element model joined to the driver network; larger budget woofers in the catalog; speed in the browser; the page's fields for cabinets that are not boxes.
-0. Wall vibration, further (newest post in `COMS.md`): MDF/plywood, braces, and partitions done (2026-11-15). Next: imported-cabinet walls, real damping figures for PLA and the TPU cores.
-1a. Make inside-shaping earn more: try it on cabinets with stronger faults (the folded line, a ported box), an objective on what the listener hears through the baffle, and real losses in the 3D model so the assumed loss can go. The newest post in `COMS.md` has the details.
-2. Step 1's remaining parts (any session): a smaller exterior air block using the outside model's one-way boundary (recheck README 5.5's block rule), and the 3D solver on the graphics chip with WebGPU (measure on the owner's laptop, which has integrated graphics only).
-3. Step 2: a library of 3D-solved parts (bends, steps, chamber corners) stored as scattering matrices that the detailed model chains; then the shape optimizer over line length, folds, taper, chamber, and port (owner request, 2026-11-11).
-4. Losses in the 3D model, the 3D wave views (owner request, 2026-11-10), and room mapping (owner request, 2026-11-11; STATUS question 8).
-5. The panel speaker's open items and the rest of Level 3 (README section 12).
-0b. The LCM comparison track (2026-11-15): Erin's curves, BMR independent data, acoustic level scale, 3D self-check fix (~25 %), and leftover tilt cause placed (baffle-average 77 dB vs LCM relative needs). Optional later: shrink the ~25 % self-check further.
+0. Wall vibration remainder: imported-cabinet walls; real PLA/TPU damping figures (MDF/plywood, braces, partitions done 2026-11-15).
+1. Research plan (README 2.6): CTA-2034 preference score; multi-source generator hardening; BEM; larger budget woofers; browser speed; non-box page fields.
+1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
+2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
+3. Scattering-matrix part library, then shape optimizer (owner request, 2026-11-11).
+4. Losses in the 3D model, 3D wave views, room mapping (STATUS question 8) — Fable-held if still available.
+5. Panel speaker open items and the rest of Level 3 (README section 12).
+0b. LCM track: curves, BMR scale, self-check ~25 %, tilt placed; optional shrink self-check further.
 6. Owner questions waiting: 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone).
 
 ## What has been verified
@@ -87,6 +87,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-15, Cursor cloud: MDF and plywood sheet boxes vibrate. `ultrastock-mdf-3-4` density_range 700–900 kg/m³ (Wood Handbook Table 12-1; UltraStock MOE kept); `sandeply-18mm` density 400–600 and MOE 6.96–8.55 GPa from the same table. `walls` sheet_box tests: 2 passed.
 - 2026-11-15, Cursor cloud: `brace` solids. Parse `min_m`/`max_m`; volume/print/FDTD like voxels; wall faces they reach split into smaller plates (`wall_tiles`). `sealed-test` left wall 284→571 Hz; `walls` 9 passed; `imported` rigid-walls check kept for mesh. fmt; clippy `-D warnings` on sim tests.
 - 2026-11-15, Cursor cloud: partitions as two-sided plates. `Partition` in `walls.rs`; mutual Y in `lumped_network_with_walls`; waveguide skips when partitions active. Acoustics network test + `walls` partition test (492 Hz, 0.6 dB). `walls` 10 passed; `network` 4 passed. fmt; clippy `-D warnings`.
+- 2026-11-15, Cursor cloud: fresh-session handoff package. Consolidated "start here" in `COMS.md`; older threads moved to `docs/coms-archive.md`; paste in `docs/new-chat.md`; README 1.4 and Level 3 C updated for Cursor leads, braces, and partitions.
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
 - 2026-11-10, Cursor's shelf fix: at the 95 dB target sealed-test under `baffle` keeps a 2.0 dB shelf. CHK-E2E-1 moved from bass limit 125 Hz, evenness 7.4 dB, clean level 83 dB to 113 Hz, 7.4 dB, 83 dB. A test-only 80 dB target keeps a shelf of at least 3 dB and improves evenness.
