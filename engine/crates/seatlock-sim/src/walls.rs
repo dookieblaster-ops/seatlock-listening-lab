@@ -12,6 +12,11 @@ use serde_json::Value;
 /// Outer shapes whose walls are printed plastic of the design's `wall_m`.
 const PRINTED: [&str; 6] = ["box", "rounded", "chamfered", "sloped", "prism", "revolved"];
 
+/// Printed shapes plus imported mesh cabinets (walls measured from the solid).
+fn walls_modeled(kind: &str) -> bool {
+    PRINTED.contains(&kind) || kind == "mesh"
+}
+
 pub struct PlacedWall {
     pub surface: String,
     /// The chamber whose pressure pushes this wall (0 when the inside is one chamber).
@@ -500,9 +505,100 @@ fn sheet_layer(design: &DesignFile, notes: &mut Vec<String>) -> Result<WallLayer
     })
 }
 
+/// Axis-aligned bounds of the air inside an imported cabinet, found by sampling
+/// [`OuterShape::contains_air`], then marching each face out to the air–solid interface.
+fn air_aabb(outer: &dyn OuterShape) -> Result<([f64; 3], [f64; 3]), String> {
+    let size = outer.outer_size_m()?;
+    let step = (size[0].min(size[1]).min(size[2]) / 50.0).clamp(0.002, 0.008);
+    let n = [
+        ((size[0] / step).ceil() as usize).max(2),
+        ((size[1] / step).ceil() as usize).max(2),
+        ((size[2] / step).ceil() as usize).max(2),
+    ];
+    let mut lo = [f64::MAX; 3];
+    let mut hi = [f64::MIN; 3];
+    let mut any = false;
+    for ix in 0..=n[0] {
+        for iy in 0..=n[1] {
+            for iz in 0..=n[2] {
+                let p = [
+                    size[0] * ix as f64 / n[0] as f64,
+                    size[1] * iy as f64 / n[1] as f64,
+                    size[2] * iz as f64 / n[2] as f64,
+                ];
+                if !outer.contains_air(p).unwrap_or(false) {
+                    continue;
+                }
+                any = true;
+                for k in 0..3 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+        }
+    }
+    if !any {
+        return Err("no enclosed air was found inside the imported cabinet".into());
+    }
+    // March each face outward from the sample bound to the last air point.
+    let march = 2.5e-4;
+    let mid = [
+        0.5 * (lo[0] + hi[0]),
+        0.5 * (lo[1] + hi[1]),
+        0.5 * (lo[2] + hi[2]),
+    ];
+    for axis in 0..3 {
+        let mut t = lo[axis];
+        while t > 0.0 {
+            let mut p = mid;
+            p[axis] = t - march;
+            if !outer.contains_air(p).unwrap_or(false) {
+                break;
+            }
+            t -= march;
+        }
+        lo[axis] = t;
+        t = hi[axis];
+        while t < size[axis] {
+            let mut p = mid;
+            p[axis] = t + march;
+            if !outer.contains_air(p).unwrap_or(false) {
+                break;
+            }
+            t += march;
+        }
+        hi[axis] = t;
+        if hi[axis] <= lo[axis] + march {
+            return Err("the imported cabinet's air is too thin to model as walls".into());
+        }
+    }
+    Ok((lo, hi))
+}
+
 /// The cabinet's flat walls, or the reason they are left rigid.
 pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<CabinetWalls, String> {
     let kind = design.speaker.enclosure.outer.kind.as_str();
+    // An imported mesh with one air space: treat that air's bounds as a single chamber and
+    // measure each outer wall through the solid (README 5.11).
+    if kind == "mesh" {
+        let (lo, hi) = air_aabb(outer)?;
+        let chamber = crate::chambers::Chamber {
+            id: "main".into(),
+            min_m: lo,
+            max_m: hi,
+            plastic_m3: 0.0,
+            region: None,
+        };
+        let mut cabinet = chamber_walls(design, outer, std::slice::from_ref(&chamber))?;
+        cabinet.notes.insert(
+            0,
+            "Imported cabinet: flat outer walls are measured through the solid from the air; \
+             curved or slanted skin is left still; wall layers follow the design's print \
+             material and wall build."
+                .into(),
+        );
+        return Ok(cabinet);
+    }
     // A tube's walls are its two printed end caps; each spans the pipe's inside, as a square
     // of the same area. The curved pipe is held still.
     let mut cap_span = None;
@@ -544,8 +640,8 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
         }
         _ => {
             return Err(format!(
-                "walls of a {kind} cabinet are not modeled yet (printed cabinets, sheet boxes, \
-                 and tubes' end caps are)"
+                "walls of a {kind} cabinet are not modeled yet (printed cabinets, imported \
+                 mesh cabinets, sheet boxes, and tubes' end caps are)"
             ))
         }
     };
@@ -750,6 +846,8 @@ enum FaceBeyond {
 
 /// What the ray from a chamber face hits within `limit_m`: the outside, another chamber
 /// (a partition), or neither (thicker plastic / open air that is not a chamber).
+/// Outside and partition distances are the solid thickness only (air before the wall is
+/// skipped), so an inset air bound still yields the real wall thickness.
 fn face_beyond(
     outer: &dyn OuterShape,
     chambers: &[crate::chambers::Chamber],
@@ -759,24 +857,38 @@ fn face_beyond(
     limit_m: f64,
 ) -> FaceBeyond {
     let step = 2.5e-4;
-    let mut t = step;
-    while t <= limit_m {
+    let mut t = 0.0;
+    let mut solid_start: Option<f64> = None;
+    while t < limit_m {
+        t += step;
         let p = [
             from[0] + t * direction[0],
             from[1] + t * direction[1],
             from[2] + t * direction[2],
         ];
         if !outer.contains_cabinet(p).unwrap_or(true) {
-            return FaceBeyond::Outside(t);
+            return match solid_start {
+                Some(t0) => FaceBeyond::Outside((t - t0).max(step)),
+                None => FaceBeyond::Held, // left the cabinet without crossing solid
+            };
         }
         if let Some((i, _)) = chambers
             .iter()
             .enumerate()
             .find(|(i, c)| *i != own && c.contains(p))
         {
-            return FaceBeyond::Partition(i, t);
+            return match solid_start {
+                Some(t0) => FaceBeyond::Partition(i, (t - t0).max(step)),
+                None => FaceBeyond::Partition(i, t),
+            };
         }
-        t += step;
+        // Air ahead of the wall does not count toward thickness.
+        let in_air = outer.contains_air(p).unwrap_or(false);
+        if in_air {
+            solid_start = None;
+        } else if solid_start.is_none() {
+            solid_start = Some(t);
+        }
     }
     FaceBeyond::Held
 }
@@ -784,29 +896,38 @@ fn face_beyond(
 /// The walls of a cabinet divided into chambers (README 5.11): each face of a chamber that
 /// lies against the cabinet's outer wall is a plate over that face, pushed by that chamber's
 /// pressure. Faces against another chamber are partitions (two-sided plates); faces against
-/// thicker plastic are held still.
+/// thicker plastic are held still. Printed cabinets and imported mesh cabinets both use this.
 pub fn chamber_walls(
     design: &DesignFile,
     outer: &dyn OuterShape,
     chambers: &[crate::chambers::Chamber],
 ) -> Result<CabinetWalls, String> {
     let kind = design.speaker.enclosure.outer.kind.as_str();
-    if !PRINTED.contains(&kind) {
+    if !walls_modeled(kind) {
         return Err(format!(
-            "walls of a {kind} cabinet are not modeled yet (only printed cabinets)"
+            "walls of a {kind} cabinet are not modeled yet (printed and imported mesh cabinets)"
         ));
     }
-    let wall_m = design
+    let field_wall_m = design
         .speaker
         .enclosure
         .outer
         .fields
         .get("wall_m")
         .and_then(Value::as_f64)
-        .filter(|w| *w > 0.0)
-        .ok_or("the cabinet gives no wall thickness")?;
-    let (layers, mut notes) = wall_layers(design, wall_m)?;
-    let stack = WallStack::from_layers(&layers)?;
+        .filter(|w| *w > 0.0);
+    // Imported mesh has no wall_m field: thickness is measured per face. A printed cabinet
+    // keeps one stack from its wall_m. The probe limit is 1.5 walls, or 50 mm when unknown.
+    let probe_limit = field_wall_m.map(|w| 1.5 * w).unwrap_or(0.05) + 1e-6;
+    let (shared_layers, mut notes) = match field_wall_m {
+        Some(wall_m) => wall_layers(design, wall_m)?,
+        None => (Vec::new(), Vec::new()),
+    };
+    let shared_stack = if shared_layers.is_empty() {
+        None
+    } else {
+        Some(WallStack::from_layers(&shared_layers)?)
+    };
     let braces = crate::solids::solids(design)
         .map(|p| p.braces)
         .unwrap_or_default();
@@ -816,6 +937,14 @@ pub fn chamber_walls(
     let mut partitions = Vec::new();
     let mut held = 0usize;
     let mut braces_used = 0usize;
+    let mut layer_names: Vec<String> = shared_layers.iter().map(|l| l.name.clone()).collect();
+    let mut mass_per_area = shared_stack
+        .as_ref()
+        .map(|s| s.mass_per_area)
+        .unwrap_or(0.0);
+    let mut measured_notes_done = shared_stack.is_some();
+    let mut thickness_min = f64::INFINITY;
+    let mut thickness_max = 0.0f64;
     // Partition pairs already made (lower chamber index, higher), so each plate is once.
     let mut seen_partitions = std::collections::HashSet::<(usize, usize)>::new();
     for (index, chamber) in chambers.iter().enumerate() {
@@ -849,14 +978,7 @@ pub fn chamber_walls(
                     let mut p = centre;
                     p[u_axis] += du * width;
                     p[v_axis] += dv * height;
-                    probes.push(face_beyond(
-                        outer,
-                        chambers,
-                        index,
-                        p,
-                        outward,
-                        1.5 * wall_m + 1e-6,
-                    ));
+                    probes.push(face_beyond(outer, chambers, index, p, outward, probe_limit));
                 }
                 let all_outside = probes.iter().all(|p| matches!(p, FaceBeyond::Outside(_)));
                 let all_partition = probes
@@ -866,23 +988,70 @@ pub fn chamber_walls(
                     let FaceBeyond::Outside(thickness) = probes[0] else {
                         unreachable!()
                     };
+                    // All five probes should agree on thickness within a wall; else hold still.
+                    let same_thickness = probes.iter().all(|p| match p {
+                        FaceBeyond::Outside(t) => {
+                            (t - thickness).abs() < 0.25 * thickness.max(1e-4)
+                        }
+                        _ => false,
+                    });
+                    if !same_thickness || thickness <= 0.0 {
+                        held += 1;
+                        continue;
+                    }
                     let surface = outer
                         .surface_facing(outward)
                         .unwrap_or_else(|| format!("chamber {} side", chamber.id));
-                    if covered.contains(&surface) {
+                    if covered.iter().any(|c| c == &surface) {
                         notes.push(format!(
                             "The {surface} wall carries a panel speaker and is held still."
                         ));
                         continue;
                     }
+                    let wall_m = field_wall_m.unwrap_or(thickness);
                     let (span_w, span_h) = (width + wall_m, height + wall_m);
                     if span_w <= wall_m || span_h <= wall_m {
                         continue;
                     }
+                    thickness_min = thickness_min.min(thickness);
+                    thickness_max = thickness_max.max(thickness);
+                    let stack = match shared_stack {
+                        Some(s) => s,
+                        None => {
+                            // Per-face stack from the measured thickness; material notes once.
+                            let (layers, face_notes) = wall_layers(design, thickness)?;
+                            if !measured_notes_done {
+                                notes.extend(face_notes);
+                                layer_names = layers.iter().map(|l| l.name.clone()).collect();
+                                measured_notes_done = true;
+                            }
+                            let s = WallStack::from_layers(&layers)?;
+                            mass_per_area = s.mass_per_area;
+                            s
+                        }
+                    };
+                    // Outer skin: march to the outside so an inset air face still places the
+                    // source on the cabinet's skin, not inside the wall.
+                    let to_outside = {
+                        let step = 2.5e-4;
+                        let mut t = step;
+                        while t <= probe_limit {
+                            let p = [
+                                centre[0] + t * outward[0],
+                                centre[1] + t * outward[1],
+                                centre[2] + t * outward[2],
+                            ];
+                            if !outer.contains_cabinet(p).unwrap_or(true) {
+                                break;
+                            }
+                            t += step;
+                        }
+                        t
+                    };
                     let skin = [
-                        centre[0] + thickness * outward[0],
-                        centre[1] + thickness * outward[1],
-                        centre[2] + thickness * outward[2],
+                        centre[0] + to_outside * outward[0],
+                        centre[1] + to_outside * outward[1],
+                        centre[2] + to_outside * outward[2],
                     ];
                     let mut along = [0.0; 3];
                     along[u_axis] = 1.0;
@@ -987,7 +1156,11 @@ pub fn chamber_walls(
         .map(|w| w.panel.resolved_up_to_hz)
         .chain(partitions.iter().map(|p| p.panel.resolved_up_to_hz))
         .fold(f64::INFINITY, f64::min);
-    let names: Vec<&str> = layers.iter().map(|l| l.name.as_str()).collect();
+    let names = if layer_names.is_empty() {
+        "printed plastic".into()
+    } else {
+        layer_names.join(" / ")
+    };
     notes.insert(
         0,
         format!(
@@ -996,11 +1169,18 @@ pub fn chamber_walls(
              pressure; the lowest wall resonance is {first:.0} Hz, and wall resonances above \
              {resolved:.0} Hz are left out.",
             walls.len(),
-            names.join(" / "),
-            stack.mass_per_area,
+            names,
+            mass_per_area,
             chambers.len()
         ),
     );
+    if field_wall_m.is_none() && thickness_max > 0.0 {
+        notes.push(format!(
+            "Wall thickness is measured through the imported solid ({:.1} to {:.1} mm).",
+            thickness_min * 1000.0,
+            thickness_max * 1000.0
+        ));
+    }
     if !partitions.is_empty() {
         let part_first = partitions
             .iter()

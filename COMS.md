@@ -45,6 +45,22 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
+### 2026-11-15 — Cursor — Handoff: start here. Imported-cabinet walls vibrate
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/imported-cabinet-walls-71c7` (merge to `main`). Level 3. Continued standing queue item 0.
+
+**Done this session:** (1) Imported `mesh` cabinets: air AABB from the solid, each axis-aligned outer face a plate with thickness measured through the plastic, layers from `build.material` / `build.wall`. (2) Sand-filled imported `sealed-test` matches the same parametric box within 0.06 dB; six faces; fidelity says walls vibrate. (3) README 5.11 / Level 3 C / open-items updated. Curved/slanted skin and per-part wall materials still out.
+
+**Last check:** `cargo test -p seatlock-sim --test walls --test imported`: walls 10 passed; imported 7 passed. fmt; clippy `-D warnings` on sim tests. Full `tools/cloud-check.sh` not re-run.
+
+**Open, in order:** (1) Standing queue: real PLA/TPU damping figures (tap test / DMA — do not invent). (2) Research plan: CTA-2034 preference score; BEM; multi-source generator; larger woofers; browser speed; non-box fields. (3) Optional: shrink LCM 3D self-check ~25 %; partition coupling in the waveguide tree; per-part materials for imported wall stacks.
+
+**Pitfalls:** do not digitize Erin's FR. Do not undo Q12. Do not invent PLA/TPU loss factors. Mesh walls are axis-aligned flats only. Waveguide + partitions → lumped only. Walls off in engine default and in `correction_plan` on purpose.
+
+**Next step:** CTA-2034 preference score (product-visible), or real damping figures if a sourced number is open in the session.
+
 ### 2026-11-15 — Cursor — Handoff: start here. Fresh lead session (Level 3)
 
 - **To:** next lead session (Claude or Cursor)
@@ -70,10 +86,11 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Last check (this stretch):** targeted `walls` / `network` / `lcm` / `independent` / `imported` tests + fmt + clippy `-D warnings` on touched crates. Full `tools/cloud-check.sh` not re-run on the latest commits — run it after a large change or before claiming Level 3 milestones.
 
-**Next step:** queue item 1 (imported-cabinet walls) or item 2 (CTA-2034 preference score). Prefer product-visible sound/score work over cleanup.
+**Next step:** queue item 1 (imported-cabinet walls) or item 2 (CTA-2034 preference score). Prefer product-visible sound/score work over cleanup. Superseded by the handoff above.
 
 ## Resolved
 
+- 2026-11-15: Imported mesh cabinets' axis-aligned flat walls vibrate (thickness measured from the solid), done on branch by Cursor.
 - 2026-11-15: Board archived to `docs/coms-archive.md` for a fresh lead session; handoff package in `docs/new-chat.md`.
 - 2026-11-15: Partitions between chambers vibrate (mutual admittance in lumped network), done on `main` by Cursor.
 - 2026-11-15: Brace solids take air/print and split wall spans, done on `main` by Cursor.

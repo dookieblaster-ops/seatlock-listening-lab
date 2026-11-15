@@ -88,27 +88,67 @@ pub fn imported_sealed_test() -> Value {
 }
 
 #[test]
-fn an_imported_cabinet_keeps_rigid_walls() {
-    let mut value = imported_sealed_test();
-    value["build"]["wall"] =
+fn an_imported_cabinet_walls_vibrate_like_the_same_box() {
+    let mut imported_value = imported_sealed_test();
+    imported_value["build"]["wall"] =
         json!({ "kind": "filled", "skin_m": 0.0016, "fill": "quikrete-play-sand" });
-    let result = simulate(
-        &serde_json::from_value(value).unwrap(),
-        &SimulateRequest {
-            walls: true,
-            ..Default::default()
-        },
-        &builtin(),
+    let mut plain_value = example();
+    plain_value["build"]["wall"] =
+        json!({ "kind": "filled", "skin_m": 0.0016, "fill": "quikrete-play-sand" });
+    let request = SimulateRequest {
+        walls: true,
+        radiation: "point".into(),
+        frequencies_hz: Some(vec![20.0, 100.0, 300.0]),
+        ..Default::default()
+    };
+    let registry = builtin();
+    let imported_file: seatlock_core::DesignFile = serde_json::from_value(imported_value).unwrap();
+    let outer = registry
+        .create_outer(
+            &imported_file.speaker.enclosure.outer.kind,
+            &imported_file.speaker.enclosure.outer.fields,
+        )
+        .unwrap();
+    let walls = seatlock_sim::walls::cabinet_walls(&imported_file, outer.as_ref()).unwrap();
+    assert_eq!(walls.walls.len(), 6, "six outer faces");
+    assert!(walls
+        .notes
+        .iter()
+        .any(|n| n.contains("Imported cabinet") || n.contains("measured through")));
+    let a = simulate(
+        &serde_json::from_value(plain_value).unwrap(),
+        &request,
+        &registry,
     );
-    assert!(result
+    let b = simulate(&imported_file, &request, &registry);
+    assert!(
+        b.issues.iter().all(|i| i.code != "wall_build_not_heard"),
+        "{:?}",
+        b.issues
+    );
+    assert!(b
+        .fidelity
+        .ignored
+        .iter()
+        .any(|l| l.starts_with("Walls vibrate")));
+    assert!(!b
         .fidelity
         .ignored
         .iter()
         .any(|l| l.starts_with("Walls are rigid")));
-    assert!(result
-        .issues
-        .iter()
-        .any(|i| i.code == "wall_build_not_heard"));
+    let mut worst = 0.0f64;
+    for (bin, _) in a.frequencies_hz.iter().enumerate() {
+        worst = worst.max((a.summed_spl_db[bin] - b.summed_spl_db[bin]).abs());
+    }
+    println!(
+        "imported vs box with sand-filled walls: worst {worst:.3} dB; lowest wall {:.0} Hz",
+        walls.first_resonance_hz()
+    );
+    // Sampling the mesh air and thickness leaves a small gap against the parametric box.
+    assert!(
+        worst < 0.5,
+        "imported walls should match the box within 0.5 dB, got {worst}"
+    );
 }
 
 #[test]
