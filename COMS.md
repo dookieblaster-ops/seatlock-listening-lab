@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM / non-box fields / generator harden next
+### 2026-11-16 — Cursor — Handoff: start here. BEM / generator harden next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/non-box-page-fields-e85b` (stacks on budget woofers #17 → speed #16 → … → #12). Level 3.
+
+**Done this session:** Non-box page fields. `OuterFields` edits tube / revolved / sloped / prism / sheet_box / rounded / chamfered with the right meters; boxes keep width/height/depth. Prior: budget 8 in woofers (#17).
+
+**Open, in order:** (1) BEM; multi-source generator harden; more browser speed if needed. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min`.
+
+**Pitfalls:** Do not invent damping. Do not digitize FR graphs. Do not undo Q12. BEM is the big Level 3 physics item (README 2.6 / 12 D).
+
+**Last check:** `outer-fields` e2e 3 passed after rebuild. Full `tools/cloud-check.sh` pending.
+
+**Next step:** item 1 — BEM or multi-source generator harden.
+
+### 2026-11-16 — Cursor — Handoff: BEM / non-box fields / generator harden next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

@@ -8,6 +8,7 @@ import { CostPanel } from "./CostPanel";
 import { CostQuality } from "./CostQuality";
 import { Generate } from "./Generate";
 import { printToScad } from "./openscad";
+import { OuterFields } from "./OuterFields";
 import { PassiveEditor, type PassiveNetwork } from "./PassiveEditor";
 import { ShapeInside } from "./ShapeInside";
 import type { Issue } from "./generated/Issue";
@@ -335,18 +336,35 @@ export default function App() {
               void publish(next, designName);
             }} />
           </label>
-          {outer.kind !== "mesh" && (<div className="grid">
-            <NumberField label="Width (mm)" testId="box-width-mm" value={mm(Number(outer.width_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.width_m", value / 1000)} />
-            <NumberField label="Height (mm)" value={mm(Number(outer.height_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.height_m", value / 1000)} />
-            <NumberField label="Depth (mm)" value={mm(Number(outer.depth_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.depth_m", value / 1000)} />
-            <NumberField label="Wall thickness (mm)" value={mm(Number(outer.wall_m))} onChange={(value) => updateNumber("speaker.enclosure.outer.wall_m", value / 1000)} />
-            <NumberField label="Edge radius (mm)" value={mm(Number(outer.edge_radius_m ?? 0))} onChange={(value) => updateNumber("speaker.enclosure.outer.edge_radius_m", value / 1000)} />
-            <NumberField label="Listening distance (m)" value={design.speaker.listening.distance_m} onChange={(value) => updateNumber("speaker.listening.distance_m", value)} />
-          </div>)}
-          {outer.kind === "mesh" && (
-            <div className="grid">
-              <NumberField label="Listening distance (m)" value={design.speaker.listening.distance_m} onChange={(value) => updateNumber("speaker.listening.distance_m", value)} />
+          {outer.kind === "mesh" ? (
+            <div className="grid" data-testid="outer-fields" data-kind="mesh">
+              <p data-testid="outer-kind">
+                Outer shape: <strong>mesh</strong>
+              </p>
+              <NumberField
+                label="Listening distance (m)"
+                value={design.speaker.listening.distance_m}
+                onChange={(value) => updateNumber("speaker.listening.distance_m", value)}
+              />
             </div>
+          ) : (
+            <OuterFields
+              outer={outer as Record<string, unknown>}
+              listeningDistanceM={design.speaker.listening.distance_m}
+              onNumber={(field, value) => {
+                if (field === "__listening_distance_m") {
+                  updateNumber("speaker.listening.distance_m", value);
+                  return;
+                }
+                updateNumber(`speaker.enclosure.outer.${field}`, value);
+              }}
+              onText={(field, value) => {
+                const next = structuredClone(design);
+                (next.speaker.enclosure.outer as Record<string, unknown>)[field] = value;
+                void publish(next, designName);
+              }}
+              onJson={(field, raw) => updateJson(`speaker.enclosure.outer.${field}`, raw)}
+            />
           )}
           <ImportedCabinet
             design={design}
