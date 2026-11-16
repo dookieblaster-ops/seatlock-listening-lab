@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Do not digitize FR graphs. Do not undo Q12. BEM is the big Level 3 physics item (README 2.6 / 12 D).
 
-**Last check:** `outer-fields` e2e 3 passed after rebuild. Full `tools/cloud-check.sh` pending.
+**Last check:** `tools/cloud-check.sh` passed (engine + browser 43, 1 flaky import retry) in 8.2m on stable 1.100.
 
 **Next step:** item 1 — BEM or multi-source generator harden.
 
