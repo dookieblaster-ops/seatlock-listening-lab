@@ -1,8 +1,10 @@
 //! Rigid sphere in a plane wave (CHK-BEM-2): surface pressures toward CHK-RAD-3.
 //!
 //! Low `ka` (below about 0.5) matches the closed form within the lit/side CHK-RAD-3
-//! budget. Higher `ka` still needs Burton–Miller / a formulation pass before the full
-//! CHK-RAD-3 band (up to `ka` 6) can be claimed for BEM.
+//! budget. At `ka ≳ 1` constant-element collocation on an icosphere converges under
+//! refine but not to the smooth-sphere series (monopole CHK-BEM-1 and dipole CHK-BEM-3
+//! stay healthy). Higher-order elements or a different surface model come before the
+//! full CHK-RAD-3 band.
 
 use seatlock_bem::{icosphere, rigid_plane_wave_surface, rigid_sphere_surface_pressure};
 use seatlock_core::C0;

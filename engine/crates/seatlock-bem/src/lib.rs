@@ -5,9 +5,11 @@
 //! convention as CHK-RAD-3's closed-form sphere series).
 //!
 //! Constant triangular elements, collocation at centroids. Validated on a pulsating sphere
-//! (CHK-BEM-1) and a rigid sphere in a plane wave at low `ka` (CHK-BEM-2, toward CHK-RAD-3).
-//! Higher-`ka` rigid-sphere scattering, Burton–Miller / CHIEF, cabinet meshing, and joining
-//! the driver network come next.
+//! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), and an oscillating
+//! sphere Neumann dipole (CHK-BEM-3). Rigid-sphere plane-wave levels at `ka ≳ 1` do not yet
+//! match the smooth-sphere series with this discretization (mesh refine does not close the
+//! gap; monopole radiation is fine). Higher-order elements or Burton–Miller, cabinet meshing,
+//! and joining the driver network come next.
 
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex64;
@@ -185,6 +187,13 @@ pub fn rigid_sphere_surface_pressure(ka: f64, theta: f64) -> Complex64 {
             / hankel2_prime(m, ka);
     }
     Complex64::new(0.0, -1.0) / (ka * ka) * sum
+}
+
+/// Rigid sphere oscillating along +z with surface velocity `U cos θ` (`e^{+jωt}`):
+/// `p(a,θ) = −j ρ c U (h₁(ka)/h₁'(ka)) cos θ`.
+pub fn oscillating_sphere_pressure(ka: f64, cos_theta: f64, velocity_m_s: f64) -> Complex64 {
+    let ratio = hankel2(1, ka) / hankel2_prime(1, ka);
+    -Complex64::new(0.0, 1.0) * RHO0 * C0 * velocity_m_s * ratio * cos_theta
 }
 
 fn integrate_element(

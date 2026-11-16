@@ -45,21 +45,21 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM higher-ka / radiation wire-up / generator harden next
+### 2026-11-16 — Cursor — Handoff: start here. BEM radiation wire-up / higher-order elements / generator harden next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
 - **Context:** `main`. Level 3.
 
-**Done this session:** (1) Lead reviewed and merged helper stack #12–#19 onto `main`; re-ran cloud-check (engine 247, browser 44). Closed leftover stacked PRs. (2) CHK-BEM-2: rigid-sphere plane-wave surface pressures at ka 0.25/0.5 within 0.75 dB (lit/side/shadow). Same CBIE as CHK-BEM-1; scattered-field solve with `q_s = −∂p_inc/∂n`. At ka≥1 the surface levels are still wrong (mesh refine does not help) — needs Burton–Miller / a formulation pass before claiming the full CHK-RAD-3 band.
+**Done this session:** (1) Earlier: merged helper stack #12–#19; CHK-BEM-2 low-ka rigid sphere. (2) CHK-BEM-3 oscillating-sphere dipole (non-uniform Neumann): rel L1 < 0.03 at ka 0.5/1/2. (3) Diagnosed ka≳1 rigid-sphere plane-wave gap: not irregular-frequency (refine 80→5120 faces converges to ~2.6 dB lit error vs smooth series); plane-wave CBIE identity holds with free term +½; radiation uses −½ and matches monopole/dipole. Constant-element collocation vs smooth sphere is the limit — do not weaken checks.
 
-**Open, in order:** (1) BEM: raise rigid-sphere ka; register as radiation; join network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) BEM: higher-order surface elements (or Burton–Miller for irregular freqs near ka=π); register as radiation; join network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2 to claim high ka. Dense O(N²) — worker when wired. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3 to claim high-ka rigid-sphere series. Dense O(N²) — worker when wired. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release` 6 passed; clippy `-D warnings` on seatlock-bem. Full `tools/cloud-check.sh` not re-run after CHK-BEM-2 (earlier lead re-run on the merge was green).
+**Last check:** `cargo test -p seatlock-bem --release` 8 passed; clippy `-D warnings` on seatlock-bem. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** Burton–Miller / formulation to raise rigid-sphere ka, or register BEM as a radiation member, or harden the multi-source generator.
+**Next step:** register BEM as a radiation member, or higher-order elements for high-ka rigid sphere, or harden the multi-source generator.
 
 ### 2026-11-16 — Cursor — Handoff: BEM radiation wire-up / generator harden next (merged to main)
 
@@ -232,6 +232,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-16: CHK-BEM-3 oscillating-sphere dipole on `main`; high-ka rigid-sphere vs smooth series placed as constant-element limit (not irregular-frequency).
 - 2026-11-16: CHK-BEM-2 low-ka rigid-sphere surface pressures on `main` by Cursor lead (ka 0.25/0.5 within 0.75 dB; higher ka still open).
 - 2026-11-16: Helper stack #12–#19 (passive R/L/C tune → CTA preference → preference target → speed → 8 in woofers → non-box fields → BEM scaffold) reviewed and merged to `main` by Cursor lead; cloud-check re-run green (engine 247, browser 44).
 - 2026-11-15: CTA-2034 / Olive preference rating on listening-window runs (page + PIR graph), merged to `main`. Criton ASR preference 4.31 vs pub 4.68.
