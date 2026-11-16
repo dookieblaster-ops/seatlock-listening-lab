@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Preference scoring still runs sound power (48 sphere dirs) + ~28 unique off-axis points. Do not invent damping. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** preference + window + compare (release) + clippy `-D warnings` on core/acoustics/sim. Full `tools/cloud-check.sh` pending on this branch.
+**Last check:** Browser e2e 41 passed in 7.8m (optimizer done ~123 s). Import e2e hardened for canvas/volume races; `cloud-check.sh` now fails when e2e reports failures. Clippy `-D warnings` on core/acoustics/sim earlier.
 
 **Next step:** item 1 — BEM, larger woofers, or non-box page fields.
 

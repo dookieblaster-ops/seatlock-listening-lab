@@ -1,8 +1,19 @@
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 
 // Importing a speaker drawn elsewhere (README 6.2, outer shape `mesh`): parts from STL
 // files, a part set as damping, a driver placed by clicking the model, and the print file.
+
+/** Wait until the 3D canvas has a layout box (can be null while the view mounts under load). */
+async function canvasBox(view: Locator) {
+  await expect
+    .poll(async () => {
+      const box = await view.boundingBox();
+      return box && box.width > 0 && box.height > 0 ? box : null;
+    })
+    .not.toBeNull();
+  return (await view.boundingBox())!;
+}
 
 /** A binary STL holding closed boxes in millimeters: outward boxes, or inward for a void. */
 function stl(boxes: Array<{ lo: number[]; hi: number[]; out: boolean }>): Buffer {
@@ -46,7 +57,7 @@ test("an imported speaker takes a damping part and a driver placed by clicking, 
   // Place the driver: click the middle of the model, which is its front from this view.
   await page.getByTestId("place-mount-0").click();
   const view = page.getByTestId("cabinet-view").locator("canvas");
-  const box = (await view.boundingBox())!;
+  const box = await canvasBox(view);
   await view.click({ position: { x: box.width * 0.45, y: box.height * 0.55 } });
   await expect(page.getByTestId("imported-cabinet")).toContainText("Sound source 1 (test-woofer-a): at", { timeout: 15_000 });
   await expect(page.getByTestId("response-graph-fidelity")).toContainText("Damping parts are modeled only by the full 3D model", { timeout: 30_000 });
@@ -148,7 +159,7 @@ test("marking a hole on an imported model stores the seal on the placed point", 
   // Place the driver as a lab-cut hole first (this shell has no cut-out), then mark it.
   await page.getByTestId("place-mount-0").click();
   const view = page.getByTestId("cabinet-view").locator("canvas");
-  const box = (await view.boundingBox())!;
+  const box = await canvasBox(view);
   await view.click({ position: { x: box.width * 0.45, y: box.height * 0.55 } });
   await expect(page.getByTestId("imported-cabinet")).toContainText("Sound source 1 (test-woofer-a): at", { timeout: 15_000 });
   await page.getByTestId("mount-hole-0").selectOption("seal");
@@ -197,13 +208,17 @@ test("a 3MF assembly in centimeters, with a component and moved items, imports a
 
   await page.getByTestId("place-mount-0").click();
   const view = page.getByTestId("cabinet-view").locator("canvas");
-  const box = (await view.boundingBox())!;
+  const box = await canvasBox(view);
   await view.click({ position: { x: box.width * 0.45, y: box.height * 0.55 } });
   await expect(page.getByTestId("imported-cabinet")).toContainText("Sound source 1 (test-woofer-a): at", { timeout: 15_000 });
   // Both parts solid: the shell and the 0.78 L block, less one driver hole.
   await expect(page.getByRole("button", { name: "Export print file" })).toBeEnabled({ timeout: 30_000 });
-  const solidM3 = Number(await page.getByTestId("solid-volume").innerText());
   const expected = 0.16 * 0.18 * 0.25 - 0.144 * 0.164 * 0.234 + 0.12 * 0.065 * 0.1;
+  const hole = 2 * Math.PI * 0.059 * 0.059 * 0.008;
+  // Under parallel load the print solid can lag one frame behind the enabled button.
+  await expect
+    .poll(async () => Number(await page.getByTestId("solid-volume").innerText()), { timeout: 30_000 })
+    .toBeGreaterThan(expected - hole);
+  const solidM3 = Number(await page.getByTestId("solid-volume").innerText());
   expect(solidM3).toBeLessThan(expected);
-  expect(solidM3).toBeGreaterThan(expected - 2 * Math.PI * 0.059 * 0.059 * 0.008);
 });

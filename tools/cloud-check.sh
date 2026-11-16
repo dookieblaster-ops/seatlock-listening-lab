@@ -79,5 +79,10 @@ echo "==> web checks"
 npm run -s typecheck
 npm run -s test 2>&1 | tail -3
 npm run -s build 2>&1 | tail -1
-CI= npm run -s test:e2e 2>&1 | tail -4
+# Keep the full log so a red suite cannot look green when only the tail is shown.
+CI=1 npm run -s test:e2e 2>&1 | tee /tmp/seatlock-e2e.log | tail -8
+if grep -E '^[[:space:]]*[0-9]+ failed' /tmp/seatlock-e2e.log >/dev/null; then
+  echo "Browser e2e failed (see /tmp/seatlock-e2e.log)." >&2
+  exit 1
+fi
 echo "All checks passed (cloud workspace: stable $(rustc --version | cut -d' ' -f2), std built from source)."
