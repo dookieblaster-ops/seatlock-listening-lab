@@ -4,10 +4,10 @@
 //! `e^{+jωt}` convention and free-space Green function `e^{-jkr}/(4πr)` (same hankel-2
 //! convention as CHK-RAD-3's closed-form sphere series).
 //!
-//! First slice: constant triangular elements, collocation at centroids, Neumann data
-//! (normal velocity). Validated on a pulsating sphere (CHK-BEM-1). Burton–Miller / CHIEF
-//! and joining the driver network come next; irregular frequencies stay rare below
-//! `ka ≈ π`.
+//! Constant triangular elements, collocation at centroids. Validated on a pulsating sphere
+//! (CHK-BEM-1) and a rigid sphere in a plane wave at low `ka` (CHK-BEM-2, toward CHK-RAD-3).
+//! Higher-`ka` rigid-sphere scattering, Burton–Miller / CHIEF, cabinet meshing, and joining
+//! the driver network come next.
 
 use nalgebra::{DMatrix, DVector};
 use num_complex::Complex64;
@@ -39,25 +39,23 @@ pub fn dgreen_dn(k: f64, from: [f64; 3], to: [f64; 3], n_at_to: [f64; 3]) -> Com
     g * Complex64::new(-1.0 / r, -k) * dr_dn
 }
 
-/// Surface pressure from prescribed outward normal velocity `v_n` (m/s) on each triangle.
+/// Surface pressure from prescribed outward `q = ∂p/∂n` on each triangle.
 ///
 /// Assembles `(D − ½ I) p = S q` with outward normals into the air,
-/// `D_ij = ∫_{E_j} ∂G/∂n_y (x_i, y) dS(y)`, `S_ij = ∫_{E_j} G dS`, and
-/// `q = ∂p/∂n = −j ω ρ v_n` (`e^{+jωt}`). Checked against the pulsating-sphere closed form.
-pub fn solve_neumann(
+/// `D_ij = ∫_{E_j} ∂G/∂n_y (x_i, y) dS(y)`, `S_ij = ∫_{E_j} G dS`.
+pub fn solve_neumann_q(
     mesh: &TriangleMesh,
     frequency_hz: f64,
-    v_n: &[f64],
+    q: &[Complex64],
 ) -> Result<Vec<Complex64>, String> {
     let n = mesh.triangles.len();
-    if v_n.len() != n {
-        return Err(format!("v_n has {} entries for {n} triangles", v_n.len()));
+    if q.len() != n {
+        return Err(format!("q has {} entries for {n} triangles", q.len()));
     }
     if frequency_hz <= 0.0 {
         return Err("frequency must be positive".into());
     }
-    let omega = 2.0 * PI * frequency_hz;
-    let k = omega / C0;
+    let k = 2.0 * PI * frequency_hz / C0;
     let mut a = DMatrix::<Complex64>::zeros(n, n);
     let mut rhs = DVector::<Complex64>::zeros(n);
     for i in 0..n {
@@ -72,8 +70,7 @@ pub fn solve_neumann(
             if i == j {
                 a[(i, j)] -= Complex64::new(0.5, 0.0);
             }
-            let q = Complex64::new(0.0, -omega * RHO0) * v_n[j];
-            rhs[i] += s_ij * q;
+            rhs[i] += s_ij * q[j];
         }
     }
     let p = a
@@ -83,10 +80,111 @@ pub fn solve_neumann(
     Ok(p.iter().copied().collect())
 }
 
+/// Surface pressure from prescribed outward normal velocity `v_n` (m/s) on each triangle.
+///
+/// `q = ∂p/∂n = −j ω ρ v_n` (`e^{+jωt}`). Checked against the pulsating-sphere closed form.
+pub fn solve_neumann(
+    mesh: &TriangleMesh,
+    frequency_hz: f64,
+    v_n: &[f64],
+) -> Result<Vec<Complex64>, String> {
+    let n = mesh.triangles.len();
+    if v_n.len() != n {
+        return Err(format!("v_n has {} entries for {n} triangles", v_n.len()));
+    }
+    let omega = 2.0 * PI * frequency_hz;
+    let q: Vec<_> = v_n
+        .iter()
+        .map(|&v| Complex64::new(0.0, -omega * RHO0) * v)
+        .collect();
+    solve_neumann_q(mesh, frequency_hz, &q)
+}
+
+/// Unit-amplitude plane wave traveling in direction `toward` (unit vector), `e^{+jωt}`:
+/// `p = exp(−j k toward·r)`.
+pub fn plane_wave(toward: [f64; 3], k: f64, point_m: [f64; 3]) -> Complex64 {
+    let phase = -(toward[0] * point_m[0] + toward[1] * point_m[1] + toward[2] * point_m[2]) * k;
+    Complex64::from_polar(1.0, phase)
+}
+
+/// Scattered surface pressure on a rigid body in a plane wave: `∂p_s/∂n = −∂p_inc/∂n`.
+///
+/// Returns total surface pressure `p_inc + p_s` at each triangle centroid.
+pub fn rigid_plane_wave_surface(
+    mesh: &TriangleMesh,
+    frequency_hz: f64,
+    toward: [f64; 3],
+) -> Result<Vec<Complex64>, String> {
+    let k = 2.0 * PI * frequency_hz / C0;
+    let mut q = Vec::with_capacity(mesh.triangles.len());
+    let mut p_inc = Vec::with_capacity(mesh.triangles.len());
+    for (centroid, normal) in mesh.centroids.iter().zip(mesh.normals.iter()) {
+        let inc = plane_wave(toward, k, *centroid);
+        p_inc.push(inc);
+        // ∇p_inc = −j k toward · p_inc; q_s = −∂p_inc/∂n = j k (toward·n) p_inc.
+        let cos = toward[0] * normal[0] + toward[1] * normal[1] + toward[2] * normal[2];
+        q.push(Complex64::new(0.0, k * cos) * inc);
+    }
+    let p_s = solve_neumann_q(mesh, frequency_hz, &q)?;
+    Ok(p_inc
+        .into_iter()
+        .zip(p_s)
+        .map(|(inc, scattered)| inc + scattered)
+        .collect())
+}
+
 /// Pulsating sphere: uniform outward `v_n`, closed form `p = ρ c v_n · j ka / (1 + j ka)`.
 pub fn pulsating_sphere_pressure(ka: f64, v_n: f64) -> Complex64 {
     let jka = Complex64::new(0.0, ka);
     RHO0 * C0 * v_n * jka / (Complex64::new(1.0, 0.0) + jka)
+}
+
+/// Spherical Hankel of the second kind (same series as CHK-RAD-3).
+fn hankel2(n: usize, x: f64) -> Complex64 {
+    let mut sum = Complex64::new(0.0, 0.0);
+    let mut term = 1.0_f64;
+    for k in 0..=n {
+        if k > 0 {
+            term *= ((n + k) * (n + 1 - k)) as f64 / (k as f64 * 2.0 * x);
+        }
+        sum += Complex64::i().powi(k as i32) * term;
+    }
+    let first =
+        Complex64::new(0.0, -1.0).powi(n as i32 + 1) * Complex64::from_polar(1.0 / x, x) * sum;
+    first.conj()
+}
+
+fn hankel2_prime(n: usize, x: f64) -> Complex64 {
+    if n == 0 {
+        return -hankel2(1, x);
+    }
+    hankel2(n - 1, x) - hankel2(n, x) * ((n + 1) as f64 / x)
+}
+
+fn legendre(n: usize, x: f64) -> f64 {
+    let (mut previous, mut current) = (1.0, x);
+    if n == 0 {
+        return 1.0;
+    }
+    for m in 1..n {
+        let next = ((2 * m + 1) as f64 * x * current - m as f64 * previous) / (m + 1) as f64;
+        previous = current;
+        current = next;
+    }
+    current
+}
+
+/// Total pressure on a rigid sphere of radius `a` for a unit plane wave, at angle `theta`
+/// from the direction the wave comes from (CHK-RAD-3 closed form):
+/// `p = −j/(ka)^2 * sum (2m+1) j^m P_m(cos θ) / h_m'(ka)`.
+pub fn rigid_sphere_surface_pressure(ka: f64, theta: f64) -> Complex64 {
+    let terms = (ka + 12.0).ceil() as usize;
+    let mut sum = Complex64::new(0.0, 0.0);
+    for m in 0..terms {
+        sum += Complex64::i().powi(m as i32) * ((2 * m + 1) as f64 * legendre(m, theta.cos()))
+            / hankel2_prime(m, ka);
+    }
+    Complex64::new(0.0, -1.0) / (ka * ka) * sum
 }
 
 fn integrate_element(
