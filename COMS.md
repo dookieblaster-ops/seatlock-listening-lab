@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Every scored candidate runs CTA early reflections (~46 directions) — cost-quality and generate e2e need long timeouts. Do not invent damping. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `compare` 7 passed; passive optimize passed; clippy `-D warnings` on sim. Full `tools/cloud-check.sh` running / pending on this branch.
+**Last check:** `tools/cloud-check.sh` passed (engine + browser 41 in 9.7m) on stable 1.100.
 
 **Next step:** item 1 — BEM, larger woofers, or browser speed (preference path is the new bottleneck).
 
