@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Irregular frequencies above `ka ≈ π` without Burton–Miller/CHIEF. Dense O(N²) solve — keep in a worker when wired to the page.
 
-**Last check:** `cargo test -p seatlock-bem` 4 passed (release). Full `tools/cloud-check.sh` pending.
+**Last check:** `tools/cloud-check.sh` passed (engine + browser 44 in 7.9m) on stable 1.100. CHK-BEM-1 ≤0.05 dB.
 
 **Next step:** wire BEM as a radiation member or harden the multi-source generator.
 
