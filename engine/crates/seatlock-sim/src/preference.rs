@@ -256,45 +256,45 @@ pub fn cta2034_report(
     }
 }
 
-/// Horizontal and vertical angles (degrees) that form the CTA-2034 early-reflections average:
-/// floor 20–40° down, ceiling 40–60° up, front wall ±0–30°, side walls ±40–80°, rear wall
-/// ±90–180°, in 10° or 5° steps as in the standard's bounce groups.
+/// Horizontal and vertical angles (degrees) for the CTA-2034 / CEA-2034-A early-reflections
+/// average (WinMF / Audiomatica APPNOTE-022 bounce groups):
+/// floor 20°/30°/40° down, ceiling 40°/50°/60° up, front wall 0° and ±10°/20°/30°,
+/// side walls ±40°…±80°, rear wall 180° and ±90°.
 pub fn early_reflection_angles_deg() -> Vec<(f64, f64)> {
     let mut out = Vec::new();
-    // Floor bounce (vertical down).
-    for deg in [20.0, 25.0, 30.0, 35.0, 40.0] {
+    for deg in [20.0, 30.0, 40.0] {
         out.push((0.0, -deg));
     }
-    // Ceiling bounce (vertical up).
-    for deg in [40.0, 45.0, 50.0, 55.0, 60.0] {
+    for deg in [40.0, 50.0, 60.0] {
         out.push((0.0, deg));
     }
-    // Front wall bounce.
     for deg in [-30.0, -20.0, -10.0, 0.0, 10.0, 20.0, 30.0] {
         out.push((deg, 0.0));
     }
-    // Side wall bounce.
     for deg in [
         -80.0, -70.0, -60.0, -50.0, -40.0, 40.0, 50.0, 60.0, 70.0, 80.0,
     ] {
         out.push((deg, 0.0));
     }
-    // Rear wall bounce.
-    let mut rear = Vec::new();
-    let mut deg = -180.0;
-    while deg <= -90.0 + 1e-9 {
-        rear.push(deg);
-        deg += 10.0;
-    }
-    deg = 90.0;
-    while deg <= 180.0 + 1e-9 {
-        rear.push(deg);
-        deg += 10.0;
-    }
-    for deg in rear {
+    for deg in [-90.0, 90.0, 180.0] {
         out.push((deg, 0.0));
     }
     out
+}
+
+/// Listening-window angles (CTA-2034): on-axis, ±10/20/30° horizontal, ±10° vertical.
+pub fn listening_window_angles_deg() -> [(f64, f64); 9] {
+    [
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (-10.0, 0.0),
+        (20.0, 0.0),
+        (-20.0, 0.0),
+        (30.0, 0.0),
+        (-30.0, 0.0),
+        (0.0, 10.0),
+        (0.0, -10.0),
+    ]
 }
 
 #[cfg(test)]
@@ -323,5 +323,19 @@ mod tests {
         let flat: Vec<f64> = freqs.iter().map(|_| 0.0).collect();
         assert!(narrow_band_deviation(&freqs, &flat) < 1e-9);
         assert!((smoothness(&freqs, &flat) - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn early_reflection_angles_match_cta2034_bounce_groups() {
+        let angles = early_reflection_angles_deg();
+        // 3 floor + 3 ceiling + 7 front + 10 side + 3 rear = 26.
+        assert_eq!(angles.len(), 26, "{angles:?}");
+        assert!(angles.contains(&(0.0, -20.0)) && angles.contains(&(0.0, -40.0)));
+        assert!(!angles.contains(&(0.0, -25.0)));
+        assert!(angles.contains(&(0.0, 40.0)) && angles.contains(&(0.0, 60.0)));
+        assert!(!angles.contains(&(0.0, 45.0)));
+        assert!(angles.contains(&(180.0, 0.0)) && angles.contains(&(90.0, 0.0)));
+        assert!(!angles.contains(&(100.0, 0.0)));
+        assert_eq!(listening_window_angles_deg().len(), 9);
     }
 }

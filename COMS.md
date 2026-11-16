@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-15 — Cursor — Handoff: start here. BEM / woofers / speed next
+### 2026-11-16 — Cursor — Handoff: start here. BEM / woofers / non-box fields next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/speed-preference-score-e85b` (stacks on preference-as-target #15 → CTA #13 → passive #12). Level 3.
+
+**Done this session:** Faster preference scoring. Early-reflection angles corrected to CTA-2034 bounce groups (26 dirs, was ~47 with invented 5°/rear-arc extras). Listening window + ER share one `transfer_many`; baffle outlines built once per batch; sound-power directions batched the same way. Single sealed-test score ~0.54 s release (was ~0.93 s). Prior stack: preference ranking (#15), CTA report (#13), passive R/L/C (#12).
+
+**Open, in order:** (1) BEM; larger budget woofers; non-box page fields; multi-source generator harden; more browser speed if still needed. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min`.
+
+**Pitfalls:** Preference scoring still runs sound power (48 sphere dirs) + ~28 unique off-axis points. Do not invent damping. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** preference + window + compare (release) + clippy `-D warnings` on core/acoustics/sim. Full `tools/cloud-check.sh` pending on this branch.
+
+**Next step:** item 1 — BEM, larger woofers, or non-box page fields.
+
+### 2026-11-15 — Cursor — Handoff: BEM / woofers / speed next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

@@ -1720,164 +1720,142 @@ pub fn simulate_with_progress(
                 .into(),
         );
     }
-    // The listening window (README section 11.1): the direct sound averaged, as energy, over
-    // straight ahead, 10, 20, and 30 degrees to either side, and 10 degrees up and down.
+    // Listening window and CTA early reflections share baffle directions (README 11.1 / 2.6).
+    // One transfer_many covers the unique angles; front-wall ER reuses the listening window.
     let mut listening_window_db: Option<Vec<f64>> = None;
     let mut window_flatness_db: Option<f64> = None;
-    if request.listening_window && !prepared.is_empty() {
-        if request.radiation == "exterior" {
-            fidelity.ignored.push(
-                "The listening window is not computed with the outside in 3D (one 3D run per \
-                 direction); evenness is the level straight ahead only."
-                    .into(),
-            );
+    let mut cta2034: Option<Cta2034Report> = None;
+    let want_window = request.listening_window && !prepared.is_empty();
+    let want_cta = request.cta2034 && request.radiation != "exterior" && !prepared.is_empty();
+    if (want_window || want_cta) && request.radiation == "exterior" && want_window {
+        fidelity.ignored.push(
+            "The listening window is not computed with the outside in 3D (one 3D run per \
+             direction); evenness is the level straight ahead only."
+                .into(),
+        );
+    }
+    if (want_window || want_cta) && request.radiation != "exterior" {
+        let distance = design.speaker.listening.distance_m;
+        let lw_angles = preference::listening_window_angles_deg();
+        let er_angles = if want_cta {
+            preference::early_reflection_angles_deg()
         } else {
-            let distance = design.speaker.listening.distance_m;
-            let mut energy = vec![0.0; freqs.len()];
-            let mut directions = 0.0;
-            let mut failed = false;
-            for (side_deg, up_deg) in [
-                (0.0f64, 0.0f64),
-                (10.0, 0.0),
-                (-10.0, 0.0),
-                (20.0, 0.0),
-                (-20.0, 0.0),
-                (30.0, 0.0),
-                (-30.0, 0.0),
-                (0.0, 10.0),
-                (0.0, -10.0),
-            ] {
+            Vec::new()
+        };
+        // Unique (side, up) degrees, stable order: listening window first, then ER-only.
+        let mut unique: Vec<(f64, f64)> = lw_angles.to_vec();
+        for angle in &er_angles {
+            if !unique
+                .iter()
+                .any(|(s, u)| (s - angle.0).abs() < 1e-9 && (u - angle.1).abs() < 1e-9)
+            {
+                unique.push(*angle);
+            }
+        }
+        let points: Vec<[f64; 3]> = unique
+            .iter()
+            .map(|(side_deg, up_deg)| {
                 let (side, up) = (side_deg.to_radians(), up_deg.to_radians());
-                let point = [
+                [
                     reference[0] + distance * side.sin() * up.cos(),
                     reference[1] - distance * side.cos() * up.cos(),
                     reference[2] + distance * up.sin(),
-                ];
-                let pressure: Vec<Complex64> = if side_deg == 0.0 && up_deg == 0.0 {
+                ]
+            })
+            .collect();
+        if let Ok(transfers) =
+            radiation.transfer_many(&scene, &all_patches, &freqs, &points, &mut *progress)
+        {
+            let mut energy_at: Vec<Vec<f64>> = Vec::with_capacity(unique.len());
+            for ((side_deg, up_deg), transfer) in unique.iter().zip(&transfers) {
+                let pressure: Vec<Complex64> = if *side_deg == 0.0 && *up_deg == 0.0 {
                     summed_pressure.clone()
                 } else {
-                    match radiation.transfer(&scene, &all_patches, &freqs, point, &mut *progress) {
-                        Ok(transfer) => {
-                            let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
-                            let mut row = 0;
-                            for (place, item) in prepared.iter().enumerate() {
-                                let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
-                                for source in &item.sources {
-                                    for bin in 0..freqs.len() {
-                                        total[bin] += source[bin]
-                                            * item.blocks_h[bin]
-                                            * (request.voltage_v * sign)
-                                            * transfer.per_source[row][bin];
-                                    }
-                                    row += 1;
-                                }
+                    let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
+                    let mut row = 0;
+                    for (place, item) in prepared.iter().enumerate() {
+                        let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
+                        for source in &item.sources {
+                            for bin in 0..freqs.len() {
+                                total[bin] += source[bin]
+                                    * item.blocks_h[bin]
+                                    * (request.voltage_v * sign)
+                                    * transfer.per_source[row][bin];
                             }
-                            total
-                        }
-                        Err(_) => {
-                            failed = true;
-                            break;
+                            row += 1;
                         }
                     }
+                    total
                 };
-                for (sum, value) in energy.iter_mut().zip(&pressure) {
-                    *sum += value.norm_sqr();
-                }
-                directions += 1.0;
+                energy_at.push(pressure.iter().map(|p| p.norm_sqr()).collect());
             }
-            if !failed {
-                let window: Vec<f64> = energy
+            let average_db = |angles: &[(f64, f64)]| -> Vec<f64> {
+                let mut energy = vec![0.0; freqs.len()];
+                let mut count = 0.0_f64;
+                for angle in angles {
+                    if let Some(found) = unique
+                        .iter()
+                        .position(|(s, u)| (s - angle.0).abs() < 1e-9 && (u - angle.1).abs() < 1e-9)
+                    {
+                        for (sum, value) in energy.iter_mut().zip(&energy_at[found]) {
+                            *sum += *value;
+                        }
+                        count += 1.0;
+                    }
+                }
+                let denom = count.max(1.0);
+                energy
                     .iter()
-                    .map(|sum| 10.0 * (sum / directions / (P_REF * P_REF)).max(1e-30).log10())
-                    .collect();
+                    .map(|sum| 10.0 * (sum / denom / (P_REF * P_REF)).max(1e-30).log10())
+                    .collect()
+            };
+            if want_window {
+                let window = average_db(&lw_angles);
                 let (_, flat, _) = metrics(&freqs, &window, &max_spl_sum);
                 window_flatness_db = Some(flat);
                 listening_window_db = Some(window);
             }
+            if want_cta {
+                if listening_window_db.is_none() {
+                    fidelity.ignored.push(
+                        "CTA-2034 preference needs the listening window; turn \
+                         listening_window on with cta2034."
+                            .into(),
+                    );
+                }
+                if let (Some(lw), Some(di)) = (&listening_window_db, &directivity_index_db) {
+                    let early = average_db(&er_angles);
+                    let sp_curve: Vec<f64> = summed_spl_db
+                        .iter()
+                        .zip(di.iter())
+                        .map(|(on, di)| on - di)
+                        .collect();
+                    let report =
+                        preference::cta2034_report(&freqs, &summed_spl_db, lw, &early, &sp_curve);
+                    fidelity.ignored.push(format!(
+                        "CTA-2034 preference rating {:.2} (Olive): NBD on-axis {:.2} dB, NBD \
+                         predicted in-room {:.2} dB, smoothness {:.2}, bass extension {:.0} Hz. \
+                         Early reflections average {} baffle directions; sound power is \
+                         on-axis minus the directivity index.",
+                        report.score.preference,
+                        report.score.nbd_on,
+                        report.score.nbd_pir,
+                        report.score.sm_pir,
+                        report.score.lfx_hz,
+                        er_angles.len()
+                    ));
+                    cta2034 = Some(report);
+                }
+            }
         }
+    } else if want_cta && listening_window_db.is_none() && request.radiation != "exterior" {
+        fidelity.ignored.push(
+            "CTA-2034 preference needs the listening window; turn listening_window on with \
+             cta2034."
+                .into(),
+        );
     }
     let flatness_db = window_flatness_db.map_or(axis_flatness_db, |w| w.max(axis_flatness_db));
-
-    // CTA-2034 curves and Olive preference (README 2.6): needs the listening window, sound
-    // power (for DI → relative SP), and early-reflection directions under the baffle model.
-    let mut cta2034: Option<Cta2034Report> = None;
-    if request.cta2034 && request.radiation != "exterior" && !prepared.is_empty() {
-        if listening_window_db.is_none() {
-            fidelity.ignored.push(
-                "CTA-2034 preference needs the listening window; turn listening_window on with \
-                 cta2034."
-                    .into(),
-            );
-        }
-        if let (Some(lw), Some(di)) = (&listening_window_db, &directivity_index_db) {
-            let distance = design.speaker.listening.distance_m;
-            let mut energy = vec![0.0; freqs.len()];
-            let mut directions = 0.0;
-            let mut failed = false;
-            for (side_deg, up_deg) in preference::early_reflection_angles_deg() {
-                let (side, up) = (side_deg.to_radians(), up_deg.to_radians());
-                let point = [
-                    reference[0] + distance * side.sin() * up.cos(),
-                    reference[1] - distance * side.cos() * up.cos(),
-                    reference[2] + distance * up.sin(),
-                ];
-                let pressure =
-                    match radiation.transfer(&scene, &all_patches, &freqs, point, &mut *progress) {
-                        Ok(transfer) => {
-                            let mut total = vec![Complex64::new(0.0, 0.0); freqs.len()];
-                            let mut row = 0;
-                            for (place, item) in prepared.iter().enumerate() {
-                                let sign = if flipped == Some(place) { -1.0 } else { 1.0 };
-                                for source in &item.sources {
-                                    for bin in 0..freqs.len() {
-                                        total[bin] += source[bin]
-                                            * item.blocks_h[bin]
-                                            * (request.voltage_v * sign)
-                                            * transfer.per_source[row][bin];
-                                    }
-                                    row += 1;
-                                }
-                            }
-                            total
-                        }
-                        Err(_) => {
-                            failed = true;
-                            break;
-                        }
-                    };
-                for (sum, value) in energy.iter_mut().zip(&pressure) {
-                    *sum += value.norm_sqr();
-                }
-                directions += 1.0;
-            }
-            if !failed && directions > 0.0 {
-                let early: Vec<f64> = energy
-                    .iter()
-                    .map(|sum| 10.0 * (sum / directions / (P_REF * P_REF)).max(1e-30).log10())
-                    .collect();
-                // Relative sound-power curve: on-axis level minus the directivity index.
-                let sp_curve: Vec<f64> = summed_spl_db
-                    .iter()
-                    .zip(di.iter())
-                    .map(|(on, di)| on - di)
-                    .collect();
-                let report =
-                    preference::cta2034_report(&freqs, &summed_spl_db, lw, &early, &sp_curve);
-                fidelity.ignored.push(format!(
-                    "CTA-2034 preference rating {:.2} (Olive): NBD on-axis {:.2} dB, NBD predicted \
-                     in-room {:.2} dB, smoothness {:.2}, bass extension {:.0} Hz. Early reflections \
-                     average {} baffle directions; sound power is on-axis minus the directivity index.",
-                    report.score.preference,
-                    report.score.nbd_on,
-                    report.score.nbd_pir,
-                    report.score.sm_pir,
-                    report.score.lfx_hz,
-                    preference::early_reflection_angles_deg().len()
-                ));
-                cta2034 = Some(report);
-            }
-        }
-    }
 
     SimulateResult {
         revision: request.revision,

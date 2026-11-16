@@ -365,7 +365,40 @@ pub trait RadiationModel: Send + Sync {
         sources: &[SourcePatch],
         freqs_hz: &[f64],
         point_m: [f64; 3],
-        _progress: Progress,
+        progress: Progress,
+    ) -> Result<Transfer, String> {
+        let mut many = self.transfer_many(scene, sources, freqs_hz, &[point_m], progress)?;
+        many.pop()
+            .ok_or_else(|| "radiation transfer returned no point.".to_string())
+    }
+
+    /// Pressure at many listener points. Default calls [`RadiationModel::transfer_one`] per
+    /// point; models that share geometry across directions (baffle outlines) override this.
+    fn transfer_many(
+        &self,
+        scene: &RadiationScene,
+        sources: &[SourcePatch],
+        freqs_hz: &[f64],
+        points_m: &[[f64; 3]],
+        progress: Progress,
+    ) -> Result<Vec<Transfer>, String> {
+        let mut out = Vec::with_capacity(points_m.len());
+        for (index, point) in points_m.iter().enumerate() {
+            out.push(self.transfer_one(scene, sources, freqs_hz, *point)?);
+            if !progress(index + 1, points_m.len().max(1)) {
+                return Err("it was canceled.".into());
+            }
+        }
+        Ok(out)
+    }
+
+    /// One listener point without progress reporting. Default is the point-source fallback.
+    fn transfer_one(
+        &self,
+        scene: &RadiationScene,
+        sources: &[SourcePatch],
+        freqs_hz: &[f64],
+        point_m: [f64; 3],
     ) -> Result<Transfer, String> {
         let unit = vec![vec![Complex64::new(1.0, 0.0); freqs_hz.len()]];
         let distance = distance_m(point_m, scene.reference_m).max(1e-6);
@@ -454,24 +487,16 @@ pub fn sound_power_by_directions<M: RadiationModel + ?Sized>(
         return Ok(SoundPower { power_w, notes });
     }
     if count > 8 {
-        for (index, direction) in directions.iter().enumerate() {
-            let transfer = model.transfer(
-                scene,
-                sources,
-                freqs_hz,
-                far_point(direction),
-                &mut *progress,
-            )?;
-            keep_notes(&transfer);
+        let points: Vec<[f64; 3]> = directions.iter().map(far_point).collect();
+        let transfers = model.transfer_many(scene, sources, freqs_hz, &points, progress)?;
+        for transfer in &transfers {
+            keep_notes(transfer);
             for (bin, slot) in power_w.iter_mut().enumerate() {
                 let mut sum = Complex64::new(0.0, 0.0);
                 for (source, row) in transfer.per_source.iter().enumerate() {
                     sum += volume_velocity[source][bin] * row[bin];
                 }
                 *slot += scale * sum.norm_sqr();
-            }
-            if !progress(index + 1, directions.len()) {
-                return Err("it was canceled.".into());
             }
         }
         return Ok(SoundPower { power_w, notes });
@@ -484,15 +509,10 @@ pub fn sound_power_by_directions<M: RadiationModel + ?Sized>(
     let coarse_hz: Vec<f64> = coarse.iter().map(|&bin| freqs_hz[bin]).collect();
     // coupling[i][j][coarse bin], for j >= i, divided by f^2 so that it interpolates well.
     let mut coupling = vec![vec![vec![Complex64::new(0.0, 0.0); coarse.len()]; count]; count];
-    for direction in &directions {
-        let transfer = model.transfer(
-            scene,
-            sources,
-            &coarse_hz,
-            far_point(direction),
-            &mut *progress,
-        )?;
-        keep_notes(&transfer);
+    let points: Vec<[f64; 3]> = directions.iter().map(far_point).collect();
+    let transfers = model.transfer_many(scene, sources, &coarse_hz, &points, progress)?;
+    for transfer in &transfers {
+        keep_notes(transfer);
         for i in 0..count {
             for j in i..count {
                 for (bin, freq) in coarse_hz.iter().enumerate() {

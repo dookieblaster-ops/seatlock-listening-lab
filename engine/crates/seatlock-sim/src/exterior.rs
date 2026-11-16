@@ -240,6 +240,16 @@ impl RadiationModel for ExteriorRadiation {
         BaffleRadiation.pressure(sources, freqs_hz, distance_m, space, baffle_width_m)
     }
 
+    fn transfer_one(
+        &self,
+        scene: &RadiationScene,
+        sources: &[SourcePatch],
+        freqs_hz: &[f64],
+        point_m: [f64; 3],
+    ) -> Result<Transfer, String> {
+        self.transfer(scene, sources, freqs_hz, point_m, &mut (|_, _| true))
+    }
+
     fn transfer(
         &self,
         scene: &RadiationScene,
