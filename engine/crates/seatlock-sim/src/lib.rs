@@ -20,6 +20,7 @@ use seatlock_dsp::{delay_block, gain_block, polarity_block, prefer_inverted_high
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+pub mod bem;
 pub mod chambers;
 pub mod compare;
 pub mod cost;
@@ -42,6 +43,7 @@ pub fn builtin() -> Registry {
     seatlock_acoustics::register(&mut registry);
     seatlock_dsp::register(&mut registry);
     registry.register_radiation("exterior", exterior::parse);
+    registry.register_radiation("bem", bem::parse);
     registry
 }
 
@@ -88,6 +90,9 @@ pub struct SimulateRequest {
     /// default.
     #[serde(default)]
     pub exterior_dx_m: Option<f64>,
+    /// Face subdivisions of the bounding-box mesh when `radiation` is `bem`; 4 by default.
+    #[serde(default)]
+    pub bem_subdivisions: Option<u32>,
     /// Run the 3D cabinet model until its echoes die away instead of stopping early and
     /// fitting the rest (README 5.5). For checks that compare the two.
     #[serde(default)]
@@ -123,6 +128,7 @@ impl Default for SimulateRequest {
             losses: false,
             walls: false,
             exterior_dx_m: None,
+            bem_subdivisions: None,
             fdtd_full_decay: false,
         }
     }
@@ -943,6 +949,9 @@ pub fn simulate_with_progress(
     let mut radiation_fields = Map::new();
     if let Some(dx) = request.exterior_dx_m {
         radiation_fields.insert("dx_m".into(), serde_json::json!(dx));
+    }
+    if let Some(subdivisions) = request.bem_subdivisions {
+        radiation_fields.insert("subdivisions".into(), serde_json::json!(subdivisions));
     }
     let radiation = match registry.create_radiation(&request.radiation, &radiation_fields) {
         Ok(model) => model,

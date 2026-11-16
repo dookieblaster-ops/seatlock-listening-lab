@@ -186,3 +186,81 @@ fn normalize(v: [f64; 3]) -> [f64; 3] {
 fn scale(v: [f64; 3], s: f64) -> [f64; 3] {
     [v[0] * s, v[1] * s, v[2] * s]
 }
+
+/// Axis-aligned box from the lab origin (front-bottom-left) to `size_m = [x, y, z]`.
+///
+/// Each face is split into `subdivisions × subdivisions` quads (two triangles each).
+/// Outward normals: front `y = 0` faces `-y` (toward the listener).
+pub fn box_aabb(size_m: [f64; 3], subdivisions: u32) -> Result<TriangleMesh, String> {
+    if size_m.iter().any(|&v| v <= 0.0) {
+        return Err("box size must be positive".into());
+    }
+    let n = subdivisions.max(1) as usize;
+    let mut vertices = Vec::new();
+    let mut triangles = Vec::new();
+    // Face: (origin corner of the face, u-axis edge, v-axis edge), outward = u × v.
+    let faces: [([f64; 3], [f64; 3], [f64; 3]); 6] = [
+        // Front y=0, outward -y: u = +x, v = +z.
+        (
+            [0.0, 0.0, 0.0],
+            [size_m[0], 0.0, 0.0],
+            [0.0, 0.0, size_m[2]],
+        ),
+        // Back y=size_y, outward +y: u = -x (so u×v = +y), v = +z from right edge.
+        (
+            [size_m[0], size_m[1], 0.0],
+            [-size_m[0], 0.0, 0.0],
+            [0.0, 0.0, size_m[2]],
+        ),
+        // Left x=0, outward -x: u = -y, v = +z.
+        (
+            [0.0, size_m[1], 0.0],
+            [0.0, -size_m[1], 0.0],
+            [0.0, 0.0, size_m[2]],
+        ),
+        // Right x=size_x, outward +x: u = +y, v = +z.
+        (
+            [size_m[0], 0.0, 0.0],
+            [0.0, size_m[1], 0.0],
+            [0.0, 0.0, size_m[2]],
+        ),
+        // Bottom z=0, outward -z: u = +x, v = -y.
+        (
+            [0.0, size_m[1], 0.0],
+            [size_m[0], 0.0, 0.0],
+            [0.0, -size_m[1], 0.0],
+        ),
+        // Top z=size_z, outward +z: u = +x, v = +y.
+        (
+            [0.0, 0.0, size_m[2]],
+            [size_m[0], 0.0, 0.0],
+            [0.0, size_m[1], 0.0],
+        ),
+    ];
+    for &(origin, u_edge, v_edge) in &faces {
+        let base = vertices.len();
+        for iv in 0..=n {
+            let fv = iv as f64 / n as f64;
+            for iu in 0..=n {
+                let fu = iu as f64 / n as f64;
+                vertices.push([
+                    origin[0] + fu * u_edge[0] + fv * v_edge[0],
+                    origin[1] + fu * u_edge[1] + fv * v_edge[1],
+                    origin[2] + fu * u_edge[2] + fv * v_edge[2],
+                ]);
+            }
+        }
+        let row = n + 1;
+        for iv in 0..n {
+            for iu in 0..n {
+                let i00 = base + iv * row + iu;
+                let i10 = i00 + 1;
+                let i01 = i00 + row;
+                let i11 = i01 + 1;
+                triangles.push([i00, i10, i11]);
+                triangles.push([i00, i11, i01]);
+            }
+        }
+    }
+    TriangleMesh::from_triangles(vertices, triangles)
+}

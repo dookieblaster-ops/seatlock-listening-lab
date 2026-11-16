@@ -5,18 +5,18 @@
 //! convention as CHK-RAD-3's closed-form sphere series).
 //!
 //! Constant triangular elements, collocation at centroids. Validated on a pulsating sphere
-//! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), and an oscillating
-//! sphere Neumann dipole (CHK-BEM-3). Rigid-sphere plane-wave levels at `ka ≳ 1` do not yet
-//! match the smooth-sphere series with this discretization (mesh refine does not close the
-//! gap; monopole radiation is fine). Higher-order elements or Burton–Miller, cabinet meshing,
-//! and joining the driver network come next.
+//! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), an oscillating
+//! sphere Neumann dipole (CHK-BEM-3), and exterior field evaluation (CHK-BEM-4). Registered
+//! as the `bem` radiation member for box AABB meshes. Rigid-sphere plane-wave levels at
+//! `ka ≳ 1` do not yet match the smooth-sphere series with this discretization. Higher-order
+//! elements, Burton–Miller, true outer-shape meshing, and joining the driver network come next.
 
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
 use seatlock_core::{C0, RHO0};
 
 mod mesh;
-pub use mesh::{icosphere, TriangleMesh};
+pub use mesh::{box_aabb, icosphere, TriangleMesh};
 
 const PI: f64 = std::f64::consts::PI;
 
@@ -41,6 +41,84 @@ pub fn dgreen_dn(k: f64, from: [f64; 3], to: [f64; 3], n_at_to: [f64; 3]) -> Com
     g * Complex64::new(-1.0 / r, -k) * dr_dn
 }
 
+/// Factorized exterior Neumann CBIE `(D − ½ I) p = S q` at one frequency.
+///
+/// Reuse across many right-hand sides (one per surface source) at the same frequency.
+pub struct NeumannSystem {
+    lu: LU<Complex64, nalgebra::Dyn, nalgebra::Dyn>,
+    s: DMatrix<Complex64>,
+    pub k: f64,
+    pub frequency_hz: f64,
+}
+
+impl NeumannSystem {
+    /// Assemble and factor the CBIE operators on `mesh` at `frequency_hz`.
+    pub fn assemble(mesh: &TriangleMesh, frequency_hz: f64) -> Result<Self, String> {
+        if frequency_hz <= 0.0 {
+            return Err("frequency must be positive".into());
+        }
+        let n = mesh.triangles.len();
+        let k = 2.0 * PI * frequency_hz / C0;
+        let mut a = DMatrix::<Complex64>::zeros(n, n);
+        let mut s = DMatrix::<Complex64>::zeros(n, n);
+        for i in 0..n {
+            let xi = mesh.centroids[i];
+            for j in 0..n {
+                let (s_ij, d_ij) = if i == j {
+                    (self_single_layer(mesh, j, k), Complex64::new(0.0, 0.0))
+                } else {
+                    integrate_element(mesh, j, xi, k)
+                };
+                s[(i, j)] = s_ij;
+                a[(i, j)] = d_ij;
+                if i == j {
+                    a[(i, j)] -= Complex64::new(0.5, 0.0);
+                }
+            }
+        }
+        let lu = a.lu();
+        // Probe singularity with a unit RHS.
+        let probe = DVector::from_element(n, Complex64::new(1.0, 0.0));
+        if lu.solve(&probe).is_none() {
+            return Err("BEM matrix was singular (irregular frequency or bad mesh)".into());
+        }
+        Ok(Self {
+            lu,
+            s,
+            k,
+            frequency_hz,
+        })
+    }
+
+    /// Surface pressure from prescribed outward `q = ∂p/∂n` on each triangle.
+    pub fn solve_q(&self, q: &[Complex64]) -> Result<Vec<Complex64>, String> {
+        let n = self.s.nrows();
+        if q.len() != n {
+            return Err(format!("q has {} entries for {n} triangles", q.len()));
+        }
+        let mut rhs = DVector::<Complex64>::zeros(n);
+        for (i, row) in rhs.iter_mut().enumerate() {
+            for (j, &qj) in q.iter().enumerate() {
+                *row += self.s[(i, j)] * qj;
+            }
+        }
+        let p = self.lu.solve(&rhs).ok_or_else(|| {
+            "BEM matrix was singular (irregular frequency or bad mesh)".to_string()
+        })?;
+        Ok(p.iter().copied().collect())
+    }
+
+    /// Surface pressure from complex outward normal velocity `v_n` (m/s).
+    pub fn solve_velocity(&self, v_n: &[Complex64]) -> Result<Vec<Complex64>, String> {
+        let omega = 2.0 * PI * self.frequency_hz;
+        let q: Vec<_> = v_n
+            .iter()
+            .map(|&v| Complex64::new(0.0, -omega * RHO0) * v)
+            .collect();
+        self.solve_q(&q)
+    }
+}
+
 /// Surface pressure from prescribed outward `q = ∂p/∂n` on each triangle.
 ///
 /// Assembles `(D − ½ I) p = S q` with outward normals into the air,
@@ -50,36 +128,7 @@ pub fn solve_neumann_q(
     frequency_hz: f64,
     q: &[Complex64],
 ) -> Result<Vec<Complex64>, String> {
-    let n = mesh.triangles.len();
-    if q.len() != n {
-        return Err(format!("q has {} entries for {n} triangles", q.len()));
-    }
-    if frequency_hz <= 0.0 {
-        return Err("frequency must be positive".into());
-    }
-    let k = 2.0 * PI * frequency_hz / C0;
-    let mut a = DMatrix::<Complex64>::zeros(n, n);
-    let mut rhs = DVector::<Complex64>::zeros(n);
-    for i in 0..n {
-        let xi = mesh.centroids[i];
-        for j in 0..n {
-            let (s_ij, d_ij) = if i == j {
-                (self_single_layer(mesh, j, k), Complex64::new(0.0, 0.0))
-            } else {
-                integrate_element(mesh, j, xi, k)
-            };
-            a[(i, j)] = d_ij;
-            if i == j {
-                a[(i, j)] -= Complex64::new(0.5, 0.0);
-            }
-            rhs[i] += s_ij * q[j];
-        }
-    }
-    let p = a
-        .lu()
-        .solve(&rhs)
-        .ok_or_else(|| "BEM matrix was singular (irregular frequency or bad mesh)".to_string())?;
-    Ok(p.iter().copied().collect())
+    NeumannSystem::assemble(mesh, frequency_hz)?.solve_q(q)
 }
 
 /// Surface pressure from prescribed outward normal velocity `v_n` (m/s) on each triangle.
@@ -94,12 +143,52 @@ pub fn solve_neumann(
     if v_n.len() != n {
         return Err(format!("v_n has {} entries for {n} triangles", v_n.len()));
     }
-    let omega = 2.0 * PI * frequency_hz;
+    let complex: Vec<_> = v_n.iter().map(|&v| Complex64::new(v, 0.0)).collect();
+    NeumannSystem::assemble(mesh, frequency_hz)?.solve_velocity(&complex)
+}
+
+/// Exterior field pressure at a point outside the body:
+/// `p(x) = ∫_S (G q − p ∂G/∂n_y) dS` with the same kernels as the CBIE.
+pub fn field_pressure(
+    mesh: &TriangleMesh,
+    k: f64,
+    p_surf: &[Complex64],
+    q: &[Complex64],
+    point_m: [f64; 3],
+) -> Result<Complex64, String> {
+    let n = mesh.triangles.len();
+    if p_surf.len() != n || q.len() != n {
+        return Err(format!(
+            "surface fields have {} / {} entries for {n} triangles",
+            p_surf.len(),
+            q.len()
+        ));
+    }
+    let mut total = Complex64::new(0.0, 0.0);
+    for j in 0..n {
+        let (s_j, d_j) = integrate_field_element(mesh, j, point_m, k);
+        total += s_j * q[j] - d_j * p_surf[j];
+    }
+    Ok(total)
+}
+
+/// Pressure from unit volume velocity of prescribed triangle velocities, at one exterior point.
+///
+/// `v_n[j]` is outward normal velocity on triangle `j`; the volume velocity is
+/// `Σ v_n[j] * area[j]`. Returns `p(point) / U` when the velocities are scaled so `U = 1`.
+pub fn transfer_from_velocity(
+    system: &NeumannSystem,
+    mesh: &TriangleMesh,
+    v_n: &[Complex64],
+    point_m: [f64; 3],
+) -> Result<Complex64, String> {
+    let p_surf = system.solve_velocity(v_n)?;
+    let omega = 2.0 * PI * system.frequency_hz;
     let q: Vec<_> = v_n
         .iter()
         .map(|&v| Complex64::new(0.0, -omega * RHO0) * v)
         .collect();
-    solve_neumann_q(mesh, frequency_hz, &q)
+    field_pressure(mesh, system.k, &p_surf, &q, point_m)
 }
 
 /// Unit-amplitude plane wave traveling in direction `toward` (unit vector), `e^{+jωt}`:
@@ -139,6 +228,17 @@ pub fn rigid_plane_wave_surface(
 pub fn pulsating_sphere_pressure(ka: f64, v_n: f64) -> Complex64 {
     let jka = Complex64::new(0.0, ka);
     RHO0 * C0 * v_n * jka / (Complex64::new(1.0, 0.0) + jka)
+}
+
+/// Exterior field of a pulsating sphere of radius `a` at radial distance `r` (`r ≥ a`):
+/// `p(r) = p(a) · (a/r) · e^{-j k (r − a)}`.
+pub fn pulsating_sphere_field(ka: f64, a_m: f64, r_m: f64, v_n: f64) -> Complex64 {
+    let surface = pulsating_sphere_pressure(ka, v_n);
+    if r_m <= 0.0 || a_m <= 0.0 {
+        return Complex64::new(0.0, 0.0);
+    }
+    let k = ka / a_m;
+    surface * (a_m / r_m) * Complex64::from_polar(1.0, -k * (r_m - a_m))
 }
 
 /// Spherical Hankel of the second kind (same series as CHK-RAD-3).
@@ -197,6 +297,16 @@ pub fn oscillating_sphere_pressure(ka: f64, cos_theta: f64, velocity_m_s: f64) -
 }
 
 fn integrate_element(
+    mesh: &TriangleMesh,
+    tri: usize,
+    xi: [f64; 3],
+    k: f64,
+) -> (Complex64, Complex64) {
+    integrate_field_element(mesh, tri, xi, k)
+}
+
+/// Single- and double-layer integrals of element `tri` observed from `xi` (no self singularity).
+fn integrate_field_element(
     mesh: &TriangleMesh,
     tri: usize,
     xi: [f64; 3],

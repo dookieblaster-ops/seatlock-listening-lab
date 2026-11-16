@@ -132,7 +132,7 @@ Sections 11.4 and 12 say how this is built.
 **How the industry builds this** (researched 2026-11-12, at the owner's request; sources in `STATUS.md`). Professional loudspeaker simulators share four habits, and the lab is to follow them:
 
 1. **Any configuration.** A speaker is a list of sound sources, each with its own position, facing, and filter. Nothing in the simulator or the generator may assume a count or a layout.
-2. **A network joined to a boundary-element model.** Drivers and filters are a fast network of lumped parts; the air inside and around the cabinet is solved once per frequency on a mesh of the cabinet's surfaces (the boundary element method), which gives the sound in every direction from one solve. The lab's 3D model works in time on a block of air and needs one run per direction, so a boundary-element model is the planned replacement for the outside (section 12, Level 3 track D). First slices in `seatlock-bem`: exterior CBIE on constant triangles — pulsating sphere (CHK-BEM-1), rigid-sphere plane-wave at low `ka` (CHK-BEM-2), oscillating-sphere dipole (CHK-BEM-3); not yet a radiation member or joined to the network. Rigid-sphere plane-wave levels at `ka ≳ 1` still miss the smooth-sphere series with this discretization.
+2. **A network joined to a boundary-element model.** Drivers and filters are a fast network of lumped parts; the air inside and around the cabinet is solved once per frequency on a mesh of the cabinet's surfaces (the boundary element method), which gives the sound in every direction from one solve. The lab's 3D model works in time on a block of air and needs one run per direction, so a boundary-element model is the planned replacement for the outside (section 12, Level 3 track D). First slices in `seatlock-bem`: exterior CBIE on constant triangles — pulsating sphere (CHK-BEM-1), rigid-sphere plane-wave at low `ka` (CHK-BEM-2), oscillating-sphere dipole (CHK-BEM-3), exterior field (CHK-BEM-4) — and the `bem` radiation member on a bounding-box mesh (baffle hand-over above the mesh limit). Not yet joined to the network; curved outer shapes are still the AABB. Rigid-sphere plane-wave levels at `ka ≳ 1` still miss the smooth-sphere series with this discretization.
 3. **A score from the whole sound field.** The standard measurement (CTA-2034, the "spinorama") takes 70 directions and forms the level straight ahead, the listening window, the early reflections, the sound power, and a predicted in-room response (12 % listening window, 44 % early reflections, 44 % sound power). A published rating predicts listeners' preference from the smoothness and slope of those curves and the bass limit. The lab's score is to be built on these curves (section 11.1).
 4. **A missing detail never stops a design.** Where a number is unknown the tools carry on with what is known and say what is left out. The lab does the same: it warns, and refuses only what truly cannot be made.
 
@@ -198,8 +198,9 @@ Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock
 ```
 simulate(design, request) -> results
   request:  { enclosure: "lumped" | "waveguide" | "fdtd",
-              radiation: "point" | "baffle" | "exterior", space: "full" | "half" | "step",
+              radiation: "point" | "baffle" | "exterior" | "bem", space: "full" | "half" | "step",
               frequency grid, which outputs (sound_power), cell sizes (fdtd_dx_m, exterior_dx_m),
+              bem_subdivisions (face grid for `bem`, default 4),
               fdtd_full_decay (run the 3D cabinet model to the end instead of stopping early),
               listening_window (section 11.1), losses (the air's wall losses, sections 5.4 and 5.5),
               walls (the cabinet's walls vibrate, section 5.11) }
@@ -220,7 +221,7 @@ The lab is a playground, so new ideas will arrive after the code exists. Each fa
 | Internal element | Its air or solid region; its role in the air network (node, edge, or shunt); its primitives for the print solid and the voxel grid. | chamber, duct, solid (1 to 2), placed plastic `voxels` (3), fill, passive radiator (3) |
 | Radiator | Its electrical impedance; its surface sources per volt (section 5.6): one net volume velocity, or a list of surface elements, each a place on the mounting surface measured from the mount point, an area, and a volume velocity; its limits; whether it pushes on the cabinet's air; what it needs from its mount; its lines for the fidelity label; the catalog parts it uses. | `cone` (1), `dml_panel` (3) |
 | Enclosure load model | `Z_ab` and `H_k` (section 5.2). | `lumped` (1), `fdtd` (1), `waveguide` (2) |
-| Radiation model | Pressure at any point per unit volume velocity of each surface source, and radiated sound power, from the sources' positions and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3) |
+| Radiation model | Pressure at any point per unit volume velocity of each surface source, and radiated sound power, from the sources' positions and the outer shape (section 5.6). | `point` (1), `baffle` (2), `exterior` (3), `bem` (3) |
 | Room model | The path from the speaker's radiation to the listening position (section 5.10): the mirror images of the listening position it needs the speaker's sound at, whether it needs the sound power, and what it adds as pressure and as energy. | `free` (1), `simple` (3) |
 | DSP block | Its frequency response, its sample process function, its parameters. | biquad, crossover, delay, gain, limiter (1 to 2), FIR, dynamic bass (3) |
 | Correction feature | Blocks with reasons, from responses, limits, and target, under the keep-only-if-it-helps rule. | C1 to C10 (section 8) |
@@ -443,7 +444,7 @@ Every radiator hands the radiation model a list of **surface sources**. A surfac
 - Opening k of that cone's enclosure is one source at the opening, with `U_s = H_k * U_in = -H_k * U_d`. Keep that sign: it is what makes a port cancel the cone at low frequency.
 - A DML panel is a grid of sources (section 5.9).
 
-A radiation model turns the sources and the cabinet's outer shape into pressure at any point and into radiated sound power. There are three. A radiator does not care which one is in use.
+A radiation model turns the sources and the cabinet's outer shape into pressure at any point and into radiated sound power. There are four. A radiator does not care which one is in use.
 
 **`point`, Level 1.** Every source is a simple source:
 
@@ -498,6 +499,8 @@ What validated it (CHK-RAD-3, CHK-RAD-4, and three more tests beside them):
 A grid that follows the surface (tried, not in use). `Domain::around_smooth` keeps the cells a curved surface cuts, with the air fraction of each cell's volume and of each face's area: a face's velocity update is scaled by its fraction, a cell's pressure update is divided by its fraction (never below a sixth of the sum of its faces' fractions, which keeps the plain time step stable), and the body's share of a face carries the prescribed velocity. On the CHK-RAD-3 sphere it is stable, and the worst error in the shadow falls from 3.42 to 2.58 dB at 10 mm and from 1.67 to 1.55 dB at 5 mm, while the lit point goes from 0.67 to 1.02 dB and the side from 0.24 to 0.56 dB at 10 mm. That is not a clear gain, so the simulator still uses stair-steps. It also shows that most of the shadow error is not the stair-steps themselves; the grid's dispersion along the path around the body is the likely rest, which is not yet tested.
 
 Not modeled: openings as openings (a port's mouth is a patch of rigid skin that moves), and anything that needs smooth curved surfaces in deep shadow.
+
+**`bem`, Level 3.** Exterior collocation CBIE from `seatlock-bem` on a triangulated mesh of the cabinet's **bounding box** (constant triangles, Duffy self-term). Each surface source maps to nearby same-facing triangles with unit volume velocity; one LU factorization per frequency serves every source and every listening point (representation formula for the field). Above the mesh's frequency limit (about six elements per wavelength on the mean face edge), the `baffle` model's value is used as it is. Sound power still uses the baffle integral. Request field `bem_subdivisions` sets the per-face grid (default 4). Fidelity label: box mesh, rigid moving openings, constant-element limits (including rigid-sphere plane-wave at `ka ≳ 1`). Not yet joined to the driver network; true outer-shape meshing, Burton–Miller, and higher-order elements are next. Checked: CHK-BEM-1…4 in the crate, and a sealed box under `bem` within 2 dB of `baffle` from 30 to 400 Hz.
 
 Sound power is the integral of `|p|^2 / (RHO0*C0)` over a sphere in the far field. The results give it as a level in dB re 1 pW, with the directivity index: the on-axis intensity at the listening distance against the mean over all directions, `10*log10(|p_axis|^2 * 4*pi*r^2 / (RHO0*C0*W))`. Both are computed when the design has a room, or when the request sets `sound_power`.
 
@@ -1095,6 +1098,7 @@ Unless a check says otherwise: 2.83 V RMS at the terminals, radiation model `poi
 | CHK-BEM-1 | `seatlock-bem` exterior CBIE, pulsating sphere radius 0.1 m, 320-face icosphere, `ka` 0.5 / 1 / 2. | Surface `|p|` within 0.5 dB of `ρ c v_n · j ka / (1 + j ka)`; phase within 10°. |
 | CHK-BEM-2 | `seatlock-bem` rigid sphere radius 0.1 m in a unit plane wave, 320-face icosphere, `ka` 0.25 / 0.5, lit / side / shadow. | Surface `|p|` within 0.75 dB of the CHK-RAD-3 closed-form series (same budget as CHK-RAD-3 lit/side). Higher `ka` not yet claimed with constant elements. |
 | CHK-BEM-3 | `seatlock-bem` oscillating sphere (Neumann dipole), radius 0.1 m, 320-face icosphere, `ka` 0.5 / 1 / 2. | Area-weighted relative L1 error of surface `p` vs `−j ρ c U (h₁/h₁') cos θ` under 0.03. |
+| CHK-BEM-4 | `seatlock-bem` pulsating sphere field at 1 m, 320-face icosphere, `ka` 0.5 / 1 / 2. | Exterior `|p|` within 0.5 dB of `p(a)·(a/r)·e^{-jk(r−a)}`. |
 | CHK-RAD-4 | `exterior` solver, a box 0.2 x 0.16 x 0.24 m, 10 mm cells, one skin cell on its front, one point beside it and one behind it. | The reciprocity run and a plain radiation run the other way round agree within 7 % and 10 degrees at 50, 200, 500, 1000, 2000, and 3000 Hz. |
 | CHK-WIN-1 | `baffle` radiation with `listening_window`, test-woofer-a's piston at the middle of a 40 x 40 m surface, listener at 100 m, 41 frequencies from 3.0 to 3.6 kHz. | The window's level against the level straight ahead, averaged over the frequencies, equals the energy mean of the piston's directivity over the nine directions, within 0.05 dB. Under `point` radiation the window equals the level straight ahead within 0.02 dB. |
 | CHK-PLATE-1 | `test-panel-a`, all four edges simply supported, no exciter, no loss. | The first five resonances are 42.36, 88.10, 123.68, 164.35, and 169.43 Hz. Within 1 %. |

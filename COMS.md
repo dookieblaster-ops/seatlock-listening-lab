@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM radiation wire-up / higher-order elements / generator harden next
+### 2026-11-16 — Cursor — Handoff: start here. BEM shape meshing / generator harden next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-radiation-wire-up-027d` (PR onto `main`). Level 3.
+
+**Done this session:** (1) Earlier on `main`: CHK-BEM-3; high-ka rigid-sphere limit placed. (2) CHK-BEM-4 pulsating-sphere exterior field at 1 m within 0.5 dB. (3) Registered `bem` radiation: AABB box mesh (`bem_subdivisions` default 4), LU reuse per frequency, representation formula at listeners, baffle hand-over above ~6 elements/wavelength; sound power still baffle. Sealed-test front driver within 2 dB of baffle 30–400 Hz.
+
+**Open, in order:** (1) BEM: true outer-shape meshing (not just AABB); higher-order elements / Burton–Miller; join network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4 to claim high-ka rigid-sphere series. Dense O(N²) — worker when page-wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `cargo test -p seatlock-bem --release` 12 passed; `cargo test -p seatlock-sim --release --test bem` 2 passed; clippy `-D warnings` on seatlock-bem + seatlock-sim. Full `tools/cloud-check.sh` not re-run this turn.
+
+**Next step:** mesh real outer shapes for `bem`, or higher-order / Burton–Miller, or harden the multi-source generator.
+
+### 2026-11-16 — Cursor — Handoff: BEM radiation wire-up / higher-order elements / generator harden next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

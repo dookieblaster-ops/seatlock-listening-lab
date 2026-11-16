@@ -8,6 +8,7 @@ edition.workspace = true
 num-complex.workspace = true
 rustfft.workspace = true
 seatlock-acoustics = { path = "../seatlock-acoustics" }
+seatlock-bem = { path = "../seatlock-bem" }
 seatlock-correct = { path = "../seatlock-correct" }
 seatlock-core = { path = "../seatlock-core" }
 seatlock-dsp = { path = "../seatlock-dsp" }
