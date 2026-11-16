@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** DC200-8 has no published bolt circle (screw holes left to the builder). Do not invent damping. Do not digitize FR graphs. Do not undo Q12.
 
-**Last check:** `large_woofers` 3 passed (release). Full `tools/cloud-check.sh` pending.
+**Last check:** `tools/cloud-check.sh` passed (engine + browser 41 in 8.0m) on stable 1.100.
 
 **Next step:** item 1 — BEM, non-box page fields, or multi-source generator harden.
 
