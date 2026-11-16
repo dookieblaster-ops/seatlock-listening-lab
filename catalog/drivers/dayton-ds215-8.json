@@ -1,0 +1,42 @@
+{
+  "id": "dayton-ds215-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "DS215-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 34.3,
+    "qes": 0.38,
+    "qms": 1.75,
+    "vas_m3": 0.0431,
+    "re_ohm": 5.8,
+    "le_h": 0.00125,
+    "sd_m2": 0.02112,
+    "xmax_m": 0.0055,
+    "pe_w": 80.0,
+    "mms_kg": 0.0297,
+    "cms_m_per_n": 0.00072,
+    "bl_tm": 9.89,
+    "sens_db_2v83": 89.9
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.180086,
+    "outer_diameter_m": 0.2159,
+    "bolt_circle_m": 0.205994,
+    "bolt_count": 5,
+    "depth_m": 0.095504
+  },
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-430--dayton-audio-ds215-8-specifications.pdf",
+    "title": "Dayton Audio DS215-8 specification sheet (Parts Express pedocs)",
+    "read_on": "2026-11-16"
+  },
+  "price": {
+    "amount": 65.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DS215-8-8-Designer-Series-Woofer-295-430",
+    "read_on": "2026-11-16"
+  }
+}

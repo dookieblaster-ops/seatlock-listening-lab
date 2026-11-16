@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM / woofers / non-box fields next
+### 2026-11-16 — Cursor — Handoff: start here. BEM / non-box fields / generator harden next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/budget-8in-woofers-e85b` (stacks on speed #16 → preference #15 → CTA #13 → passive #12). Level 3.
+
+**Done this session:** Two budget 8 in woofers in the catalog: Dayton DS215-8 and DC200-8 (Parts Express PDF + product page, read 2026-11-16). Generator pool includes them. Example `ds215-sealed` reaches f6 71 Hz (TCP115 mdf-box 92 Hz). Prior: preference scoring speed (#16), preference ranking (#15), CTA (#13), passive (#12).
+
+**Open, in order:** (1) BEM; non-box page fields; multi-source generator harden; more browser speed if needed. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min`.
+
+**Pitfalls:** DC200-8 has no published bolt circle (screw holes left to the builder). Do not invent damping. Do not digitize FR graphs. Do not undo Q12.
+
+**Last check:** `large_woofers` 3 passed (release). Full `tools/cloud-check.sh` pending.
+
+**Next step:** item 1 — BEM, non-box page fields, or multi-source generator harden.
+
+### 2026-11-16 — Cursor — Handoff: BEM / woofers / non-box fields next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

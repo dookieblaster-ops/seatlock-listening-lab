@@ -1,0 +1,41 @@
+{
+  "id": "dayton-dc200-8",
+  "status": "sourced",
+  "tier": "budget",
+  "maker": "Dayton Audio",
+  "model": "DC200-8",
+  "kind": "woofer",
+  "published": {
+    "fs_hz": 30.3,
+    "qes": 0.49,
+    "qms": 3.06,
+    "vas_m3": 0.0457,
+    "re_ohm": 6.41,
+    "le_h": 0.00232,
+    "sd_m2": 0.02112,
+    "xmax_m": 0.0045,
+    "pe_w": 60.0,
+    "mms_kg": 0.0361,
+    "cms_m_per_n": 0.00077,
+    "bl_tm": 9.5,
+    "sens_db_2v83": 87.0
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.18288,
+    "outer_diameter_m": 0.204978,
+    "bolt_count": 4,
+    "depth_m": 0.093472
+  },
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/DC200-8%208_%20Classic%20Woofer%208%20Ohm%20Specification%20Sheet.pdf",
+    "title": "Dayton Audio DC200-8 specification sheet (Parts Express pedocs)",
+    "read_on": "2026-11-16"
+  },
+  "price": {
+    "amount": 39.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DC200-8-8-Classic-Woofer-295-310",
+    "read_on": "2026-11-16"
+  }
+}
