@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM / generator harden next
+### 2026-11-16 — Cursor — Handoff: start here. BEM radiation wire-up / generator harden next
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-exterior-scaffold-e85b` (stacks on non-box fields #18 → … → #12). Level 3.
+
+**Done this session:** Exterior BEM scaffold crate `seatlock-bem`. Constant triangles, collocation CBIE, Duffy self-term, icosphere. CHK-BEM-1: pulsating sphere |p| within 0.05 dB (ka 0.5/1/2, 320 faces). Prior: non-box page fields (#18).
+
+**Open, in order:** (1) BEM next: register as radiation / match rigid-sphere CHK-RAD-3 / Burton–Miller / join network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears.
+
+**Pitfalls:** Do not invent damping. Irregular frequencies above `ka ≈ π` without Burton–Miller/CHIEF. Dense O(N²) solve — keep in a worker when wired to the page.
+
+**Last check:** `cargo test -p seatlock-bem` 4 passed (release). Full `tools/cloud-check.sh` pending.
+
+**Next step:** wire BEM as a radiation member or harden the multi-source generator.
+
+### 2026-11-16 — Cursor — Handoff: BEM / generator harden next (superseded)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff

@@ -230,6 +230,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "seatlock-bem"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "num-complex",
+ "seatlock-core",
+]
+
+[[package]]
 name = "seatlock-core"
 version = "0.1.0"
 dependencies = [

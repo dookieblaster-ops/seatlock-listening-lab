@@ -1,0 +1,10 @@
+[package]
+name = "seatlock-bem"
+description = "Frequency-domain boundary-element acoustics for the air around (and later inside) a cabinet."
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+nalgebra = { version = "0.33", default-features = false, features = ["std"] }
+num-complex.workspace = true
+seatlock-core = { path = "../seatlock-core" }

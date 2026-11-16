@@ -36,3 +36,7 @@ opt-level = 2
 
 [profile.dev.package.seatlock-dsp]
 opt-level = 2
+
+# Dense BEM matrix fills; keep release-like speed in tests.
+[profile.dev.package.seatlock-bem]
+opt-level = 3
