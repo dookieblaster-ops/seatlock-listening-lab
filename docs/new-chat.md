@@ -26,14 +26,14 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 `AGENTS.md` loads those three for Claude Code automatically.
 
-## Current queue (2026-11-15)
+## Current queue (2026-11-16)
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
 1. **BEM radiation wire-up / Burton–Miller / multi-source generator harden** (see `COMS.md`)
 2. Then real PLA/TPU damping / Criton leftovers if a source appears
 
-Already done / open PRs: … → non-box page fields (#18); BEM exterior scaffold (this branch, CHK-BEM-1); C-Note MT and Criton 3TD-X vs ASR.
+Already on `main`: passive R/L/C tune, CTA-2034 Olive preference as the ranked score, preference scoring speedup, budget 8 in woofers, non-box page fields, BEM exterior scaffold (CHK-BEM-1); C-Note MT and Criton 3TD-X vs ASR.
 
 ## What “done” looks like for a lead turn
 

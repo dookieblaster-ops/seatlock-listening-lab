@@ -49,7 +49,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-exterior-scaffold-e85b` (stacks on non-box fields #18 → … → #12). Level 3.
+- **Context:** `main`. Level 3. Lead reviewed and merged helper stack #12–#19.
+
+**Done this session (lead review):** Fetched all remotes. Reviewed stacked PRs #12 (passive R/L/C tune) → #13 (CTA preference) → #15 (preference as target) → #16 (preference speed) → #17 (budget 8 in woofers) → #18 (non-box page fields) → #19 (BEM scaffold). Sourced driver sheets and AES 6190 formula look correct; no invented damping. Fast-forwarded tip onto `main`. Re-ran `tools/cloud-check.sh` on the tip: engine 247, browser 44, All checks passed (stable 1.100).
+
+**Open, in order:** (1) BEM next: register as radiation / match rigid-sphere CHK-RAD-3 / Burton–Miller / join network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+
+**Pitfalls:** Do not invent damping. Irregular frequencies above `ka ≈ π` without Burton–Miller/CHIEF. Dense O(N²) solve — keep in a worker when wired to the page. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `tools/cloud-check.sh` passed (engine 247, browser 44 in ~8.0m) on stable 1.100 after lead re-run. CHK-BEM-1 ≤0.05 dB.
+
+**Next step:** wire BEM as a radiation member or harden the multi-source generator.
+
+### 2026-11-16 — Cursor — Handoff: BEM radiation wire-up / generator harden next (merged to main)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-exterior-scaffold-e85b` (stacks on non-box fields #18 → … → #12). Level 3. **Merged to `main` by lead 2026-11-16.**
 
 **Done this session:** Exterior BEM scaffold crate `seatlock-bem`. Constant triangles, collocation CBIE, Duffy self-term, icosphere. CHK-BEM-1: pulsating sphere |p| within 0.05 dB (ka 0.5/1/2, 320 faces). Prior: non-box page fields (#18).
 
@@ -216,8 +232,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
-- 2026-11-15: CTA-2034 / Olive preference rating on listening-window runs (page + PIR graph), done by Cursor (PR on branch). Criton ASR preference 4.31 vs pub 4.68.
-- 2026-11-15: Passive R/L/C value optimizer ("Tune the passive board"), done by Cursor (PR on branch). Mis-tuned first-order shortfall 8.34 → 5.66.
+- 2026-11-16: Helper stack #12–#19 (passive R/L/C tune → CTA preference → preference target → speed → 8 in woofers → non-box fields → BEM scaffold) reviewed and merged to `main` by Cursor lead; cloud-check re-run green (engine 247, browser 44).
+- 2026-11-15: CTA-2034 / Olive preference rating on listening-window runs (page + PIR graph), merged to `main`. Criton ASR preference 4.31 vs pub 4.68.
+- 2026-11-15: Passive R/L/C value optimizer ("Tune the passive board"), merged to `main`. Mis-tuned first-order shortfall 8.34 → 5.66.
 - 2026-11-15: CSS Criton 3TD-X kit copy vs ASR CTA-2034 (mid/treble ~2 dB RMS; bass relatively high), done on `main` by Cursor. Skyline skipped for lack of a Klippel measurement.
 - 2026-11-15: Any number of vents, add-a-driver on the page, Play up to 16 drivers; three Dayton mounting drawings filled in. Laptop check skipped. Done on `main` by Cursor.
 - 2026-11-15: Passive page netlist editor (ohm / mH / µF), done on `main` by Cursor.

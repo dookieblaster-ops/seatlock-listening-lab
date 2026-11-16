@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-16 (BEM exterior scaffold)
+Updated: 2026-11-16 (lead merged helper stack #12–#19 onto main)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -75,7 +75,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
-0p. Passive R/L/C done 2026-11-15. CTA preference + ranked target done 2026-11-15. Preference score speedup done 2026-11-16. Budget 8 in woofers done 2026-11-16. Non-box page fields done 2026-11-16. BEM exterior scaffold (CHK-BEM-1) done 2026-11-16.
+0p. Helper stack #12–#19 merged to `main` 2026-11-16 (passive R/L/C tune, CTA preference + ranked target, preference speed, budget 8 in woofers, non-box page fields, BEM scaffold CHK-BEM-1). Lead re-ran cloud-check: engine 247, browser 44.
 0. **Next:** BEM next: radiation member / rigid-sphere CHK-RAD-3 match / Burton–Miller; multi-source generator harden; more browser speed if needed. Or wall vibration remainder: real PLA/TPU damping — do not invent.
 1. Research plan details as above.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
@@ -116,6 +116,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-16, Cursor cloud: budget 8 in woofers. `dayton-ds215-8` and `dayton-dc200-8` from Parts Express PDF + product page; example `ds215-sealed`; tests `large_woofers` 3 passed (f6 71 Hz vs TCP115 92 Hz). `tools/cloud-check.sh` passed (engine + browser 41 in 8.0m).
 - 2026-11-16, Cursor cloud: non-box page fields (`OuterFields`). Tube / revolved / sloped / prism / sheet / edged box editors; e2e `outer-fields` 3 passed. `tools/cloud-check.sh` passed (43 browser, 1 flaky import retry) in 8.2m.
 - 2026-11-16, Cursor cloud: `seatlock-bem` exterior CBIE scaffold; CHK-BEM-1 pulsating sphere ≤0.05 dB on 320-face mesh (ka 0.5/1/2). `tools/cloud-check.sh` passed (browser 44 in 7.9m).
+- 2026-11-16, Cursor cloud (lead): reviewed helper PRs #12–#19 against README (sourced drivers, AES 6190 preference, no invented damping); fast-forwarded tip onto `main`; re-ran `tools/cloud-check.sh` — engine 247 passed, browser 44 passed, All checks passed (stable 1.100).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).
 
 - 2026-11-10, Claude's cloud workspace: `tools/cloud-check.sh` ran every step of `./check.sh` on `main` after the shelf fix: rustfmt, clippy, 62 engine tests, the TypeScript bindings, both WebAssembly modules, the type check, vitest, the production build, and all 7 browser tests. This is the first full check outside a Cursor agent. It used stable Rust 1.97.0, not the pinned 1.99.1, and Chromium build 1243 linked as the 1254 that Playwright expects.
