@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** review of `cursor/bem-radiation-wire-up-027d` (PR #20) onto this branch. Level 3.
+- **Context:** `main`, after review of `cursor/bem-radiation-wire-up-027d` (PR #20). Level 3.
 
 **Done this session:** Reviewed the helper's `bem` radiation member against README 2.6 / 3.2 / 3.3 / 5.6. Two defects, both fixed before accepting it. (1) The exterior field integral had the opposite sign: level within 0.15 dB of the pulsating sphere, phase 180° off. With the outward normal, Green's identity is `∫ (p ∂G/∂n − G q)`. CHK-BEM-4 now requires phase within 10° (measured 0.07° / 0.34° / 1.09° at ka 0.5 / 1 / 2). (2) `seatlock-wasm` did not compile: `full_3d` lists every `SimulateRequest` field and omitted `bem_subdivisions`. The worker now passes that field. Accepted as-is: box AABB mesh, one LU per frequency, baffle hand-over, sealed-test within 2 dB of baffle from 30 to 400 Hz. Sound power still uses the baffle integral. The page does not offer `bem` yet.
 
@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4 — phase is part of CHK-BEM-4, and a magnitude-only check hid the sign error. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release` passed (CHK-BEM-4 phase 0.07° / 0.34° / 1.09°); `cargo test -p seatlock-sim --release --test bem` 2 passed; clippy `-D warnings` on seatlock-bem, seatlock-sim, seatlock-wasm (toolchain 1.99.1). Full `tools/cloud-check.sh` not re-run yet.
+**Last check:** `tools/cloud-check.sh` passed (engine 257, browser 44) on stable 1.100. CHK-BEM-4 phase 0.07° / 0.34° / 1.09° at ka 0.5 / 1 / 2.
 
 **Next step:** mesh real outer shapes for `bem`, or higher-order / Burton–Miller, or harden the multi-source generator.
 
