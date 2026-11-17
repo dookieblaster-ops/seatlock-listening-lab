@@ -57,7 +57,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4 — phase is part of CHK-BEM-4, and a magnitude-only check hid the sign error. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `tools/cloud-check.sh` passed (engine 257, browser 44) on stable 1.100. CHK-BEM-4 phase 0.07° / 0.34° / 1.09° at ka 0.5 / 1 / 2.
+**Last check:** `tools/cloud-check.sh` re-run 2026-11-17 at owner request (laptop check stand-in; Mint not linked): engine 257, browser 44, stable 1.100. CHK-BEM-4 phase 0.07° / 0.34° / 1.09° at ka 0.5 / 1 / 2.
 
 **Next step:** mesh real outer shapes for `bem`, or higher-order / Burton–Miller, or harden the multi-source generator.
 
