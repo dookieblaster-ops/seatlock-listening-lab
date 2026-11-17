@@ -51,14 +51,19 @@ fn chk_bem_4_pulsating_sphere_field_matches_the_closed_form() {
         let bem = field_pressure(&mesh, system.k, &p_surf, &q, point).expect("field");
         let exact = pulsating_sphere_field(ka, a, r, v_n);
         let err_db = 20.0 * (bem.norm() / exact.norm()).log10().abs();
+        let phase_deg = (bem / exact).arg().to_degrees().abs();
         eprintln!(
-            "ka={ka}: |p|_bem={:.5} |p|_exact={:.5} err={err_db:.3} dB",
+            "ka={ka}: |p|_bem={:.5} |p|_exact={:.5} err={err_db:.3} dB phase={phase_deg:.2}°",
             bem.norm(),
             exact.norm()
         );
         assert!(
             err_db < 0.5,
             "ka={ka}: field |p| {err_db:.2} dB from closed form"
+        );
+        assert!(
+            phase_deg < 10.0,
+            "ka={ka}: field phase {phase_deg:.1}° from closed form"
         );
         worst_db = worst_db.max(err_db);
     }

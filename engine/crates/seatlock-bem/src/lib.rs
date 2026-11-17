@@ -147,8 +147,11 @@ pub fn solve_neumann(
     NeumannSystem::assemble(mesh, frequency_hz)?.solve_velocity(&complex)
 }
 
-/// Exterior field pressure at a point outside the body:
-/// `p(x) = ∫_S (G q − p ∂G/∂n_y) dS` with the same kernels as the CBIE.
+/// Exterior field pressure at a point outside the body.
+///
+/// With the outward normal into the air (the same normal as the CBIE), Green's identity
+/// for the exterior is `p(x) = ∫_S (p ∂G/∂n_y − G q) dS`. The opposite sign matches the
+/// magnitude and misses the phase by 180°.
 pub fn field_pressure(
     mesh: &TriangleMesh,
     k: f64,
@@ -167,7 +170,7 @@ pub fn field_pressure(
     let mut total = Complex64::new(0.0, 0.0);
     for j in 0..n {
         let (s_j, d_j) = integrate_field_element(mesh, j, point_m, k);
-        total += s_j * q[j] - d_j * p_surf[j];
+        total += d_j * p_surf[j] - s_j * q[j];
     }
     Ok(total)
 }

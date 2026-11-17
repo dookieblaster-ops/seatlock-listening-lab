@@ -45,6 +45,9 @@ struct CallRequest {
     fdtd_dx_m: Option<f64>,
     #[serde(default)]
     exterior_dx_m: Option<f64>,
+    /// Face grid for `bem` radiation (README 3.2). Absent means the solver's default.
+    #[serde(default)]
+    bem_subdivisions: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -84,6 +87,8 @@ struct SimRequest {
     losses: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     walls: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bem_subdivisions: Option<u32>,
 }
 
 fn read_utf8(ptr: *const u8, len: usize) -> Result<String, String> {
@@ -130,6 +135,7 @@ fn parse_request(request: &str) -> CallRequest {
         sample_rate_hz: None,
         fdtd_dx_m: None,
         exterior_dx_m: None,
+        bem_subdivisions: None,
     })
 }
 
@@ -264,6 +270,7 @@ fn full_3d(request: &str) -> String {
         losses: true,
         walls: true,
         exterior_dx_m: parsed.exterior_dx_m,
+        bem_subdivisions: parsed.bem_subdivisions,
         fdtd_full_decay: false,
     };
     let result = simulate_with_progress(&design, &sim_request, &builtin(), &mut report_progress);
@@ -313,6 +320,7 @@ fn dispatch(method: &str, request: &str) -> String {
                 cta2034: parsed.cta2034,
                 losses: parsed.losses,
                 walls: parsed.walls,
+                bem_subdivisions: parsed.bem_subdivisions,
             })
             .unwrap();
             match simulate_json(&text, &request_value, &builtin()) {

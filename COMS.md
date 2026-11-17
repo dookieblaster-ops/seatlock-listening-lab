@@ -45,7 +45,23 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-16 — Cursor — Handoff: start here. BEM shape meshing / generator harden next
+### 2026-11-16 — Cursor — Handoff: start here. BEM shape meshing next (field sign fixed)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** review of `cursor/bem-radiation-wire-up-027d` (PR #20) onto this branch. Level 3.
+
+**Done this session:** Reviewed the helper's `bem` radiation member against README 2.6 / 3.2 / 3.3 / 5.6. Two defects, both fixed before accepting it. (1) The exterior field integral had the opposite sign: level within 0.15 dB of the pulsating sphere, phase 180° off. With the outward normal, Green's identity is `∫ (p ∂G/∂n − G q)`. CHK-BEM-4 now requires phase within 10° (measured 0.07° / 0.34° / 1.09° at ka 0.5 / 1 / 2). (2) `seatlock-wasm` did not compile: `full_3d` lists every `SimulateRequest` field and omitted `bem_subdivisions`. The worker now passes that field. Accepted as-is: box AABB mesh, one LU per frequency, baffle hand-over, sealed-test within 2 dB of baffle from 30 to 400 Hz. Sound power still uses the baffle integral. The page does not offer `bem` yet.
+
+**Open, in order:** (1) BEM: true outer-shape meshing (not just the bounding box); higher-order elements / Burton–Miller; join the driver network; multi-source generator harden. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4 — phase is part of CHK-BEM-4, and a magnitude-only check hid the sign error. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+
+**Last check:** `cargo test -p seatlock-bem --release` passed (CHK-BEM-4 phase 0.07° / 0.34° / 1.09°); `cargo test -p seatlock-sim --release --test bem` 2 passed; clippy `-D warnings` on seatlock-bem, seatlock-sim, seatlock-wasm (toolchain 1.99.1). Full `tools/cloud-check.sh` not re-run yet.
+
+**Next step:** mesh real outer shapes for `bem`, or higher-order / Burton–Miller, or harden the multi-source generator.
+
+### 2026-11-16 — Cursor — Handoff: BEM shape meshing / generator harden next (reviewed)
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
@@ -248,6 +264,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-16: Helper `bem` radiation (PR #20) reviewed; exterior field sign corrected and CHK-BEM-4 phase held within 10°; worker passes `bem_subdivisions`.
 - 2026-11-16: CHK-BEM-3 oscillating-sphere dipole on `main`; high-ka rigid-sphere vs smooth series placed as constant-element limit (not irregular-frequency).
 - 2026-11-16: CHK-BEM-2 low-ka rigid-sphere surface pressures on `main` by Cursor lead (ka 0.25/0.5 within 0.75 dB; higher ka still open).
 - 2026-11-16: Helper stack #12–#19 (passive R/L/C tune → CTA preference → preference target → speed → 8 in woofers → non-box fields → BEM scaffold) reviewed and merged to `main` by Cursor lead; cloud-check re-run green (engine 247, browser 44).
