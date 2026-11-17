@@ -264,3 +264,111 @@ pub fn box_aabb(size_m: [f64; 3], subdivisions: u32) -> Result<TriangleMesh, Str
     }
     TriangleMesh::from_triangles(vertices, triangles)
 }
+
+fn lerp3(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
+    [
+        a[0] + t * (b[0] - a[0]),
+        a[1] + t * (b[1] - a[1]),
+        a[2] + t * (b[2] - a[2]),
+    ]
+}
+
+fn length3(v: [f64; 3]) -> f64 {
+    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+/// Triangulate an outer shape by seeding the axis-aligned bounding box and pulling every
+/// vertex that sits outside the true skin inward onto it.
+///
+/// `inside` is the cabinet occupancy test (`OuterShape::contains_cabinet`). Box-like shapes
+/// whose skin fills the AABB keep the seed mesh. Curved and chamfered skins move the
+/// overhanging vertices onto the surface along the ray from the box centre. Star-convex
+/// cabinets from that centre are the intended case; a later mesh pass can replace this for
+/// deeply re-entrant imported shells.
+pub fn mesh_from_aabb_seed<F>(
+    size_m: [f64; 3],
+    subdivisions: u32,
+    mut inside: F,
+) -> Result<TriangleMesh, String>
+where
+    F: FnMut([f64; 3]) -> Result<bool, String>,
+{
+    let mut seed = box_aabb(size_m, subdivisions)?;
+    let center = [size_m[0] * 0.5, size_m[1] * 0.5, size_m[2] * 0.5];
+    if !inside(center)? {
+        return Err(
+            "The cabinet's centre is outside its outer shape, so the boundary-element mesh \
+             cannot be built from the bounding box."
+                .into(),
+        );
+    }
+    let scale = size_m.iter().copied().fold(0.0_f64, f64::max).max(1e-6);
+    let eps = 1e-7 * scale;
+    let probe_step = 1e-5 * scale;
+
+    for vertex in &mut seed.vertices {
+        let to_center = [
+            center[0] - vertex[0],
+            center[1] - vertex[1],
+            center[2] - vertex[2],
+        ];
+        let dist = length3(to_center);
+        if dist <= eps {
+            continue;
+        }
+        let dir = [
+            to_center[0] / dist,
+            to_center[1] / dist,
+            to_center[2] / dist,
+        ];
+        let probe = [
+            vertex[0] + dir[0] * probe_step,
+            vertex[1] + dir[1] * probe_step,
+            vertex[2] + dir[2] * probe_step,
+        ];
+        // Vertex already lies on a face that fills the AABB: keep it.
+        if inside(probe)? {
+            continue;
+        }
+        // Search the segment from the centre (inside) to a point just past the seed vertex.
+        let far = lerp3(center, *vertex, 1.02);
+        if inside(far).unwrap_or(true) {
+            // Seed vertex was not past the skin; leave it.
+            continue;
+        }
+        let mut lo = 0.0;
+        let mut hi = 1.0;
+        for _ in 0..48 {
+            let mid = 0.5 * (lo + hi);
+            if inside(lerp3(center, far, mid))? {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        *vertex = lerp3(center, far, 0.5 * (lo + hi));
+    }
+
+    // Centroids, normals, and areas must follow the moved vertices.
+    TriangleMesh::from_triangles(seed.vertices, seed.triangles)
+}
+
+/// Mean edge length over every triangle (for the baffle frequency hand-over).
+pub fn mean_edge_length(mesh: &TriangleMesh) -> f64 {
+    let mut sum = 0.0;
+    let mut count = 0.0;
+    for tri in &mesh.triangles {
+        let a = mesh.vertices[tri[0]];
+        let b = mesh.vertices[tri[1]];
+        let c = mesh.vertices[tri[2]];
+        sum += length3([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+        sum += length3([c[0] - b[0], c[1] - b[1], c[2] - b[2]]);
+        sum += length3([a[0] - c[0], a[1] - c[1], a[2] - c[2]]);
+        count += 3.0;
+    }
+    if count <= 0.0 {
+        0.0
+    } else {
+        sum / count
+    }
+}

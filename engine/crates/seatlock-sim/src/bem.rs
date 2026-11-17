@@ -1,22 +1,24 @@
-//! The `bem` radiation model (README section 5.6): exterior CBIE on a box AABB mesh of the
-//! cabinet, with baffle fallback above the mesh's frequency limit.
+//! The `bem` radiation model (README section 5.6): exterior CBIE on a mesh of the cabinet's
+//! outer shape, with baffle fallback above the mesh's frequency limit.
 
 use num_complex::Complex64;
 use seatlock_acoustics::BaffleRadiation;
-use seatlock_bem::{box_aabb, field_pressure, NeumannSystem, TriangleMesh};
+use seatlock_bem::{
+    field_pressure, mean_edge_length, mesh_from_aabb_seed, NeumannSystem, TriangleMesh,
+};
 use seatlock_core::constants::C0;
 use seatlock_core::registry::{
     Progress, RadiationModel, RadiationScene, SoundPower, SourcePatch, Transfer,
 };
 use serde_json::{Map, Value};
 
-/// Default face subdivisions for the AABB mesh (each face → `n²` quads → `2 n²` triangles).
+/// Default face subdivisions for the AABB seed grid (each face → `n²` quads → `2 n²` triangles).
 pub const DEFAULT_SUBDIVISIONS: u32 = 4;
 /// Aim for at least this many elements along one wavelength before handing over to baffle.
 const ELEMENTS_PER_WAVELENGTH: f64 = 6.0;
 
-pub const BOX_MESH_NOTE: &str = "Boundary-element outside: the cabinet is meshed as its \
-     bounding box; curved or slanted skin is not followed yet.";
+pub const SHAPE_MESH_NOTE: &str = "Boundary-element outside: the mesh follows the cabinet's \
+     outer shape from a bounding-box seed; deeply re-entrant skins are not yet remeshed.";
 pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are rigid patches that \
      move, not true mouths.";
 
@@ -51,12 +53,6 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
 fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
     let d = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
     (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
-}
-
-/// Mean edge length of the AABB face grid (used for the baffle hand-over).
-fn mean_edge_m(size_m: [f64; 3], subdivisions: u32) -> f64 {
-    let n = subdivisions.max(1) as f64;
-    (size_m[0] / n + size_m[1] / n + size_m[2] / n) / 3.0
 }
 
 fn valid_hz(edge_m: f64) -> f64 {
@@ -125,7 +121,7 @@ fn unit_velocity(mesh: &TriangleMesh, triangles: &[usize]) -> Option<Vec<Complex
 impl BemRadiation {
     fn label(&self, valid: f64) -> String {
         format!(
-            "Boundary-element outside on a box mesh ({sub}×{sub} per face) up to {valid:.0} Hz",
+            "Boundary-element outside on the outer shape ({sub}×{sub} seed per face) up to {valid:.0} Hz",
             sub = self.subdivisions,
             valid = valid
         )
@@ -133,8 +129,9 @@ impl BemRadiation {
 
     fn mesh_for(&self, scene: &RadiationScene) -> Result<(TriangleMesh, f64, f64), String> {
         let size = scene.shape.outer_size_m()?;
-        let mesh = box_aabb(size, self.subdivisions)?;
-        let edge = mean_edge_m(size, self.subdivisions);
+        let mesh =
+            mesh_from_aabb_seed(size, self.subdivisions, |p| scene.shape.contains_cabinet(p))?;
+        let edge = mean_edge_length(&mesh);
         Ok((mesh, edge, valid_hz(edge)))
     }
 }
@@ -227,7 +224,7 @@ impl RadiationModel for BemRadiation {
 
         let notes = vec![
             self.label(valid),
-            BOX_MESH_NOTE.to_string(),
+            SHAPE_MESH_NOTE.to_string(),
             OPENINGS_NOTE.to_string(),
         ];
         for transfer in &mut transfers {

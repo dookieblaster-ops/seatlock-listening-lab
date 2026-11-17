@@ -7,16 +7,17 @@
 //! Constant triangular elements, collocation at centroids. Validated on a pulsating sphere
 //! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), an oscillating
 //! sphere Neumann dipole (CHK-BEM-3), and exterior field evaluation (CHK-BEM-4). Registered
-//! as the `bem` radiation member for box AABB meshes. Rigid-sphere plane-wave levels at
-//! `ka ≳ 1` do not yet match the smooth-sphere series with this discretization. Higher-order
-//! elements, Burton–Miller, true outer-shape meshing, and joining the driver network come next.
+//! as the `bem` radiation member. The cabinet mesh seeds the bounding box and pulls vertices
+//! onto the true outer skin. Rigid-sphere plane-wave levels at `ka ≳ 1` do not yet match the
+//! smooth-sphere series with this discretization. Higher-order elements, Burton–Miller, and
+//! joining the driver network come next.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
 use seatlock_core::{C0, RHO0};
 
 mod mesh;
-pub use mesh::{box_aabb, icosphere, TriangleMesh};
+pub use mesh::{box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, TriangleMesh};
 
 const PI: f64 = std::f64::consts::PI;
 

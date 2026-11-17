@@ -90,7 +90,7 @@ pub struct SimulateRequest {
     /// default.
     #[serde(default)]
     pub exterior_dx_m: Option<f64>,
-    /// Face subdivisions of the bounding-box mesh when `radiation` is `bem`; 4 by default.
+    /// Face subdivisions of the bounding-box seed mesh when `radiation` is `bem`; 4 by default.
     #[serde(default)]
     pub bem_subdivisions: Option<u32>,
     /// Run the 3D cabinet model until its echoes die away instead of stopping early and
