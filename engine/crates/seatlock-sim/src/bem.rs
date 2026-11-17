@@ -19,6 +19,8 @@ const ELEMENTS_PER_WAVELENGTH: f64 = 6.0;
 
 pub const SHAPE_MESH_NOTE: &str = "Boundary-element outside: the mesh follows the cabinet's \
      outer shape from a bounding-box seed; deeply re-entrant skins are not yet remeshed.";
+pub const CHIEF_NOTE: &str = "Boundary-element outside: CHIEF interior points keep irregular \
+     frequencies nonsingular on constant elements.";
 pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are rigid patches that \
      move, not true mouths.";
 
@@ -225,6 +227,7 @@ impl RadiationModel for BemRadiation {
         let notes = vec![
             self.label(valid),
             SHAPE_MESH_NOTE.to_string(),
+            CHIEF_NOTE.to_string(),
             OPENINGS_NOTE.to_string(),
         ];
         for transfer in &mut transfers {

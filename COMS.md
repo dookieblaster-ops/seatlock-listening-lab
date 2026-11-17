@@ -45,21 +45,33 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-17 — Cursor — Handoff: start here. Burton–Miller / higher-order / generator harden next
+### 2026-11-17 — Cursor — Handoff: start here. Higher-order elements / join network / generator harden next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-outer-shape-mesh-e8db` (PR onto `main`). Level 3.
+- **Context:** branch `cursor/bem-burton-miller-e8db` (PR onto `main`). Level 3. Prior outer-shape mesh already on `main`.
 
-**Done this session:** (1) True outer-shape meshing for `bem`: AABB face grid is a seed; overhanging vertices pull onto `contains_cabinet`. Boxes keep the box mesh; cylinders within 8 % of analytical skin area; `pvc-tube` runs under `bem`; sealed-test vs baffle still within 2 dB (30–400 Hz). Fidelity label says outer shape. (2) README 2.6 / 5.6 / table updated. Star-convex from the box centre only — deeply re-entrant imported shells still need a later remesh.
+**Done this session:** (1) Merged outer-shape mesh to `main`. (2) Irregular-frequency fix: CHIEF interior points on the default CBIE solve (CHK-BEM-5). At the discrete peak `ka ≈ 3.2` on 320 faces, CHIEF within 0.5 dB while plain CBIE is >2 dB off; CHK-BEM-1…4 still pass. (3) Burton–Miller prototype kept as `BurtonMillerSystem` (monopole-ok) but not the radiation default — constant discontinuous elements break CHK-BEM-3 under BM. Higher-order/continuous elements come before production BM.
 
-**Open, in order:** (1) BEM: higher-order elements / Burton–Miller; join the driver network; multi-source generator harden; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) BEM: higher-order surface elements (then Burton–Miller on those); join the driver network; multi-source generator harden; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4 — phase is part of CHK-BEM-4. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release` 14 passed (incl. 2 outer-shape mesh); `cargo test -p seatlock-sim --release --test bem` 3 passed; clippy `-D warnings` on seatlock-bem + seatlock-sim. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-bem --release` 16 passed; `cargo test -p seatlock-sim --release --test bem` 3 passed; clippy `-D warnings` on seatlock-bem + seatlock-sim. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** Burton–Miller or higher-order elements, or join BEM to the driver network, or harden the multi-source generator.
+**Next step:** higher-order BEM elements, or join BEM to the driver network, or harden the multi-source generator.
+
+### 2026-11-17 — Cursor — Handoff: Burton–Miller / higher-order / generator harden next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-outer-shape-mesh-e8db` (merged to `main`). Level 3.
+
+**Done this session:** True outer-shape meshing for `bem` (AABB seed → `contains_cabinet`). Merged to `main`.
+
+**Open, in order:** superseded by the CHIEF handoff above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-16 — Cursor — Handoff: start here. BEM shape meshing next (field sign fixed)
 
@@ -280,7 +292,8 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
-- 2026-11-17: `bem` true outer-shape meshing (AABB seed → `contains_cabinet`) on branch `cursor/bem-outer-shape-mesh-e8db`.
+- 2026-11-17: CHIEF irregular-frequency fix (CHK-BEM-5); BM on constant elements deferred.
+- 2026-11-17: `bem` true outer-shape meshing (AABB seed → `contains_cabinet`) merged to `main`.
 - 2026-11-16: Helper `bem` radiation (PR #20) reviewed; exterior field sign corrected and CHK-BEM-4 phase held within 10°; worker passes `bem_subdivisions`.
 - 2026-11-16: CHK-BEM-3 oscillating-sphere dipole on `main`; high-ka rigid-sphere vs smooth series placed as constant-element limit (not irregular-frequency).
 - 2026-11-16: CHK-BEM-2 low-ka rigid-sphere surface pressures on `main` by Cursor lead (ka 0.25/0.5 within 0.75 dB; higher ka still open).

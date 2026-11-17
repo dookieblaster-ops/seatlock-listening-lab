@@ -8,15 +8,19 @@
 //! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), an oscillating
 //! sphere Neumann dipole (CHK-BEM-3), and exterior field evaluation (CHK-BEM-4). Registered
 //! as the `bem` radiation member. The cabinet mesh seeds the bounding box and pulls vertices
-//! onto the true outer skin. Rigid-sphere plane-wave levels at `ka ≳ 1` do not yet match the
-//! smooth-sphere series with this discretization. Higher-order elements, Burton–Miller, and
-//! joining the driver network come next.
+//! onto the true outer skin. Surface solves use the CBIE with CHIEF interior points so
+//! irregular frequencies stay nonsingular on constant elements (Burton–Miller needs smoother
+//! elements; the `BurtonMillerSystem` stays for monopole experiments). Rigid-sphere plane-wave
+//! levels at `ka ≳ 1` still miss the smooth-sphere series with constant elements. Higher-order
+//! elements and joining the driver network come next.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
 use seatlock_core::{C0, RHO0};
 
+mod burton_miller;
 mod mesh;
+pub use burton_miller::{d2green_dndn, dgreen_dn_x, BurtonMillerSystem};
 pub use mesh::{box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, TriangleMesh};
 
 const PI: f64 = std::f64::consts::PI;
@@ -42,53 +46,128 @@ pub fn dgreen_dn(k: f64, from: [f64; 3], to: [f64; 3], n_at_to: [f64; 3]) -> Com
     g * Complex64::new(-1.0 / r, -k) * dr_dn
 }
 
-/// Factorized exterior Neumann CBIE `(D − ½ I) p = S q` at one frequency.
+/// Factorized exterior Neumann CBIE `(D − ½ I) p = S q` at one frequency,
+/// optionally overdetermined with CHIEF interior rows and solved by normal equations.
 ///
 /// Reuse across many right-hand sides (one per surface source) at the same frequency.
 pub struct NeumannSystem {
     lu: LU<Complex64, nalgebra::Dyn, nalgebra::Dyn>,
+    /// Maps `q` to the right-hand side of the (possibly normal) equations.
     s: DMatrix<Complex64>,
     pub k: f64,
     pub frequency_hz: f64,
 }
 
-impl NeumannSystem {
-    /// Assemble and factor the CBIE operators on `mesh` at `frequency_hz`.
-    pub fn assemble(mesh: &TriangleMesh, frequency_hz: f64) -> Result<Self, String> {
-        if frequency_hz <= 0.0 {
-            return Err("frequency must be positive".into());
+/// A few points inside the mesh's axis-aligned bounds (CHIEF).
+pub fn default_chief_points(mesh: &TriangleMesh) -> Vec<[f64; 3]> {
+    let mut min = [f64::INFINITY; 3];
+    let mut max = [f64::NEG_INFINITY; 3];
+    for v in &mesh.vertices {
+        for i in 0..3 {
+            min[i] = min[i].min(v[i]);
+            max[i] = max[i].max(v[i]);
         }
-        let n = mesh.triangles.len();
-        let k = 2.0 * PI * frequency_hz / C0;
-        let mut a = DMatrix::<Complex64>::zeros(n, n);
-        let mut s = DMatrix::<Complex64>::zeros(n, n);
-        for i in 0..n {
-            let xi = mesh.centroids[i];
-            for j in 0..n {
-                let (s_ij, d_ij) = if i == j {
-                    (self_single_layer(mesh, j, k), Complex64::new(0.0, 0.0))
-                } else {
-                    integrate_element(mesh, j, xi, k)
-                };
-                s[(i, j)] = s_ij;
-                a[(i, j)] = d_ij;
-                if i == j {
-                    a[(i, j)] -= Complex64::new(0.5, 0.0);
-                }
+    }
+    let center = [
+        0.5 * (min[0] + max[0]),
+        0.5 * (min[1] + max[1]),
+        0.5 * (min[2] + max[2]),
+    ];
+    let half = [
+        0.5 * (max[0] - min[0]),
+        0.5 * (max[1] - min[1]),
+        0.5 * (max[2] - min[2]),
+    ];
+    let mut points = vec![center];
+    for axis in 0..3 {
+        let delta = 0.2 * half[axis];
+        if delta <= 1e-9 {
+            continue;
+        }
+        let mut plus = center;
+        plus[axis] += delta;
+        points.push(plus);
+        let mut minus = center;
+        minus[axis] -= delta;
+        points.push(minus);
+    }
+    points
+}
+
+fn assemble_cbie_chief(
+    mesh: &TriangleMesh,
+    frequency_hz: f64,
+    chief_points: &[[f64; 3]],
+) -> Result<NeumannSystem, String> {
+    if frequency_hz <= 0.0 {
+        return Err("frequency must be positive".into());
+    }
+    let n = mesh.triangles.len();
+    let k = 2.0 * PI * frequency_hz / C0;
+    let m = n + chief_points.len();
+    let mut left = DMatrix::<Complex64>::zeros(m, n);
+    let mut right = DMatrix::<Complex64>::zeros(m, n);
+    for i in 0..n {
+        let xi = mesh.centroids[i];
+        for j in 0..n {
+            let (s_ij, d_ij) = if i == j {
+                (self_single_layer(mesh, j, k), Complex64::new(0.0, 0.0))
+            } else {
+                integrate_element(mesh, j, xi, k)
+            };
+            right[(i, j)] = s_ij;
+            left[(i, j)] = d_ij;
+            if i == j {
+                left[(i, j)] -= Complex64::new(0.5, 0.0);
             }
         }
-        let lu = a.lu();
-        // Probe singularity with a unit RHS.
+    }
+    for (c_index, &point) in chief_points.iter().enumerate() {
+        let row = n + c_index;
+        for j in 0..n {
+            let (s_ij, d_ij) = integrate_element(mesh, j, point, k);
+            // Interior point: no free-term jump. ∫ (p ∂G/∂n − G q) = 0.
+            left[(row, j)] = d_ij;
+            right[(row, j)] = s_ij;
+        }
+    }
+
+    let (lu, s) = if chief_points.is_empty() {
+        let lu = left.lu();
         let probe = DVector::from_element(n, Complex64::new(1.0, 0.0));
         if lu.solve(&probe).is_none() {
             return Err("BEM matrix was singular (irregular frequency or bad mesh)".into());
         }
-        Ok(Self {
-            lu,
-            s,
-            k,
-            frequency_hz,
-        })
+        (lu, right)
+    } else {
+        // Normal equations (M* M) p = M* R q for the stacked CHIEF system.
+        let m_adj = left.adjoint();
+        let normal = &m_adj * &left;
+        let s = &m_adj * &right;
+        let lu = normal.lu();
+        let probe = DVector::from_element(n, Complex64::new(1.0, 0.0));
+        if lu.solve(&probe).is_none() {
+            return Err("BEM CHIEF normal matrix was singular (bad mesh)".into());
+        }
+        (lu, s)
+    };
+    Ok(NeumannSystem {
+        lu,
+        s,
+        k,
+        frequency_hz,
+    })
+}
+
+impl NeumannSystem {
+    /// Assemble CBIE with CHIEF interior points (default radiation path).
+    pub fn assemble(mesh: &TriangleMesh, frequency_hz: f64) -> Result<Self, String> {
+        assemble_cbie_chief(mesh, frequency_hz, &default_chief_points(mesh))
+    }
+
+    /// Assemble the plain exterior CBIE `(D − ½ I) p = S q` (no CHIEF; singular at irregular frequencies).
+    pub fn assemble_cbie(mesh: &TriangleMesh, frequency_hz: f64) -> Result<Self, String> {
+        assemble_cbie_chief(mesh, frequency_hz, &[])
     }
 
     /// Surface pressure from prescribed outward `q = ∂p/∂n` on each triangle.
@@ -330,7 +409,7 @@ fn integrate_field_element(
 }
 
 /// Singular single-layer self term: ∫ G dS on the flat triangle (∂G/∂n vanishes).
-fn self_single_layer(mesh: &TriangleMesh, tri: usize, k: f64) -> Complex64 {
+pub(crate) fn self_single_layer(mesh: &TriangleMesh, tri: usize, k: f64) -> Complex64 {
     let (a, b, c) = mesh.corners(tri);
     let xi = mesh.centroids[tri];
     let mut total = Complex64::new(0.0, 0.0);
@@ -394,7 +473,7 @@ fn triangle_area(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> f64 {
 
 /// 4-point Gauss–Legendre on [0, 1].
 #[allow(clippy::excessive_precision)]
-const GAUSS4: [(f64, f64); 4] = [
+pub(crate) const GAUSS4: [(f64, f64); 4] = [
     (0.173_927_422_568_726_9, 0.069_431_844_202_973_7),
     (0.326_072_577_431_273_1, 0.330_009_478_207_564_2),
     (0.326_072_577_431_273_1, 0.669_990_521_792_435_8),
@@ -403,7 +482,7 @@ const GAUSS4: [(f64, f64); 4] = [
 
 /// Degree-5 / 7-point triangle rule; weights sum to 1.
 #[allow(clippy::excessive_precision)]
-const TRI_GAUSS7: [(f64, [f64; 2]); 7] = [
+pub(crate) const TRI_GAUSS7: [(f64, [f64; 2]); 7] = [
     (0.225, [1.0 / 3.0, 1.0 / 3.0]),
     (
         0.132_394_152_788_506_2,
