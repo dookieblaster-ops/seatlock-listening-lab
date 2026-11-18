@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-join-network-8787` (PR onto `main`). Level 3. CHIEF already on `main`.
+- **Context:** branch `cursor/generator-harden-8787` (PR onto `main`). Level 3. CHIEF already on `main`.
 
 **Done this session:** (1) Reviewed and merged PR #23 CHIEF (CHK-BEM-5) to `main`. (2) Multi-source generator harden: tall/volume floors and face grow for stacks and folded lines; vented ports widen then raise tuning to fit; front woofer clearance for a bottom port. Throw-outs seed 3 / 6 evals: folded-line two-way 219→7, dual-woofer ported 138→28, ported two-way 49→21.
 
