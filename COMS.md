@@ -45,21 +45,33 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-18 — Cursor — Handoff: start here. Higher-order elements / join network / generator harden next
+### 2026-11-18 — Cursor — Handoff: start here. Higher-order elements / join network next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`, after review of `cursor/bem-burton-miller-e8db` (PR #23). Level 3.
+- **Context:** branch `cursor/bem-join-network-8787` (PR onto `main`). Level 3. CHIEF already on `main`.
 
-**Done this session:** Reviewed PR #23 against README 2.6 / 5.6 / 13 (CHK-BEM-5). Accepted and fast-forwarded to `main`. CHIEF as the default CBIE solve is the right irregular-frequency fix on constant elements; keeping Burton–Miller off the radiation path until smoother elements exist matches the pitfall (BM broke CHK-BEM-3). Re-ran: `seatlock-bem` 16 passed (incl. CHK-BEM-5), `seatlock-sim --test bem` 3, clippy `-D warnings` on bem+sim, `seatlock-wasm` compiles. No defects found.
+**Done this session:** (1) Reviewed and merged PR #23 CHIEF (CHK-BEM-5) to `main`. (2) Multi-source generator harden: tall/volume floors and face grow for stacks and folded lines; vented ports widen then raise tuning to fit; front woofer clearance for a bottom port. Throw-outs seed 3 / 6 evals: folded-line two-way 219→7, dual-woofer ported 138→28, ported two-way 49→21.
 
-**Open, in order:** (1) BEM: higher-order surface elements (then Burton–Miller on those); join the driver network; multi-source generator harden; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) BEM: higher-order surface elements (then Burton–Miller on those); join the driver network; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release` 16 passed; `cargo test -p seatlock-sim --release --test bem` 3 passed; clippy `-D warnings` on seatlock-bem + seatlock-sim; wasm check ok. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-sim --release --test generate_harden` 1 passed; clippy `-D warnings` on seatlock-sim. Full `generate` suite and `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** higher-order BEM elements, or join BEM to the driver network, or harden the multi-source generator.
+**Next step:** higher-order BEM elements, or join BEM to the driver network.
+
+### 2026-11-18 — Cursor — Handoff: Higher-order / join network / generator harden (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`, after review of PR #23. Superseded by the generator-harden handoff above.
+
+**Done this session:** Reviewed PR #23; CHIEF on `main`.
+
+**Open, in order:** superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-17 — Cursor — Handoff: Higher-order elements / join network / generator harden next (merged)
 
@@ -304,6 +316,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-18: Multi-source generator harden (stacked / folded-line / dual-woofer throw-outs cut sharply).
 - 2026-11-18: PR #23 CHIEF irregular-frequency fix (CHK-BEM-5) reviewed and merged to `main`; Burton–Miller kept experimental on constant elements.
 - 2026-11-17: CHIEF irregular-frequency fix (CHK-BEM-5); BM on constant elements deferred.
 - 2026-11-17: `bem` true outer-shape meshing (AABB seed → `contains_cabinet`) merged to `main`.

@@ -295,11 +295,7 @@ fn build(
 ) -> Result<Built, String> {
     let part = &parts[((x[0] * parts.len() as f64) as usize).min(parts.len() - 1)];
     let cone = (4.0 * part.sd_m2 / std::f64::consts::PI).sqrt();
-    // Net air from 1.5 to 40 L on a log scale; a line's chamber is smaller.
-    let volume = 0.0015 * (40.0f64 / 1.5).powf(x[1]);
-    let tall = lerp(1.0, 2.4, x[2]);
     let deep = lerp(0.7, 1.6, x[3]);
-    let along = lerp(0.3, 0.72, x[4]);
     let shape_t = x[6];
     let line = family.layout == "line";
     let tweeter = match family.ways {
@@ -330,22 +326,72 @@ fn build(
     } else {
         0.0
     };
+    let stacked_front = tweeter_room + mid_room + second_room;
+
+    // Multi-source harden (README 2.6): stacked faces and folded lines need taller, larger
+    // cabinets than a single driver. Raise the tall/volume floors so random draws land in
+    // buildable sizes more often (the 8 in budget woofers made short throws common).
+    let mut tall = lerp(1.0, 2.4, x[2]);
+    let mut volume = 0.0015 * (40.0f64 / 1.5).powf(x[1]);
+    let tall_floor = if family.woofers > 1 {
+        2.0
+    } else if line && tweeter.is_some() {
+        2.2
+    } else if mid.is_some() {
+        1.9
+    } else if tweeter.is_some() {
+        1.55
+    } else if line {
+        1.7
+    } else {
+        1.0
+    };
+    tall = tall.max(tall_floor);
+    let volume_floor = if family.woofers > 1 {
+        0.012
+    } else if line && tweeter.is_some() {
+        0.01
+    } else if mid.is_some() {
+        0.008
+    } else if line {
+        0.006
+    } else {
+        0.0015
+    };
+    volume = volume.max(volume_floor).min(0.06);
 
     // Inner air w x h x d of the asked volume and proportions, then the true shape scaled
-    // until its own air matches.
-    let mut w = (volume / (tall * deep)).cbrt();
+    // until its own air matches. Grow tall/volume a few times if the face still cannot hold
+    // the stack (large woofers on multi-source families).
     let mut fields = Value::Null;
     let mut size = [0.0; 3];
-    for _ in 0..4 {
-        let (h, d) = (w * tall, w * deep);
-        (fields, size) = outer_fields(&family.outer, w, h, d, shape_t);
-        let kind = fields["kind"].as_str().unwrap_or("box").to_string();
-        let map = fields.as_object().cloned().unwrap_or_default();
-        let air = registry.create_outer(&kind, &map)?.interior_volume_m3()?;
-        if air <= 0.0 {
-            return Err("the shape leaves no air.".into());
+    let front = family.face == "front";
+    let stack_on_face = if front { stacked_front } else { 0.0 };
+    for _grow in 0..6 {
+        let mut w = (volume / (tall * deep)).cbrt();
+        for _ in 0..4 {
+            let (h, d) = (w * tall, w * deep);
+            (fields, size) = outer_fields(&family.outer, w, h, d, shape_t);
+            let kind = fields["kind"].as_str().unwrap_or("box").to_string();
+            let map = fields.as_object().cloned().unwrap_or_default();
+            let air = registry.create_outer(&kind, &map)?.interior_volume_m3()?;
+            if air <= 0.0 {
+                return Err("the shape leaves no air.".into());
+            }
+            w *= (volume / air).cbrt();
         }
-        w *= (volume / air).cbrt();
+        let [_ow, oh, od] = size;
+        let face_h = match family.face.as_str() {
+            "top" => od,
+            _ => oh,
+        };
+        let need =
+            part.outer_m + stack_on_face + 2.0 * WALL_M + 0.012 + if line { 0.22 } else { 0.0 };
+        if face_h + 1e-9 >= need {
+            break;
+        }
+        tall = (tall * 1.18).min(3.6);
+        volume = (volume * 1.12).min(0.06);
     }
     let [ow, oh, od] = size;
     if ow < part.outer_m + 2.0 * WALL_M + 0.012 {
@@ -367,13 +413,8 @@ fn build(
             return Err("the cabinet is too shallow for the midrange.".into());
         }
     }
-    let front = family.face == "front";
     // Both on the front: the tweeter sits right above the bass driver.
-    let stacked = if front {
-        tweeter_room + mid_room + second_room
-    } else {
-        0.0
-    };
+    let stacked = stack_on_face;
     let (face_w, face_h) = match family.face.as_str() {
         "top" => (ow, od),
         _ => (ow, oh),
@@ -384,17 +425,32 @@ fn build(
     if tweeter.is_some() && !front && oh < tweeter_room + 2.0 * WALL_M + 0.012 {
         return Err("the front is shorter than the tweeter.".into());
     }
+    // Keep a front woofer higher when a port and a tweeter share the baffle, so the port
+    // still fits under the cone.
+    let along = if front && tweeter.is_some() && family.layout == "vented" {
+        lerp(0.48, 0.72, x[4])
+    } else {
+        lerp(0.3, 0.72, x[4])
+    };
     let reach = part.outer_m / 2.0 + WALL_M + 0.006;
     let egg = family.outer == "revolved";
     if egg && fields["front_diameter_m"].as_f64().unwrap_or(0.0) < part.outer_m + 0.012 {
         return Err("the flat front is smaller than the driver.".into());
     }
     // On an egg the driver sits in the middle of the flat front.
-    let v = if egg {
+    let mut v = if egg {
         face_h / 2.0
     } else {
         (along * face_h).clamp(reach, face_h - reach - stacked)
     };
+    // Front port at the bottom needs clearance under the woofer when a tweeter is stacked.
+    if front && tweeter.is_some() && family.layout == "vented" && family.outer != "sloped" && !egg {
+        let port_clear = WALL_M + 0.08 / 2.0 + 0.012 + 0.01 + part.outer_m / 2.0;
+        let max_v = face_h - reach - stacked;
+        if v < port_clear && port_clear <= max_v {
+            v = port_clear;
+        }
+    }
     let facing_depth = if family.face == "top" { oh } else { od };
     if facing_depth < part.depth_m + 2.0 * WALL_M + 0.01 {
         return Err("the cabinet is too shallow for the driver.".into());
@@ -440,16 +496,29 @@ fn build(
     }
     match family.layout.as_str() {
         "vented" => {
-            let tuning = part.fs_hz * lerp(0.65, 1.35, x[5]);
-            let diameter = (0.35 * cone).clamp(0.025, 0.08);
-            let length = port_length_m(diameter, tuning, bass_volume);
+            let mut tuning = part.fs_hz * lerp(0.65, 1.35, x[5]);
+            let mut diameter = (0.35 * cone).clamp(0.025, 0.08);
             // The port leaves the front, or the back when the front leans.
             let back = family.outer == "sloped" || egg;
             if egg && fields["back_diameter_m"].as_f64().unwrap_or(0.0) < diameter + 0.02 {
                 return Err("the flat back is smaller than the port.".into());
             }
             let port_depth = if back { od * 0.75 } else { od };
-            if length < 0.01 || length > port_depth - 0.05 {
+            let max_length = port_depth - 0.05;
+            let mut length = port_length_m(diameter, tuning, bass_volume);
+            // Harden: widen the port, then raise the tuning, until a physical tube fits.
+            if length > max_length && max_length > 0.01 {
+                diameter = (diameter * 1.35).clamp(0.025, 0.08);
+                length = port_length_m(diameter, tuning, bass_volume);
+            }
+            for _ in 0..10 {
+                if length <= max_length && length >= 0.01 {
+                    break;
+                }
+                tuning *= 1.08;
+                length = port_length_m(diameter, tuning, bass_volume);
+            }
+            if length < 0.01 || length > max_length {
                 return Err("no port of this tuning fits the cabinet.".into());
             }
             // At the end of the height away from a front driver.
