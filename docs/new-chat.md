@@ -30,10 +30,10 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. **BEM higher-order elements / join network** (see `COMS.md`)
+1. **BEM curved geometry / join network** (see `COMS.md`)
 2. Then real PLA/TPU damping / Criton leftovers if a source appears
 
-Already in: passive R/L/C tune, CTA-2034 Olive preference as the ranked score, preference scoring speedup, budget 8 in woofers, non-box page fields, BEM scaffold (CHK-BEM-1…5 with CHIEF) and `bem` radiation on the true outer shape (AABB seed), multi-source generator harden; C-Note MT and Criton 3TD-X vs ASR.
+Already in: passive R/L/C tune, CTA-2034 Olive preference as the ranked score, preference scoring speedup, budget 8 in woofers, non-box page fields, BEM scaffold (CHK-BEM-1…6 with CHIEF and discontinuous linear) and `bem` radiation on the true outer shape (AABB seed), multi-source generator harden; C-Note MT and Criton 3TD-X vs ASR.
 
 ## What “done” looks like for a lead turn
 

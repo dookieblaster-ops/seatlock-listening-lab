@@ -10,17 +10,22 @@
 //! as the `bem` radiation member. The cabinet mesh seeds the bounding box and pulls vertices
 //! onto the true outer skin. Surface solves use the CBIE with CHIEF interior points so
 //! irregular frequencies stay nonsingular on constant elements (Burton–Miller needs smoother
-//! elements; the `BurtonMillerSystem` stays for monopole experiments). Rigid-sphere plane-wave
-//! levels at `ka ≳ 1` still miss the smooth-sphere series with constant elements. Higher-order
-//! elements and joining the driver network come next.
+//! elements; the `BurtonMillerSystem` stays for monopole experiments). Discontinuous linear
+//! triangles (`LinearNeumannSystem`) improve the high-`ka` rigid-sphere gap (CHK-BEM-6) and
+//! are not yet the radiation default. Joining the driver network comes next.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
 use seatlock_core::{C0, RHO0};
 
 mod burton_miller;
+mod linear;
 mod mesh;
 pub use burton_miller::{d2green_dndn, dgreen_dn_x, BurtonMillerSystem};
+pub use linear::{
+    area_mean_pressure, collocation_point, rigid_plane_wave_surface_linear,
+    sample_constant_on_nodes, triangle_mean_pressure, LinearNeumannSystem, LAMBDA,
+};
 pub use mesh::{box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, TriangleMesh};
 
 const PI: f64 = std::f64::consts::PI;
