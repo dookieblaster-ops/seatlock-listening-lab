@@ -11,18 +11,27 @@
 //! onto the true outer skin. Surface solves use the CBIE with CHIEF interior points so
 //! irregular frequencies stay nonsingular on constant elements (Burton–Miller needs smoother
 //! elements; the `BurtonMillerSystem` stays for monopole experiments). Discontinuous linear
-//! triangles (`LinearNeumannSystem`, CHK-BEM-6) pass monopole and dipole; the high-`ka`
-//! rigid-sphere gap against the smooth series is the faceted mesh (curved geometry next) and
-//! is not yet the radiation default. Joining the driver network comes next.
+//! triangles (`LinearNeumannSystem`, CHK-BEM-6) pass monopole and dipole. Spherical-triangle
+//! constant elements (`SphereNeumannSystem`, CHK-BEM-7) and continuous linear on the sphere
+//! (`ContinuousSphereSystem`) keep monopole accuracy and exact skin area, but the high-`ka`
+//! rigid-sphere lit gap vs the smooth series (~2.6 dB at `ka = 1`) remains — not chordal
+//! geometry alone. Not the radiation default. Joining the driver network comes next.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
 use seatlock_core::{C0, RHO0};
 
 mod burton_miller;
+mod continuous;
+mod curved;
 mod linear;
 mod mesh;
 pub use burton_miller::{d2green_dndn, dgreen_dn_x, BurtonMillerSystem};
+pub use continuous::{rigid_plane_wave_surface_continuous, ContinuousSphereSystem};
+pub use curved::{
+    mesh_radius, rigid_plane_wave_surface_sphere, sphere_area, sphere_collocation, sphere_map,
+    SphereNeumannSystem,
+};
 pub use linear::{
     area_mean_pressure, collocation_point, rigid_plane_wave_surface_linear,
     sample_constant_on_nodes, triangle_mean_pressure, LinearNeumannSystem, LAMBDA,

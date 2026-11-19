@@ -45,21 +45,29 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-19 — Cursor — Handoff: start here. Curved BEM geometry / join network next
+### 2026-11-19 — Cursor — Handoff: start here. Join BEM to network next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`, after merge of `cursor/bem-linear-elements-8787` (PR #25). Level 3.
+- **Context:** `main`, after CHK-BEM-7 on `cursor/bem-curved-sphere-8bb5`. Level 3.
 
-**Done this session:** Reviewed and merged PR #25 (discontinuous linear BEM, CHK-BEM-6) to `main`. Re-ran `seatlock-bem` 19 + `seatlock-sim --test bem` 3 + clippy `-D warnings` + wasm check. Fixed crate docs that wrongly said flat linear closes the high-ka gap (it does not — faceted limit). Accepted.
+**Done this session:** (1) Reviewed and merged PR #25 (CHK-BEM-6). (2) CHK-BEM-7: spherical-triangle constant CBIE + continuous-linear probe on the true sphere. Area exact; monopole ok; **ka=1 rigid lit gap stays ~2.6 dB** (flat, curved, continuous, refine) — prior "faceted geometry" diagnosis was wrong. Not the radiation default.
 
-**Open, in order:** (1) BEM: curved surface geometry (then Burton–Miller on a basis that keeps the dipole); join the driver network; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) BEM: **join the driver network** (replace analytic mouth radiation loads with BEM-derived Z_rad; openings still rigid until then); optional remesh for re-entrant imported shells; high-ka lit-gap diagnosis (formulation / series / BM on dipole-safe basis) only if it blocks. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6. Do not claim flat higher-order closes the smooth-sphere ka≳1 gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `seatlock-bem` 19 passed; `seatlock-sim --test bem` 3 passed; clippy `-D warnings` on seatlock-bem; `seatlock-wasm` check ok. Full cloud-check not re-run.
+**Last check:** `seatlock-bem` curved/continuous tests + full crate; clippy `-D warnings` on seatlock-bem. Full cloud-check not re-run.
 
-**Next step:** curved BEM geometry, or join BEM to the driver network.
+**Next step:** join BEM to the driver network.
+
+### 2026-11-19 — Cursor — Handoff: Curved BEM / join network next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`, after merge of PR #25. Superseded by CHK-BEM-7 finding above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-18 — Cursor — Handoff: Curved BEM / join network next (merged)
 
@@ -344,6 +352,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-19: CHK-BEM-7 spherical-triangle BEM; high-ka lit gap placed as not geometry-only.
 - 2026-11-19: PR #25 discontinuous linear BEM (CHK-BEM-6) reviewed and merged to `main`.
 - 2026-11-18: Discontinuous linear BEM (CHK-BEM-6); high-ka rigid-sphere gap placed as faceted geometry.
 - 2026-11-18: PR #24 multi-source generator harden reviewed and merged to `main`.
