@@ -11,8 +11,9 @@
 //! onto the true outer skin. Surface solves use the CBIE with CHIEF interior points so
 //! irregular frequencies stay nonsingular on constant elements (Burton–Miller needs smoother
 //! elements; the `BurtonMillerSystem` stays for monopole experiments). Discontinuous linear
-//! triangles (`LinearNeumannSystem`) improve the high-`ka` rigid-sphere gap (CHK-BEM-6) and
-//! are not yet the radiation default. Joining the driver network comes next.
+//! triangles (`LinearNeumannSystem`, CHK-BEM-6) pass monopole and dipole; the high-`ka`
+//! rigid-sphere gap against the smooth series is the faceted mesh (curved geometry next) and
+//! is not yet the radiation default. Joining the driver network comes next.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
