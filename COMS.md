@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-18 — Cursor — Handoff: start here. Curved BEM geometry / join network next
+### 2026-11-19 — Cursor — Handoff: start here. Curved BEM geometry / join network next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-linear-elements-8787` (PR onto `main`). Level 3. Generator harden already on `main`.
+- **Context:** `main`, after merge of `cursor/bem-linear-elements-8787` (PR #25). Level 3.
 
-**Done this session:** (1) Merged PR #24 generator harden to `main`. (2) Discontinuous linear CBIE (`LinearNeumannSystem`, CHK-BEM-6): monopole ≤0.5 dB and dipole rel L1 <0.03 at ka 0.5/1/2. Placed the high-ka rigid-sphere gap as faceted geometry vs the smooth series — flat linear matches constant (~2.6 dB lit at ka=1); curved elements are required. Not the radiation default. BM on constant still breaks the dipole.
+**Done this session:** Reviewed and merged PR #25 (discontinuous linear BEM, CHK-BEM-6) to `main`. Re-ran `seatlock-bem` 19 + `seatlock-sim --test bem` 3 + clippy `-D warnings` + wasm check. Fixed crate docs that wrongly said flat linear closes the high-ka gap (it does not — faceted limit). Accepted.
 
-**Open, in order:** (1) BEM: curved surface geometry (then BM on a basis that keeps the dipole); join the driver network; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) BEM: curved surface geometry (then Burton–Miller on a basis that keeps the dipole); join the driver network; optional remesh for re-entrant imported shells. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6. Do not claim flat higher-order closes the smooth-sphere ka≳1 gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release` 19 passed (incl. CHK-BEM-6); clippy `-D warnings` on seatlock-bem. Full cloud-check not re-run.
+**Last check:** `seatlock-bem` 19 passed; `seatlock-sim --test bem` 3 passed; clippy `-D warnings` on seatlock-bem; `seatlock-wasm` check ok. Full cloud-check not re-run.
 
 **Next step:** curved BEM geometry, or join BEM to the driver network.
+
+### 2026-11-18 — Cursor — Handoff: Curved BEM / join network next (merged)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-linear-elements-8787` (PR #25). **Merged to `main` by lead 2026-11-19.**
+
+**Done this session:** Discontinuous linear CBIE (CHK-BEM-6). Superseded by the review handoff above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-18 — Cursor — Handoff: Higher-order BEM / join network next (superseded)
 
@@ -334,6 +344,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-19: PR #25 discontinuous linear BEM (CHK-BEM-6) reviewed and merged to `main`.
 - 2026-11-18: Discontinuous linear BEM (CHK-BEM-6); high-ka rigid-sphere gap placed as faceted geometry.
 - 2026-11-18: PR #24 multi-source generator harden reviewed and merged to `main`.
 - 2026-11-18: Multi-source generator harden (stacked / folded-line / dual-woofer throw-outs cut sharply).

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-18 (discontinuous linear BEM; generator harden on main)
+Updated: 2026-11-19 (PR #25 linear BEM merged; curved / join network next)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -131,6 +131,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-18, Cursor cloud (lead review of PR #23): accepted CHIEF as default; BM stays experimental. Re-ran bem 16 + sim bem 3 + clippy `-D warnings` + wasm check; fast-forwarded to `main`.
 - 2026-11-18, Cursor cloud (lead): multi-source generator harden. Tall/volume floors + face grow; port fit clamp; woofer clearance for bottom port. Throw-outs 219→7 / 138→28 / 49→21 on the three worst families. `generate_harden` 1 passed; clippy `-D warnings` on seatlock-sim. Merged to `main` after re-check (generate_harden + seed-repeat + clippy).
 - 2026-11-18, Cursor cloud (lead): discontinuous linear BEM (`LinearNeumannSystem`, CHK-BEM-6). Monopole/dipole ok; faceted rigid-sphere limit placed (curved geometry next). `seatlock-bem` 19 tests; clippy `-D warnings`.
+- 2026-11-19, Cursor cloud (lead review of PR #25): accepted CHK-BEM-6; clarified crate docs (flat linear does not close high-ka gap). Re-ran bem 19 + sim bem 3 + clippy `-D warnings` + wasm check; fast-forwarded to `main`.
 - 2026-11-17, Cursor cloud (owner: run what's slated for the laptop): laptop not linked from this session; ran `tools/cloud-check.sh` (same steps as `./check.sh`). All checks passed: engine 257, browser 44, stable 1.100 (~26 min).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).
 
