@@ -49,9 +49,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/pla-tpu-damping-5fc9` (PR onto `main`). Level 3.
+- **Context:** `main` (PR #31 sourced PLA damping merged). Level 3.
 
-**Done this session:** Printed PLA loss factor η = 0.075 sourced from Rothe et al. Materials 2021 Table 7 (middle of six FFF PLA beam fits 0.055–0.095) on `catalog/materials.json` `pla` and `catalog/panels/pla-printed.json`. varioShore Young’s set to 40 MPa from colorFabb TDS 2023-11-28 foamed print (was derived 4.09 MPa). Soft TPU core loss kept at Irvine rubber 0.10 — Irska Z-SEMIFLEX DMTA tanδ 0.26 at 25 °C not used (that filament’s Tα is near room temp). Wall spring check: 10 Hz within 0.01 dB, 20 Hz within 0.02 dB. Solid PLA wall peak on `sealed-test` ~1.89 dB (was ~5.3 dB under assumed η = 0.02); varioShore core resonance ~243 Hz / ~2.1 dB (was ~137 Hz / ~9 dB under soft derived E).
+**Done this session:** Printed PLA loss factor η = 0.075 sourced from Rothe et al. Materials 2021 Table 7 (middle of six FFF PLA beam fits 0.055–0.095) on `catalog/materials.json` `pla` and `catalog/panels/pla-printed.json`. varioShore Young’s set to 40 MPa from colorFabb TDS 2023-11-28 foamed print (was derived 4.09 MPa). Soft TPU core loss kept at Irvine rubber 0.10 — Irska Z-SEMIFLEX DMTA tanδ 0.26 at 25 °C not used (that filament’s Tα is near room temp). Wall spring check: 10 Hz within 0.01 dB, 20 Hz within 0.02 dB. Solid PLA wall peak on `sealed-test` ~1.89 dB (was ~5.3 dB under assumed η = 0.02); varioShore core resonance ~243 Hz / ~2.1 dB (was ~137 Hz / ~9 dB under soft derived E). PR #31 merged to `main`.
 
 **Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
@@ -434,8 +434,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
-- 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.
+- 2026-11-22: PR #31 sourced PLA damping (η = 0.075) and varioShore Young’s (40 MPa) merged to `main`.
 - 2026-11-22: Printed PLA loss factor sourced (Rothe 2021 η = 0.075); varioShore Young’s from maker TDS (40 MPa foamed).
+- 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.
 - 2026-11-22: BEM remesh for re-entrant shells (`mesh_outer_shape` occupancy path when not star-convex).
 - 2026-11-22: PR #29 CHK-BEM-10 (true open mouths) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-10 true open mouths (exact-area aperture disks cut into the outer BEM mesh).
