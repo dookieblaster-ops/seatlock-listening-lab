@@ -372,3 +372,279 @@ pub fn mean_edge_length(mesh: &TriangleMesh) -> f64 {
         sum / count
     }
 }
+
+/// A circular opening cut into a closed outer-shape mesh (true open mouth, not a rigid patch).
+#[derive(Clone, Copy, Debug)]
+pub struct MouthAperture {
+    pub position_m: [f64; 3],
+    pub outward: [f64; 3],
+    pub radius_m: f64,
+}
+
+/// Cut circular openings into a closed mesh and cover each with a dedicated aperture disk.
+///
+/// Same-facing skin triangles that meet an opening are removed; a fan of `segments` triangles
+/// fills the exact mouth area; a collar from the hole rim to that disk keeps the surface closed
+/// for the exterior CBIE. Returns the new mesh and, for each aperture, the indices of its disk
+/// triangles (the ones that carry the mouth's volume velocity).
+pub fn mesh_with_open_apertures(
+    mesh: &TriangleMesh,
+    apertures: &[MouthAperture],
+    segments: usize,
+) -> Result<(TriangleMesh, Vec<Vec<usize>>), String> {
+    let n_seg = segments.max(8);
+    let mut vertices = mesh.vertices.clone();
+    let mut triangles = mesh.triangles.clone();
+    let edge = mean_edge_length(mesh).max(1e-6);
+
+    for aperture in apertures {
+        let radius = aperture.radius_m.max(1e-6);
+        if length3(aperture.outward) < 1e-12 {
+            return Err("mouth aperture has no outward direction".into());
+        }
+        let n_hat = normalize(aperture.outward);
+        let (u_hat, v_hat) = plane_basis(n_hat);
+        // Rebuild areas/normals for the current triangle list after prior cuts.
+        let current = TriangleMesh::from_triangles(vertices.clone(), triangles.clone())?;
+        let mut remove = vec![false; current.triangles.len()];
+        for (index, (centroid, normal)) in current
+            .centroids
+            .iter()
+            .zip(current.normals.iter())
+            .enumerate()
+        {
+            if dot3(*normal, n_hat) < 0.5 {
+                continue;
+            }
+            let offset = [
+                centroid[0] - aperture.position_m[0],
+                centroid[1] - aperture.position_m[1],
+                centroid[2] - aperture.position_m[2],
+            ];
+            let along = dot3(offset, n_hat).abs();
+            if along > edge.max(radius) * 0.75 {
+                continue;
+            }
+            let planar = dot3(offset, n_hat);
+            let in_plane = [
+                offset[0] - n_hat[0] * planar,
+                offset[1] - n_hat[1] * planar,
+                offset[2] - n_hat[2] * planar,
+            ];
+            if length3(in_plane) <= radius + edge * 0.55 {
+                remove[index] = true;
+            }
+        }
+        if !remove.iter().any(|&r| r) {
+            // Mouth smaller than the local face grid: take the nearest same-facing triangle.
+            let mut best: Option<(usize, f64)> = None;
+            for (index, (centroid, normal)) in current
+                .centroids
+                .iter()
+                .zip(current.normals.iter())
+                .enumerate()
+            {
+                if dot3(*normal, n_hat) < 0.5 {
+                    continue;
+                }
+                let d = length3([
+                    centroid[0] - aperture.position_m[0],
+                    centroid[1] - aperture.position_m[1],
+                    centroid[2] - aperture.position_m[2],
+                ]);
+                if best.map(|(_, bd)| d < bd).unwrap_or(true) {
+                    best = Some((index, d));
+                }
+            }
+            if let Some((index, _)) = best {
+                remove[index] = true;
+            } else {
+                return Err("no cabinet face meets this mouth aperture".into());
+            }
+        }
+
+        // Boundary edges of the removed patch (appear once).
+        let mut edge_count: std::collections::HashMap<(usize, usize), i32> =
+            std::collections::HashMap::new();
+        for (index, tri) in current.triangles.iter().enumerate() {
+            if !remove[index] {
+                continue;
+            }
+            for &(a, b) in &[(tri[0], tri[1]), (tri[1], tri[2]), (tri[2], tri[0])] {
+                let key = if a < b { (a, b) } else { (b, a) };
+                *edge_count.entry(key).or_insert(0) += 1;
+            }
+        }
+        let boundary: Vec<(usize, usize)> = edge_count
+            .into_iter()
+            .filter(|&(_, count)| count == 1)
+            .map(|(e, _)| e)
+            .collect();
+        if boundary.is_empty() {
+            return Err("mouth cut left no hole rim to collar".into());
+        }
+
+        let mut kept: Vec<[usize; 3]> = current
+            .triangles
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !remove[*i])
+            .map(|(_, t)| *t)
+            .collect();
+
+        // Aperture disk: centre + rim. Scale the rim so the regular n-gon area equals πr².
+        let turn = 2.0 * std::f64::consts::PI;
+        let rim_radius = radius * (turn / (n_seg as f64 * (turn / n_seg as f64).sin())).sqrt();
+        let centre_index = vertices.len();
+        vertices.push(aperture.position_m);
+        let mut rim = Vec::with_capacity(n_seg);
+        for i in 0..n_seg {
+            let ang = turn * (i as f64) / (n_seg as f64);
+            let p = [
+                aperture.position_m[0] + rim_radius * (u_hat[0] * ang.cos() + v_hat[0] * ang.sin()),
+                aperture.position_m[1] + rim_radius * (u_hat[1] * ang.cos() + v_hat[1] * ang.sin()),
+                aperture.position_m[2] + rim_radius * (u_hat[2] * ang.cos() + v_hat[2] * ang.sin()),
+            ];
+            rim.push(vertices.len());
+            vertices.push(p);
+        }
+        for i in 0..n_seg {
+            let a = rim[i];
+            let b = rim[(i + 1) % n_seg];
+            push_oriented(&mut kept, &vertices, [centre_index, a, b], n_hat);
+        }
+
+        // Collar: each boundary edge to the nearest rim vertices by angle.
+        for (a, b) in boundary {
+            if a == b {
+                continue;
+            }
+            let ang_a = vertex_angle(&vertices, a, aperture.position_m, u_hat, v_hat);
+            let ang_b = vertex_angle(&vertices, b, aperture.position_m, u_hat, v_hat);
+            let ia = nearest_rim_index(ang_a, n_seg);
+            let ib = nearest_rim_index(ang_b, n_seg);
+            if ia == ib {
+                push_oriented(&mut kept, &vertices, [a, b, rim[ia]], n_hat);
+            } else {
+                push_oriented(&mut kept, &vertices, [a, b, rim[ib]], n_hat);
+                push_oriented(&mut kept, &vertices, [a, rim[ib], rim[ia]], n_hat);
+            }
+        }
+
+        triangles = kept;
+    }
+
+    let built = TriangleMesh::from_triangles(vertices, triangles)?;
+    // Resolve disk triangles by centroid after every cut (indices shift between apertures).
+    let mut resolved = Vec::with_capacity(apertures.len());
+    for aperture in apertures {
+        let n_hat = normalize(aperture.outward);
+        let mut hits = Vec::new();
+        for (index, (centroid, normal)) in
+            built.centroids.iter().zip(built.normals.iter()).enumerate()
+        {
+            if dot3(*normal, n_hat) < 0.85 {
+                continue;
+            }
+            let d = length3([
+                centroid[0] - aperture.position_m[0],
+                centroid[1] - aperture.position_m[1],
+                centroid[2] - aperture.position_m[2],
+            ]);
+            // Disk fan centroids sit near 2/3 of the radius from the centre.
+            if d < aperture.radius_m.max(1e-6) * 0.85 {
+                hits.push(index);
+            }
+        }
+        if hits.is_empty() {
+            return Err("open aperture disk was lost after meshing".into());
+        }
+        resolved.push(hits);
+    }
+    Ok((built, resolved))
+}
+
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn plane_basis(n: [f64; 3]) -> ([f64; 3], [f64; 3]) {
+    let helper = if n[0].abs() < 0.9 {
+        [1.0, 0.0, 0.0]
+    } else {
+        [0.0, 1.0, 0.0]
+    };
+    let ux = n[1] * helper[2] - n[2] * helper[1];
+    let uy = n[2] * helper[0] - n[0] * helper[2];
+    let uz = n[0] * helper[1] - n[1] * helper[0];
+    let u = normalize([ux, uy, uz]);
+    let v = normalize([
+        n[1] * u[2] - n[2] * u[1],
+        n[2] * u[0] - n[0] * u[2],
+        n[0] * u[1] - n[1] * u[0],
+    ]);
+    (u, v)
+}
+
+fn face_normal(vertices: &[[f64; 3]], tri: [usize; 3], n_hat: [f64; 3]) -> f64 {
+    let a = vertices[tri[0]];
+    let b = vertices[tri[1]];
+    let c = vertices[tri[2]];
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n = [
+        ab[1] * ac[2] - ab[2] * ac[1],
+        ab[2] * ac[0] - ab[0] * ac[2],
+        ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    let twice = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if twice < 1e-18 {
+        return 0.0;
+    }
+    dot3(n, n_hat)
+}
+
+fn push_oriented(
+    kept: &mut Vec<[usize; 3]>,
+    vertices: &[[f64; 3]],
+    tri: [usize; 3],
+    n_hat: [f64; 3],
+) {
+    if tri[0] == tri[1] || tri[1] == tri[2] || tri[2] == tri[0] {
+        return;
+    }
+    let align = face_normal(vertices, tri, n_hat);
+    if align.abs() < 1e-18 {
+        // Degenerate (zero area) — skip.
+        return;
+    }
+    if align < 0.0 {
+        kept.push([tri[0], tri[2], tri[1]]);
+    } else {
+        kept.push(tri);
+    }
+}
+
+fn vertex_angle(
+    vertices: &[[f64; 3]],
+    index: usize,
+    center: [f64; 3],
+    u_hat: [f64; 3],
+    v_hat: [f64; 3],
+) -> f64 {
+    let p = vertices[index];
+    let d = [p[0] - center[0], p[1] - center[1], p[2] - center[2]];
+    let x = dot3(d, u_hat);
+    let y = dot3(d, v_hat);
+    y.atan2(x)
+}
+
+fn nearest_rim_index(angle: f64, n_seg: usize) -> usize {
+    let turn = 2.0 * std::f64::consts::PI;
+    let mut a = angle % turn;
+    if a < 0.0 {
+        a += turn;
+    }
+    let step = turn / n_seg as f64;
+    ((a / step).round() as usize) % n_seg
+}

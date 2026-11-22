@@ -16,8 +16,8 @@
 //! (`ContinuousSphereSystem`) keep monopole accuracy and exact skin area, but the high-`ka`
 //! rigid-sphere lit gap vs the smooth series (~2.6 dB at `ka = 1`) remains — not chordal
 //! geometry alone. Not the radiation default. Mouth radiation impedances (self and mutual)
-//! from the same surface solve join the waveguide network (CHK-BEM-8 / CHK-BEM-9); openings
-//! stay rigid patches.
+//! from the same surface solve join the waveguide network (CHK-BEM-8 / CHK-BEM-9). Mouths are
+//! cut as true open apertures in the outer mesh (CHK-BEM-10), not rigid skin patches.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
@@ -38,7 +38,10 @@ pub use linear::{
     area_mean_pressure, collocation_point, rigid_plane_wave_surface_linear,
     sample_constant_on_nodes, triangle_mean_pressure, LinearNeumannSystem, LAMBDA,
 };
-pub use mesh::{box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, TriangleMesh};
+pub use mesh::{
+    box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, mesh_with_open_apertures,
+    MouthAperture, TriangleMesh,
+};
 
 const PI: f64 = std::f64::consts::PI;
 
