@@ -10,6 +10,9 @@ pub enum AcousticNode {
     Rigid,
     /// Opening into the air. `flush` is an end in a large wall; otherwise the end is free.
     Radiation { area_m2: f64, flush: bool },
+    /// Opening whose radiation load is given (for example from a BEM solve). Still reports
+    /// one unit volume velocity out, like [`AcousticNode::Radiation`].
+    FixedRadiation { z: Complex64 },
     /// A chamber small enough to be a shunt compliance.
     Compliance { volume_m3: f64 },
     /// A chamber that reports its pressure under `slot`, and whose walls take the admittance
@@ -89,6 +92,11 @@ fn solve_at(
         },
         AcousticNode::Radiation { area_m2, flush } => WaveguideResult {
             z_in: radiation_impedance(*area_m2, *flush, k),
+            openings: vec![Complex64::new(1.0, 0.0)],
+            pressures: Vec::new(),
+        },
+        AcousticNode::FixedRadiation { z } => WaveguideResult {
+            z_in: *z,
             openings: vec![Complex64::new(1.0, 0.0)],
             pressures: Vec::new(),
         },
@@ -209,7 +217,8 @@ fn duct_chain(
     }
 }
 
-fn radiation_impedance(area_m2: f64, flush: bool, k: f64) -> Complex64 {
+/// Analytic mouth radiation impedance (README 5.4): free end or flush with a wall, for `ka < 1`.
+pub fn radiation_impedance(area_m2: f64, flush: bool, k: f64) -> Complex64 {
     let radius = (area_m2 / PI).sqrt();
     let ka = k * radius;
     let z0 = RHO0 * C0 / area_m2.max(1e-12);
@@ -217,6 +226,59 @@ fn radiation_impedance(area_m2: f64, flush: bool, k: f64) -> Complex64 {
         z0 * Complex64::new(0.5 * ka * ka, 0.849 * ka)
     } else {
         z0 * Complex64::new(0.25 * ka * ka, 0.613 * ka)
+    }
+}
+
+/// Replace each [`AcousticNode::Radiation`] leaf, in depth-first order, with
+/// [`AcousticNode::FixedRadiation`] from `loads`. Leaves past the end of `loads` keep the
+/// analytic formula (resolved later at solve time). Used to join BEM self-impedances into
+/// the waveguide network.
+pub fn with_fixed_radiation_loads(node: &AcousticNode, loads: &[Complex64]) -> AcousticNode {
+    let mut index = 0;
+    replace_radiation(node, loads, &mut index)
+}
+
+fn replace_radiation(node: &AcousticNode, loads: &[Complex64], index: &mut usize) -> AcousticNode {
+    match node {
+        AcousticNode::Radiation { area_m2, flush } => {
+            let slot = *index;
+            *index += 1;
+            match loads.get(slot) {
+                Some(z) => AcousticNode::FixedRadiation { z: *z },
+                None => AcousticNode::Radiation {
+                    area_m2: *area_m2,
+                    flush: *flush,
+                },
+            }
+        }
+        AcousticNode::FixedRadiation { z } => AcousticNode::FixedRadiation { z: *z },
+        AcousticNode::Rigid => AcousticNode::Rigid,
+        AcousticNode::Compliance { volume_m3 } => AcousticNode::Compliance {
+            volume_m3: *volume_m3,
+        },
+        AcousticNode::Chamber { volume_m3, slot } => AcousticNode::Chamber {
+            volume_m3: *volume_m3,
+            slot: *slot,
+        },
+        AcousticNode::Duct {
+            length_m,
+            area_in_m2,
+            area_out_m2,
+            added_length_m,
+            load,
+        } => AcousticNode::Duct {
+            length_m: *length_m,
+            area_in_m2: *area_in_m2,
+            area_out_m2: *area_out_m2,
+            added_length_m: *added_length_m,
+            load: Box::new(replace_radiation(load, loads, index)),
+        },
+        AcousticNode::Parallel(branches) => AcousticNode::Parallel(
+            branches
+                .iter()
+                .map(|branch| replace_radiation(branch, loads, index))
+                .collect(),
+        ),
     }
 }
 

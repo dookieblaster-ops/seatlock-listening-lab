@@ -45,21 +45,29 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-19 — Cursor — Handoff: start here. Join BEM to network next
+### 2026-11-22 — Cursor — Handoff: start here. PLA/TPU damping next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`, after CHK-BEM-7 on `cursor/bem-curved-sphere-8bb5`. Level 3.
+- **Context:** branch `cursor/bem-join-network-ff91` (PR onto `main`). Level 3.
 
-**Done this session:** (1) Reviewed and merged PR #25 (CHK-BEM-6). (2) CHK-BEM-7: spherical-triangle constant CBIE + continuous-linear probe on the true sphere. Area exact; monopole ok; **ka=1 rigid lit gap stays ~2.6 dB** (flat, curved, continuous, refine) — prior "faceted geometry" diagnosis was wrong. Not the radiation default.
+**Done this session:** CHK-BEM-8 — join BEM to the driver network. With `radiation: "bem"` + enclosure `waveguide`, each outside mouth's BEM self-impedance (`p_avg` under unit volume velocity on rigid patch triangles) replaces the analytic radiation leaf (`AcousticNode::FixedRadiation` / `with_fixed_radiation_loads`). Above the mesh limit, flush analytic Z. Mutual mouth loads left out. Lumped runs keep analytic end corrections and say so. Openings still rigid patches. Large-face patch at `ka = 0.25` within 35 % Re / 25 % Im of flush; vented `two-way-vented` woofer Z moves vs analytic mouths.
 
-**Open, in order:** (1) BEM: **join the driver network** (replace analytic mouth radiation loads with BEM-derived Z_rad; openings still rigid until then); optional remesh for re-entrant imported shells; high-ka lit-gap diagnosis (formulation / series / BM on dipole-safe basis) only if it blocks. (2) Real PLA/TPU damping — do not invent. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Real PLA/TPU damping — do not invent. (2) Criton leftovers only if a source appears. (3) Optional BEM leftovers: mutual mouth loads; true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks; page offer of `bem`. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `seatlock-bem` curved/continuous tests + full crate; clippy `-D warnings` on seatlock-bem. Full cloud-check not re-run.
+**Last check:** `cargo test -p seatlock-sim --release --test bem` 6 passed; clippy `-D warnings` on seatlock-acoustics + seatlock-sim. Full cloud-check not re-run this turn.
 
-**Next step:** join BEM to the driver network.
+**Next step:** real PLA/TPU damping when a source appears; otherwise Criton leftovers or optional BEM polish.
+
+### 2026-11-19 — Cursor — Handoff: Join BEM to network next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`, after CHK-BEM-7 on `cursor/bem-curved-sphere-8bb5`. Level 3. Superseded by CHK-BEM-8 join above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-19 — Cursor — Handoff: Curved BEM / join network next (superseded)
 

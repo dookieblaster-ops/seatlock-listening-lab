@@ -1,5 +1,6 @@
 //! The `bem` radiation model (README section 5.6): exterior CBIE on a mesh of the cabinet's
-//! outer shape, with baffle fallback above the mesh's frequency limit.
+//! outer shape, with baffle fallback above the mesh's frequency limit. Mouth self-impedances
+//! from the same solve join the waveguide network (README 2.6).
 
 use num_complex::Complex64;
 use seatlock_acoustics::BaffleRadiation;
@@ -23,9 +24,77 @@ pub const CHIEF_NOTE: &str = "Boundary-element outside: CHIEF interior points ke
      frequencies nonsingular on constant elements.";
 pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are rigid patches that \
      move, not true mouths.";
+pub const NETWORK_NOTE: &str = "Boundary-element outside: each mouth's self-impedance from the \
+     mesh replaces the analytic radiation load in the detailed air network; mutual loads \
+     between mouths are left out.";
 
 pub struct BemRadiation {
     pub subdivisions: u32,
+}
+
+/// Acoustic self-impedance of each mouth patch: area-mean surface pressure under unit volume
+/// velocity on that patch alone (`Z = p_avg / U` with `U = 1`). One row per mouth, one column
+/// per frequency. Above the mesh frequency limit the analytic flush impedance is used.
+pub fn mouth_self_impedances(
+    scene: &RadiationScene,
+    mouths: &[SourcePatch],
+    freqs_hz: &[f64],
+    subdivisions: u32,
+) -> Result<Vec<Vec<Complex64>>, String> {
+    let mut out = vec![vec![Complex64::new(0.0, 0.0); freqs_hz.len()]; mouths.len()];
+    if mouths.is_empty() || freqs_hz.is_empty() {
+        return Ok(out);
+    }
+    let size = scene.shape.outer_size_m()?;
+    let mesh = mesh_from_aabb_seed(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
+    let edge = mean_edge_length(&mesh);
+    let valid = valid_hz(edge);
+    let placements: Vec<Option<(Vec<usize>, Vec<Complex64>)>> = mouths
+        .iter()
+        .map(|mouth| {
+            let triangles = triangles_of_source(&mesh, mouth);
+            unit_velocity(&mesh, &triangles).map(|v_n| (triangles, v_n))
+        })
+        .collect();
+
+    for (bin, &freq) in freqs_hz.iter().enumerate() {
+        if freq <= 0.0 {
+            continue;
+        }
+        if freq > valid {
+            let k = 2.0 * std::f64::consts::PI * freq / C0;
+            for (mouth, row) in mouths.iter().zip(out.iter_mut()) {
+                row[bin] = seatlock_acoustics::radiation_impedance(mouth.area_m2, true, k);
+            }
+            continue;
+        }
+        let system = NeumannSystem::assemble(&mesh, freq)?;
+        for (mouth_index, placement) in placements.iter().enumerate() {
+            let Some((triangles, v_n)) = placement else {
+                let k = 2.0 * std::f64::consts::PI * freq / C0;
+                out[mouth_index][bin] =
+                    seatlock_acoustics::radiation_impedance(mouths[mouth_index].area_m2, true, k);
+                continue;
+            };
+            let p_surf = system.solve_velocity(v_n)?;
+            out[mouth_index][bin] = area_mean_pressure(&mesh, triangles, &p_surf);
+        }
+    }
+    Ok(out)
+}
+
+fn area_mean_pressure(mesh: &TriangleMesh, triangles: &[usize], p: &[Complex64]) -> Complex64 {
+    let mut sum = Complex64::new(0.0, 0.0);
+    let mut area = 0.0;
+    for &i in triangles {
+        sum += p[i] * mesh.areas[i];
+        area += mesh.areas[i];
+    }
+    if area <= 0.0 {
+        Complex64::new(0.0, 0.0)
+    } else {
+        sum / area
+    }
 }
 
 pub fn parse(fields: &Map<String, Value>) -> Result<Box<dyn RadiationModel>, String> {

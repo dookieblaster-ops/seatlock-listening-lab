@@ -32,8 +32,8 @@ pub use vented::{
     effective_port_length_m, end_correction_m, tuning_hz, vented_sample, PortSpec, VentedSample,
 };
 pub use waveguide::{
-    closed_duct_impedance, helmholtz, ported_box, solve, solve_lossy, solve_with_walls,
-    AcousticNode, WaveguideResult, WALL_LOSS,
+    closed_duct_impedance, helmholtz, ported_box, radiation_impedance, solve, solve_lossy,
+    solve_with_walls, with_fixed_radiation_loads, AcousticNode, WaveguideResult, WALL_LOSS,
 };
 
 use num_complex::Complex64;
