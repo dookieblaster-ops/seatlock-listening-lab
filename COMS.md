@@ -49,9 +49,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-reentrant-remesh-52b9` (PR onto `main`). Level 3.
+- **Context:** `main` (PR #30 remesh reviewed and merged). Level 3.
 
-**Done this session:** BEM remesh for re-entrant shells. `mesh_outer_shape` keeps the AABB seed when star-convex from the box centre; otherwise builds a closed skin from an occupancy grid (stair-step faces between inside/outside cells). An L-shaped solid that the seed refused now remeshes; boxes still take the seed path. Fidelity note names the remesh when it runs. README 5.6 / 2.6 / glossary updated. CHK-BEM-8/9/10 still pass.
+**Done this session:** BEM remesh for re-entrant shells (PR #30). `mesh_outer_shape` keeps the AABB seed when star-convex from the box centre; otherwise builds a closed skin from an occupancy grid (stair-step faces between inside/outside cells). An L-shaped solid that the seed refused now remeshes; boxes still take the seed path. Fidelity note names the remesh when it runs. README 5.6 / 2.6 / glossary updated. CHK-BEM-8/9/10 still pass.
 
 **Open, in order:** (1) Optional BEM: high-ka lit-gap diagnosis only if it blocks (occupancy remesh is stair-step; finer remesh later if a re-entrant import needs it). (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
@@ -424,6 +424,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.
 - 2026-11-22: BEM remesh for re-entrant shells (`mesh_outer_shape` occupancy path when not star-convex).
 - 2026-11-22: PR #29 CHK-BEM-10 (true open mouths) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-10 true open mouths (exact-area aperture disks cut into the outer BEM mesh).
