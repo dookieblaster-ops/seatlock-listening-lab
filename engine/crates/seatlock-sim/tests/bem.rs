@@ -375,7 +375,7 @@ fn chk_bem_10_open_apertures_match_mouth_area_and_keep_z_rad() {
         outward: [0.0, -1.0, 0.0],
         area_m2: area,
     };
-    let (mesh, disks) = bem::open_mouth_mesh(&scene, &[mouth], 16).expect("open mesh");
+    let (mesh, disks, _kind) = bem::open_mouth_mesh(&scene, &[mouth], 16).expect("open mesh");
     assert_eq!(disks.len(), 1);
     let disk_area: f64 = disks[0].iter().map(|&i| mesh.areas[i]).sum();
     let area_err = (disk_area - area).abs() / area;

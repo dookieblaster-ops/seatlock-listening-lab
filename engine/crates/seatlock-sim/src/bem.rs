@@ -5,8 +5,8 @@
 use num_complex::Complex64;
 use seatlock_acoustics::BaffleRadiation;
 use seatlock_bem::{
-    field_pressure, mean_edge_length, mesh_from_aabb_seed, mesh_with_open_apertures, MouthAperture,
-    NeumannSystem, TriangleMesh,
+    field_pressure, mean_edge_length, mesh_outer_shape, mesh_with_open_apertures, MouthAperture,
+    NeumannSystem, OuterMeshKind, TriangleMesh,
 };
 use seatlock_core::constants::C0;
 use seatlock_core::registry::{
@@ -20,7 +20,10 @@ pub const DEFAULT_SUBDIVISIONS: u32 = 4;
 const ELEMENTS_PER_WAVELENGTH: f64 = 6.0;
 
 pub const SHAPE_MESH_NOTE: &str = "Boundary-element outside: the mesh follows the cabinet's \
-     outer shape from a bounding-box seed; deeply re-entrant skins are not yet remeshed.";
+     outer shape from a bounding-box seed when that shell is star-convex from the box centre; \
+     re-entrant skins are remeshed from an occupancy grid.";
+pub const REMESH_NOTE: &str = "Boundary-element outside: re-entrant outer shape remeshed from \
+     an occupancy grid (not the bounding-box seed).";
 pub const CHIEF_NOTE: &str = "Boundary-element outside: CHIEF interior points keep irregular \
      frequencies nonsingular on constant elements.";
 pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are true open apertures \
@@ -50,7 +53,7 @@ pub fn mouth_impedance_matrices(
     if n == 0 || freqs_hz.is_empty() {
         return Ok(out);
     }
-    let (mesh, mouth_tris) = open_mouth_mesh(scene, mouths, subdivisions)?;
+    let (mesh, mouth_tris, _kind) = open_mouth_mesh(scene, mouths, subdivisions)?;
     let edge = mean_edge_length(&mesh);
     let valid = valid_hz(edge);
     let placements: Vec<Option<Vec<Complex64>>> = mouth_tris
@@ -94,15 +97,16 @@ pub fn mouth_impedance_matrices(
     Ok(out)
 }
 
-/// Outer-shape mesh with each mouth cut as an open aperture disk. Returns the mesh and the
-/// disk triangle indices per mouth.
+/// Outer-shape mesh with each mouth cut as an open aperture disk. Returns the mesh, the
+/// disk triangle indices per mouth, and whether the skin was remeshed.
 pub fn open_mouth_mesh(
     scene: &RadiationScene,
     mouths: &[SourcePatch],
     subdivisions: u32,
-) -> Result<(TriangleMesh, Vec<Vec<usize>>), String> {
+) -> Result<(TriangleMesh, Vec<Vec<usize>>, OuterMeshKind), String> {
     let size = scene.shape.outer_size_m()?;
-    let seed = mesh_from_aabb_seed(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
+    let (seed, kind) =
+        mesh_outer_shape(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
     let apertures: Vec<MouthAperture> = mouths
         .iter()
         .filter(|m| m.area_m2 > 0.0 && m.outward != [0.0; 3])
@@ -113,7 +117,7 @@ pub fn open_mouth_mesh(
         })
         .collect();
     if apertures.is_empty() {
-        return Ok((seed, vec![Vec::new(); mouths.len()]));
+        return Ok((seed, vec![Vec::new(); mouths.len()], kind));
     }
     let (mesh, disks) = mesh_with_open_apertures(&seed, &apertures, APERTURE_SEGMENTS)?;
     // Map back onto the original mouth list (skipped empty mouths stay empty).
@@ -125,7 +129,7 @@ pub fn open_mouth_mesh(
             disk_i += 1;
         }
     }
-    Ok((mesh, out))
+    Ok((mesh, out, kind))
 }
 
 /// Diagonal of [`mouth_impedance_matrices`] (self-impedance per mouth per frequency).
@@ -267,12 +271,15 @@ impl BemRadiation {
         )
     }
 
-    fn mesh_for(&self, scene: &RadiationScene) -> Result<(TriangleMesh, f64, f64), String> {
+    fn mesh_for(
+        &self,
+        scene: &RadiationScene,
+    ) -> Result<(TriangleMesh, OuterMeshKind, f64, f64), String> {
         let size = scene.shape.outer_size_m()?;
-        let mesh =
-            mesh_from_aabb_seed(size, self.subdivisions, |p| scene.shape.contains_cabinet(p))?;
+        let (mesh, kind) =
+            mesh_outer_shape(size, self.subdivisions, |p| scene.shape.contains_cabinet(p))?;
         let edge = mean_edge_length(&mesh);
-        Ok((mesh, edge, valid_hz(edge)))
+        Ok((mesh, kind, edge, valid_hz(edge)))
     }
 }
 
@@ -331,9 +338,9 @@ impl RadiationModel for BemRadiation {
             .filter(|s| s.area_m2 > 0.0 && s.outward != [0.0; 3])
             .cloned()
             .collect();
-        let (mesh, disks) = if directed.is_empty() {
-            let (mesh, _edge, _valid) = self.mesh_for(scene)?;
-            (mesh, Vec::new())
+        let (mesh, disks, kind) = if directed.is_empty() {
+            let (mesh, kind, _edge, _valid) = self.mesh_for(scene)?;
+            (mesh, Vec::new(), kind)
         } else {
             open_mouth_mesh(scene, &directed, self.subdivisions)?
         };
@@ -386,12 +393,15 @@ impl RadiationModel for BemRadiation {
             }
         }
 
-        let notes = vec![
+        let mut notes = vec![
             self.label(valid),
             SHAPE_MESH_NOTE.to_string(),
             CHIEF_NOTE.to_string(),
             OPENINGS_NOTE.to_string(),
         ];
+        if kind == OuterMeshKind::OccupancyRemesh {
+            notes.insert(1, REMESH_NOTE.to_string());
+        }
         for transfer in &mut transfers {
             let mut merged = notes.clone();
             for note in transfer.notes.drain(..) {

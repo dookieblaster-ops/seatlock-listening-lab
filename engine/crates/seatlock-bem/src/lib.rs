@@ -8,16 +8,18 @@
 //! (CHK-BEM-1), a rigid sphere in a plane wave at low `ka` (CHK-BEM-2), an oscillating
 //! sphere Neumann dipole (CHK-BEM-3), and exterior field evaluation (CHK-BEM-4). Registered
 //! as the `bem` radiation member. The cabinet mesh seeds the bounding box and pulls vertices
-//! onto the true outer skin. Surface solves use the CBIE with CHIEF interior points so
-//! irregular frequencies stay nonsingular on constant elements (Burton–Miller needs smoother
-//! elements; the `BurtonMillerSystem` stays for monopole experiments). Discontinuous linear
-//! triangles (`LinearNeumannSystem`, CHK-BEM-6) pass monopole and dipole. Spherical-triangle
-//! constant elements (`SphereNeumannSystem`, CHK-BEM-7) and continuous linear on the sphere
-//! (`ContinuousSphereSystem`) keep monopole accuracy and exact skin area, but the high-`ka`
-//! rigid-sphere lit gap vs the smooth series (~2.6 dB at `ka = 1`) remains — not chordal
-//! geometry alone. Not the radiation default. Mouth radiation impedances (self and mutual)
-//! from the same surface solve join the waveguide network (CHK-BEM-8 / CHK-BEM-9). Mouths are
-//! cut as true open apertures in the outer mesh (CHK-BEM-10), not rigid skin patches.
+//! onto the true outer skin when that shell is star-convex from the box centre; re-entrant
+//! imported shells are remeshed from an occupancy grid. Surface solves use the CBIE with
+//! CHIEF interior points so irregular frequencies stay nonsingular on constant elements
+//! (Burton–Miller needs smoother elements; the `BurtonMillerSystem` stays for monopole
+//! experiments). Discontinuous linear triangles (`LinearNeumannSystem`, CHK-BEM-6) pass
+//! monopole and dipole. Spherical-triangle constant elements (`SphereNeumannSystem`,
+//! CHK-BEM-7) and continuous linear on the sphere (`ContinuousSphereSystem`) keep monopole
+//! accuracy and exact skin area, but the high-`ka` rigid-sphere lit gap vs the smooth series
+//! (~2.6 dB at `ka = 1`) remains — not chordal geometry alone. Not the radiation default.
+//! Mouth radiation impedances (self and mutual) from the same surface solve join the
+//! waveguide network (CHK-BEM-8 / CHK-BEM-9). Mouths are cut as true open apertures in the
+//! outer mesh (CHK-BEM-10), not rigid skin patches.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;
@@ -28,6 +30,7 @@ mod continuous;
 mod curved;
 mod linear;
 mod mesh;
+mod occupancy;
 pub use burton_miller::{d2green_dndn, dgreen_dn_x, BurtonMillerSystem};
 pub use continuous::{rigid_plane_wave_surface_continuous, ContinuousSphereSystem};
 pub use curved::{
@@ -39,9 +42,10 @@ pub use linear::{
     sample_constant_on_nodes, triangle_mean_pressure, LinearNeumannSystem, LAMBDA,
 };
 pub use mesh::{
-    box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, mesh_with_open_apertures,
-    MouthAperture, TriangleMesh,
+    box_aabb, icosphere, mean_edge_length, mesh_from_aabb_seed, mesh_outer_shape,
+    mesh_with_open_apertures, MouthAperture, OuterMeshKind, TriangleMesh,
 };
+pub use occupancy::{is_star_convex_from, mesh_from_occupancy};
 
 const PI: f64 = std::f64::consts::PI;
 

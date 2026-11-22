@@ -1,6 +1,9 @@
-//! Outer-shape meshing from an AABB seed (README section 5.6).
+//! Outer-shape meshing from an AABB seed or occupancy remesh (README section 5.6).
 
-use seatlock_bem::{box_aabb, mesh_from_aabb_seed};
+use seatlock_bem::{
+    box_aabb, is_star_convex_from, mesh_from_aabb_seed, mesh_from_occupancy, mesh_outer_shape,
+    OuterMeshKind,
+};
 
 fn box_inside(size: [f64; 3], p: [f64; 3]) -> bool {
     p[0] > 0.0 && p[0] < size[0] && p[1] > 0.0 && p[1] < size[1] && p[2] > 0.0 && p[2] < size[2]
@@ -10,6 +13,18 @@ fn cylinder_inside(diameter: f64, length: f64, p: [f64; 3]) -> bool {
     let r = diameter * 0.5;
     let radial = ((p[0] - r).powi(2) + (p[2] - r).powi(2)).sqrt();
     radial < r && p[1] > 0.0 && p[1] < length
+}
+
+/// Thick L-shaped solid: bottom bar and left upright. AABB centre sits in the missing corner.
+fn l_inside(size: [f64; 3], p: [f64; 3]) -> bool {
+    if p[0] <= 0.0 || p[0] >= size[0] || p[1] <= 0.0 || p[1] >= size[1] || p[2] <= 0.0 || p[2] >= size[2]
+    {
+        return false;
+    }
+    let bar = 0.35;
+    let in_bottom = p[2] < size[2] * bar;
+    let in_left = p[0] < size[0] * bar;
+    in_bottom || in_left
 }
 
 #[test]
@@ -82,4 +97,67 @@ fn a_cylinder_mesh_is_closer_to_the_true_skin_than_the_bounding_box() {
         radial_faces > 10,
         "expected curved side faces, got {radial_faces}"
     );
+}
+
+#[test]
+fn an_l_shape_is_not_star_convex_and_needs_remesh() {
+    let size = [0.24, 0.16, 0.20];
+    let center = [size[0] * 0.5, size[1] * 0.5, size[2] * 0.5];
+    assert!(
+        !l_inside(size, center),
+        "AABB centre should sit in the missing corner of the L"
+    );
+    assert!(!is_star_convex_from(center, size, 24, |p| Ok(l_inside(size, p))).unwrap());
+    assert!(
+        mesh_from_aabb_seed(size, 4, |p| Ok(l_inside(size, p))).is_err(),
+        "AABB seed must refuse an off-centre L"
+    );
+
+    let (mesh, kind) = mesh_outer_shape(size, 4, |p| Ok(l_inside(size, p))).unwrap();
+    assert_eq!(kind, OuterMeshKind::OccupancyRemesh);
+    assert!(
+        mesh.triangles.len() > 24,
+        "remesh should produce a closed skin, got {} faces",
+        mesh.triangles.len()
+    );
+    // Analytical L surface (outer AABB faces that belong to the solid, plus the inner step).
+    // Coarse occupancy will overshoot; require the remesh to beat a naive filled AABB and to
+    // stay within a generous band of a voxel estimate at the same resolution.
+    let remesh = mesh_from_occupancy(size, 8, |p| Ok(l_inside(size, p))).unwrap();
+    let aabb = box_aabb(size, 4).unwrap();
+    assert!(
+        remesh.surface_area() < aabb.surface_area() * 0.98,
+        "L remesh area {:.4} should undercut a filled AABB {:.4}",
+        remesh.surface_area(),
+        aabb.surface_area()
+    );
+    // Outward normals: a step along the normal from a centroid should leave the solid.
+    // Stair-step faces near the inner corner can sit a cell inside the analytic L, so a
+    // few probes still read solid; require a clear majority.
+    let mut outward = 0;
+    for (centroid, normal) in remesh.centroids.iter().zip(remesh.normals.iter()) {
+        let probe = [
+            centroid[0] + normal[0] * 0.004,
+            centroid[1] + normal[1] * 0.004,
+            centroid[2] + normal[2] * 0.004,
+        ];
+        if !l_inside(size, probe) {
+            outward += 1;
+        }
+    }
+    let frac = outward as f64 / remesh.triangles.len() as f64;
+    assert!(
+        frac > 0.85,
+        "expected outward normals on remesh faces, got {frac:.2} ({outward}/{})",
+        remesh.triangles.len()
+    );
+}
+
+#[test]
+fn a_box_still_uses_the_aabb_seed_path() {
+    let size = [0.2, 0.16, 0.24];
+    let (mesh, kind) = mesh_outer_shape(size, 4, |p| Ok(box_inside(size, p))).unwrap();
+    assert_eq!(kind, OuterMeshKind::AabbSeed);
+    let seed = box_aabb(size, 4).unwrap();
+    assert_eq!(mesh.triangles.len(), seed.triangles.len());
 }

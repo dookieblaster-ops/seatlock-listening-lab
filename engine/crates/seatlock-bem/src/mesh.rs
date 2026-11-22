@@ -277,14 +277,45 @@ fn length3(v: [f64; 3]) -> f64 {
     (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
 }
 
+/// How [`mesh_outer_shape`] built the skin.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OuterMeshKind {
+    /// Bounding-box face grid with overhanging vertices pulled onto the skin.
+    AabbSeed,
+    /// Occupancy remesh for re-entrant (not star-convex) shells.
+    OccupancyRemesh,
+}
+
+/// Triangulate an outer shape: AABB seed when star-convex from the box centre, otherwise an
+/// occupancy remesh that follows re-entrant imported shells (README 5.6).
+pub fn mesh_outer_shape<F>(
+    size_m: [f64; 3],
+    subdivisions: u32,
+    mut inside: F,
+) -> Result<(TriangleMesh, OuterMeshKind), String>
+where
+    F: FnMut([f64; 3]) -> Result<bool, String>,
+{
+    let center = [size_m[0] * 0.5, size_m[1] * 0.5, size_m[2] * 0.5];
+    let star = crate::occupancy::is_star_convex_from(center, size_m, 24, &mut inside)?;
+    if star {
+        let mesh = mesh_from_aabb_seed(size_m, subdivisions, &mut inside)?;
+        return Ok((mesh, OuterMeshKind::AabbSeed));
+    }
+    // Keep the remesh face count in the same ballpark as the AABB seed (dense O(N²) BEM).
+    let cells = (subdivisions.max(1) * 2).clamp(8, 24);
+    let mesh = crate::occupancy::mesh_from_occupancy(size_m, cells, &mut inside)?;
+    Ok((mesh, OuterMeshKind::OccupancyRemesh))
+}
+
 /// Triangulate an outer shape by seeding the axis-aligned bounding box and pulling every
 /// vertex that sits outside the true skin inward onto it.
 ///
 /// `inside` is the cabinet occupancy test (`OuterShape::contains_cabinet`). Box-like shapes
 /// whose skin fills the AABB keep the seed mesh. Curved and chamfered skins move the
 /// overhanging vertices onto the surface along the ray from the box centre. Star-convex
-/// cabinets from that centre are the intended case; a later mesh pass can replace this for
-/// deeply re-entrant imported shells.
+/// cabinets from that centre are the intended case; [`mesh_outer_shape`] remeshes when the
+/// shell is deeply re-entrant.
 pub fn mesh_from_aabb_seed<F>(
     size_m: [f64; 3],
     subdivisions: u32,
