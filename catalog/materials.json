@@ -4,7 +4,8 @@
     "price_per_kg": 13.49,
     "youngs_modulus_xy_pa": 2680000000.0,
     "youngs_modulus_z_pa": 2160000000.0,
-    "note": "Price: Elegoo PLA Basic, 1 kg refill, $13.49 (its 10 kg pack is $99.99). Density and stiffness: Bambu Lab PLA Basic data sheet (ISO 1183, 1.24 g/cm3; ISO 527, 2680 MPa along the layers and 2160 MPa across them). The two sheets are different brands of the same plastic.",
+    "loss_factor": 0.075,
+    "note": "Price: Elegoo PLA Basic, 1 kg refill, $13.49 (its 10 kg pack is $99.99). Density and stiffness: Bambu Lab PLA Basic data sheet (ISO 1183, 1.24 g/cm3; ISO 527, 2680 MPa along the layers and 2160 MPa across them). The two sheets are different brands of the same plastic. Loss factor: middle of Rothe et al. Table 7 for FFF PLA beams (not this brand).",
     "price_source": {
       "url": "https://us.elegoo.com/products/pla-basic-filament-1-75mm-colored-1kg",
       "title": "Elegoo PLA Basic 3D Printer Filament (Spool-Free)",
@@ -14,6 +15,12 @@
       "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf",
       "title": "Bambu PLA Basic Technical Data Sheet",
       "read_on": "2026-11-10"
+    },
+    "loss_factor_source": {
+      "url": "https://doi.org/10.3390/ma14010168",
+      "title": "Rothe et al., Material Parameter Identification for Acoustic Simulation of Additively Manufactured Structures, Materials 14(1):168 (2021), Table 7",
+      "read_on": "2026-11-22",
+      "note": "Frequency-independent identified loss factors η for six FFF PLA beams (DAS FILAMENT, 1/3/6 mm): 0.055 to 0.095. The record holds the middle, 0.075. Frequency-dependent fits in the same paper run about 0.02–0.06 above 2 kHz and can reach ~0.1 below 2 kHz; one constant figure is used. Not measured on Elegoo/Bambu PLA."
     }
   },
   "petg": {
@@ -69,26 +76,25 @@
     "density_kg_m3": 813.0,
     "filament_density_kg_m3": 1220.0,
     "price_per_kg": null,
-    "note": "Shore 92A TPU that foams above about 230 C and grows 1.4 to 1.6 times; density 1.22 g/cm3 unfoamed (ASTM D-792). The printed density is derived for 1.5 times. A soft core between two PLA skins damps a wall (constrained-layer damping). No price sourced yet.",
+    "note": "Shore 92A TPU that foams above about 230 C and grows 1.4 to 1.6 times; density 1.22 g/cm3 unfoamed (ASTM D-792 / ISO 1183). The printed density is derived for 1.5 times. A soft core between two PLA skins damps a wall (constrained-layer damping). No price sourced yet.",
     "data_source": {
-      "url": "https://matterhackers.com/r/aYWo1o",
-      "title": "colorFabb varioShore TPU technical datasheet v1.0 (2019)",
-      "read_on": "2026-11-12",
-      "via": "search_extract"
+      "url": "https://colorfabb.com/media/datasheets/tds/colorfabb/TDS_E_ColorFabb_varioShore_TPU.pdf",
+      "title": "colorFabb varioShore TPU technical datasheet v1.0 (2023-11-28)",
+      "read_on": "2026-11-22"
     },
-    "youngs_modulus_xy_pa": 4090000.0,
+    "youngs_modulus_xy_pa": 40000000.0,
     "loss_factor": 0.1,
     "youngs_source": {
-      "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_TPU_95A_Technical_Data_Sheet.pdf",
-      "title": "Bambu TPU 95A Technical Data Sheet V3.0",
-      "read_on": "2026-11-13",
-      "note": "colorFabb publishes no modulus for varioShore (its sheet v1.0 of 2023-03-14 gives Shore 92A, 1.22 g/cm3, 58.6 MPa tensile strength). Derived: the nearest published printed TPU, Bambu TPU 95A, 9.2 MPa along the layers (ISO 527), scaled to the foamed density 813 of 1220 kg/m3 by the square of the density ratio: 4.09 MPa. Uncertain by a factor of two or more."
+      "url": "https://colorfabb.com/media/datasheets/tds/colorfabb/TDS_E_ColorFabb_varioShore_TPU.pdf",
+      "title": "colorFabb varioShore TPU technical datasheet v1.0 (2023-11-28)",
+      "read_on": "2026-11-22",
+      "note": "Maker's printed ISO 527-1A Youngs modulus: 50 MPa at 210 C / 100 % flow (unfoamed) and 40 MPa at 230 C / 70 % flow (foamed). The record holds the foamed print, 40 MPa. Replaces an earlier derived 4.09 MPa from Bambu TPU 95A scaled by density."
     },
     "loss_factor_source": {
       "url": "https://www.researchgate.net/publication/373989804_DAMPING_PROPERTIES_OF_MATERIALS_Revision_D",
       "title": "Tom Irvine, Damping Properties of Materials, Revision D (Vibrationdata, 2010-07-02), Table 3",
       "read_on": "2026-11-13",
-      "note": "A generic figure for rubber: Table 3 gives rubber a damping ratio of about 0.05, and the document's own relation, loss factor = 2 x damping ratio, gives 0.10. Not measured for this filament."
+      "note": "A generic figure for rubber: Table 3 gives rubber a damping ratio of about 0.05, and the document's own relation, loss factor = 2 x damping ratio, gives 0.10. Not measured for this filament. Irska et al. Materials 16(3):1250 (2023) DMTA tanδ = 0.26 at 25 C for Z-SEMIFLEX TPU was not used: that filament's Tα is 34.6 C (near room temp), while a foamed soft TPU wall core is rubbery at room temperature."
     }
   },
   "roamr_tpu_air_85a": {

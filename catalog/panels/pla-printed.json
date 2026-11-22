@@ -6,11 +6,18 @@
   "name": "Printed PLA (solid)",
   "youngs_pa": 2680000000.0,
   "density_kg_m3": 1240.0,
-  "note": "Bambu Lab PLA Basic data sheet: 1.24 g/cm3 (ISO 1183), 2680 MPa along the layers (ISO 527). A panel is printed flat, so its bending runs along the layers. Price as the lab's PLA (Elegoo PLA Basic, 1 kg, $13.49).",
+  "loss_factor": 0.075,
+  "note": "Bambu Lab PLA Basic data sheet: 1.24 g/cm3 (ISO 1183), 2680 MPa along the layers (ISO 527). A panel is printed flat, so its bending runs along the layers. Price as the lab's PLA (Elegoo PLA Basic, 1 kg, $13.49). Loss factor: middle of Rothe et al. Table 7 for FFF PLA beams (same figure as catalog/materials.json pla).",
   "source": {
     "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf",
     "title": "Bambu PLA Basic Technical Data Sheet",
     "read_on": "2026-11-10"
+  },
+  "loss_factor_source": {
+    "url": "https://doi.org/10.3390/ma14010168",
+    "title": "Rothe et al., Material Parameter Identification for Acoustic Simulation of Additively Manufactured Structures, Materials 14(1):168 (2021), Table 7",
+    "read_on": "2026-11-22",
+    "note": "Frequency-independent identified loss factors η for six FFF PLA beams: 0.055 to 0.095; the record holds the middle, 0.075. Not measured on Bambu PLA."
   },
   "price": {
     "per_kg": 13.49,

@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-22 — Cursor — Handoff: start here. PLA damping / lit-gap next
+### 2026-11-22 — Cursor — Handoff: start here. Soft-TPU DMA / lit-gap / Criton next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (PR #30 remesh reviewed and merged). Level 3.
+- **Context:** branch `cursor/pla-tpu-damping-5fc9` (PR onto `main`). Level 3.
 
-**Done this session:** BEM remesh for re-entrant shells (PR #30). `mesh_outer_shape` keeps the AABB seed when star-convex from the box centre; otherwise builds a closed skin from an occupancy grid (stair-step faces between inside/outside cells). An L-shaped solid that the seed refused now remeshes; boxes still take the seed path. Fidelity note names the remesh when it runs. README 5.6 / 2.6 / glossary updated. CHK-BEM-8/9/10 still pass.
+**Done this session:** Printed PLA loss factor η = 0.075 sourced from Rothe et al. Materials 2021 Table 7 (middle of six FFF PLA beam fits 0.055–0.095) on `catalog/materials.json` `pla` and `catalog/panels/pla-printed.json`. varioShore Young’s set to 40 MPa from colorFabb TDS 2023-11-28 foamed print (was derived 4.09 MPa). Soft TPU core loss kept at Irvine rubber 0.10 — Irska Z-SEMIFLEX DMTA tanδ 0.26 at 25 °C not used (that filament’s Tα is near room temp). Wall spring check: 10 Hz within 0.01 dB, 20 Hz within 0.02 dB. Solid PLA wall peak on `sealed-test` ~1.89 dB (was ~5.3 dB under assumed η = 0.02); varioShore core resonance ~243 Hz / ~2.1 dB (was ~137 Hz / ~9 dB under soft derived E).
 
-**Open, in order:** (1) Optional BEM: high-ka lit-gap diagnosis only if it blocks (occupancy remesh is stair-step; finer remesh later if a re-entrant import needs it). (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9/10. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — remesh cell count is clamped (`≈ 2 × bem_subdivisions`, max 24). Open-aperture collar is a first cut. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9/10. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. PLA η is one constant (Rothe also shows frequency dependence). Open-aperture collar is a first cut. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release --test outer_shape_mesh` 4 passed; `open_apertures` 2 passed; `cargo test -p seatlock-sim --release --test bem` 8 passed (~148 s); clippy `-D warnings` on seatlock-bem / seatlock-sim / seatlock-acoustics. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-sim --release --test walls` 10 passed; `materials` 5 passed; clippy `-D warnings` on seatlock-sim / seatlock-acoustics. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** PLA/TPU damping when a source appears, or high-ka lit-gap diagnosis only if it blocks.
+**Next step:** soft-TPU DMA when a source appears, or high-ka lit-gap only if it blocks.
+
+### 2026-11-22 — Cursor — Handoff: PLA damping / lit-gap next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (PR #30 remesh reviewed and merged). Level 3. Superseded by sourced PLA damping above.
+
+**Done this session:** BEM remesh for re-entrant shells (PR #30). Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-22 — Cursor — Handoff: Remesh / PLA damping next (superseded)
 
@@ -425,6 +435,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 ## Resolved
 
 - 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.
+- 2026-11-22: Printed PLA loss factor sourced (Rothe 2021 η = 0.075); varioShore Young’s from maker TDS (40 MPa foamed).
 - 2026-11-22: BEM remesh for re-entrant shells (`mesh_outer_shape` occupancy path when not star-convex).
 - 2026-11-22: PR #29 CHK-BEM-10 (true open mouths) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-10 true open mouths (exact-area aperture disks cut into the outer BEM mesh).

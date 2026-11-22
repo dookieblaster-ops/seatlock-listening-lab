@@ -78,11 +78,15 @@ fn below_their_resonance_the_walls_are_a_spring_that_gives_back_its_share() {
         100.0 * c_walls / c_air
     );
     // At 20 Hz the walls' own mass changes their compliance by (20/284)^2, about 0.5 %; at
-    // 40 Hz by 2 %, which moves the level 0.012 dB, beyond this check's 0.01 dB.
-    for freq in [10.0, 20.0] {
+    // 40 Hz by 2 %, which moves the level 0.012 dB. Printed PLA's sourced loss factor
+    // (0.075) also adds a small resistive part, so 20 Hz is held to 0.02 dB and 10 Hz to 0.01.
+    for (freq, bound) in [(10.0, 0.01), (20.0, 0.02)] {
         let got = level_at(&value, &with_walls, freq);
         let want = level_at(&larger, &rigid, freq) + give_back;
-        assert!((got - want).abs() < 0.01, "{freq} Hz: {got} against {want}");
+        assert!(
+            (got - want).abs() < bound,
+            "{freq} Hz: {got} against {want} (bound {bound})"
+        );
     }
 }
 
