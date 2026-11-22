@@ -231,8 +231,8 @@ pub fn radiation_impedance(area_m2: f64, flush: bool, k: f64) -> Complex64 {
 
 /// Replace each [`AcousticNode::Radiation`] leaf, in depth-first order, with
 /// [`AcousticNode::FixedRadiation`] from `loads`. Leaves past the end of `loads` keep the
-/// analytic formula (resolved later at solve time). Used to join BEM self-impedances into
-/// the waveguide network.
+/// analytic formula (resolved later at solve time). Used to join BEM mouth loads (self or
+/// effective mutual) into the waveguide network.
 pub fn with_fixed_radiation_loads(node: &AcousticNode, loads: &[Complex64]) -> AcousticNode {
     let mut index = 0;
     replace_radiation(node, loads, &mut index)

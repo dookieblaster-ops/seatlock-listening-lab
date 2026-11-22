@@ -49,17 +49,27 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-mutual-mouths-641f` (PR onto `main`). Level 3.
+- **Context:** `main` (PR #28 CHK-BEM-9 reviewed and merged). Level 3.
 
-**Done this session:** CHK-BEM-9 mutual BEM mouth loads. `mouth_impedance_matrices` (self + mutual from the same LU); waveguide joins the full matrix by iterating effective loads; tight mouth footprint for self-Z. CHK-BEM-8 retuned under the mesh hand-over (was vacuous on analytic fallback). Openings still rigid patches.
+**Done this session:** Reviewed and merged PR #28 (CHK-BEM-9 mutual BEM mouth loads). Full mouth `Z_rad` matrix into waveguide via effective-load iteration; CHK-BEM-8 retuned under mesh hand-over; tight mouth footprint for self-Z. Clarified crate docs (mutuals + CHK-BEM-9). Openings still rigid patches.
 
 **Open, in order:** (1) Optional BEM: true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — keep `bem` off the everyday path. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-sim --release --test bem` 7 passed; clippy `-D warnings` on seatlock-acoustics / seatlock-sim / seatlock-bem. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-sim --release --test bem` 7 passed; CHK-WG 3; clippy `-D warnings` on seatlock-acoustics / seatlock-sim / seatlock-bem. Full `tools/cloud-check.sh` not re-run this turn.
 
 **Next step:** true open mouths, or PLA/TPU damping when a source appears.
+
+### 2026-11-22 — Cursor — Handoff: True openings / PLA damping next (superseded; PR #28)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-mutual-mouths-641f` (PR #28). **Merged to `main` by lead 2026-11-22.**
+
+**Done this session:** CHK-BEM-9 mutual BEM mouth loads. Superseded by the review handoff above.
+
+**Next step:** none (merged).
 
 ### 2026-11-22 — Cursor — Handoff: Mutual mouths / PLA damping next (superseded)
 
@@ -386,6 +396,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: PR #28 CHK-BEM-9 (mutual BEM mouth loads) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-9 mutual BEM mouth loads joined to the waveguide network.
 - 2026-11-22: Page offer of `bem` ("Run the boundary-element outside" compare overlay); everyday radiation stays `baffle`.
 - 2026-11-22: PR #26 CHK-BEM-8 (BEM mouth self-`Z_rad` joined to waveguide) reviewed and merged to `main`.

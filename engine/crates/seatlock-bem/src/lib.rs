@@ -15,8 +15,9 @@
 //! constant elements (`SphereNeumannSystem`, CHK-BEM-7) and continuous linear on the sphere
 //! (`ContinuousSphereSystem`) keep monopole accuracy and exact skin area, but the high-`ka`
 //! rigid-sphere lit gap vs the smooth series (~2.6 dB at `ka = 1`) remains — not chordal
-//! geometry alone. Not the radiation default. Mouth self-impedances from the same surface
-//! solve join the waveguide network (CHK-BEM-8); openings stay rigid patches.
+//! geometry alone. Not the radiation default. Mouth radiation impedances (self and mutual)
+//! from the same surface solve join the waveguide network (CHK-BEM-8 / CHK-BEM-9); openings
+//! stay rigid patches.
 
 use nalgebra::{DMatrix, DVector, LU};
 use num_complex::Complex64;

@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-22 (CHK-BEM-9 mutual mouth loads)
+Updated: 2026-11-22 (CHK-BEM-9 mutual mouth loads on main)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -138,7 +138,8 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-19, Cursor cloud (lead): CHK-BEM-7 spherical-triangle CBIE + continuous-linear probe. High-ka lit gap is not chordal geometry. Next: join network or formulation diagnosis.
 - 2026-11-22, Cursor cloud (lead): BEM mouth self-`Z_rad` joined to waveguide (CHK-BEM-8). `FixedRadiation` + `mouth_self_impedances`; openings still rigid; mutual loads later. `seatlock-sim --test bem` 6 passed; clippy on touched crates.
 - 2026-11-22, Cursor cloud (lead review of PR #26): accepted CHK-BEM-8; mouth leaf only replaced (chamber-end correction kept). Re-ran sim bem 6 + bem suite + chk_wg 3 + clippy `-D warnings` on acoustics/sim/bem; fast-forwarded to `main`.
-- 2026-11-22, Cursor cloud (lead): mutual BEM mouth loads (CHK-BEM-9). Full Z matrix into waveguide via effective-load iteration; tight mouth footprint for self-Z. `seatlock-sim --test bem` 7 passed; clippy `-D warnings` on acoustics/sim/bem. Full `tools/cloud-check.sh` not re-run this turn.
+- 2026-11-22, Cursor cloud: mutual BEM mouth loads (CHK-BEM-9) on branch `cursor/bem-mutual-mouths-641f`. Full Z matrix into waveguide via effective-load iteration; tight mouth footprint for self-Z. `seatlock-sim --test bem` 7 passed; clippy `-D warnings` on acoustics/sim/bem.
+- 2026-11-22, Cursor cloud (lead review of PR #28): accepted CHK-BEM-9; mouth leaf only replaced (chamber-end correction kept); crate docs note mutuals. Re-ran sim bem 7 + CHK-WG 3 + clippy `-D warnings` on acoustics/sim/bem; fast-forwarded to `main`. Full `tools/cloud-check.sh` not re-run this turn.
 - 2026-11-22, Cursor cloud (lead): page offer of `bem` — "Run the boundary-element outside" in its own worker, overlay vs baffle; everyday path unchanged. `e2e/bem.spec.ts` passed (~22 s); typecheck + vite build ok.
 - 2026-11-17, Cursor cloud (owner: run what's slated for the laptop): laptop not linked from this session; ran `tools/cloud-check.sh` (same steps as `./check.sh`). All checks passed: engine 257, browser 44, stable 1.100 (~26 min).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).
