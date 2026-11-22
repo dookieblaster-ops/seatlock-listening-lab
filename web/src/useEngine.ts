@@ -134,8 +134,20 @@ export function useEngine() {
   );
 
   const simulate = useCallback(
-    async (text: string, revision: number, frequencies: number[]) => {
-      const json = await call({ type: "simulate", text, revision, frequencies });
+    async (
+      text: string,
+      revision: number,
+      frequencies: number[],
+      options?: { radiation?: string; bem_subdivisions?: number },
+    ) => {
+      const json = await call({
+        type: "simulate",
+        text,
+        revision,
+        frequencies,
+        radiation: options?.radiation,
+        bem_subdivisions: options?.bem_subdivisions,
+      });
       return JSON.parse(json) as SimulateResult;
     },
     [call],

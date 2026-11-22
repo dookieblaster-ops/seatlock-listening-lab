@@ -45,21 +45,29 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-22 — Cursor — Handoff: start here. Page offer of bem / PLA damping next
+### 2026-11-22 — Cursor — Handoff: start here. Mutual mouths / PLA damping next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main`, after review merge of PR #26 (CHK-BEM-8). Level 3.
+- **Context:** branch `cursor/bem-page-offer-5ade` (PR onto `main`). Level 3.
 
-**Done this session:** Reviewed PR #26 against README 2.6 / 5.4 / 5.6 / CHK-BEM-8. No defects found (self-`Z_rad` replaces the mouth leaf only; chamber-end `0.849*a` stays; openings remain rigid patches; lumped keeps analytic). Re-ran: `cargo test -p seatlock-sim --release --test bem` 6 passed; `seatlock-bem` release suite; `chk_wg` 3; clippy `-D warnings` on acoustics/sim/bem. Fast-forwarded to `main`.
+**Done this session:** (1) Reviewed and merged PR #26 (CHK-BEM-8). (2) Page offer of `bem`: "Run the boundary-element outside" in its own worker (default seed 4), overlay vs everyday baffle; cancel button; README 5.6 / 14. Everyday `engineWorker` simulate stays `baffle`.
 
-**Open, in order:** (1) Optional BEM: **page offer of `bem`** (worker already passes `bem_subdivisions`; dense O(N²) — keep off the everyday path). Then mutual mouth loads / true open mouths / remesh for re-entrant shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Optional BEM: mutual mouth loads; true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired; do not make `bem` the everyday radiation. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — keep `bem` off the everyday path. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** as above on Cursor cloud (pinned 1.99.1). Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `e2e/bem.spec.ts` passed (~22 s) on Cursor cloud; `npm run typecheck` + vite build ok. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** wire `bem` on the page (compare overlay like exterior), or PLA/TPU damping when a source appears.
+**Next step:** mutual BEM mouth loads, or PLA/TPU damping when a source appears.
+
+### 2026-11-22 — Cursor — Handoff: Page offer of bem / PLA damping next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main`, after review merge of PR #26 (CHK-BEM-8). Level 3. Superseded by the page-offer handoff above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-22 — Cursor — Handoff: PLA/TPU damping next (merged)
 
@@ -370,6 +378,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: Page offer of `bem` ("Run the boundary-element outside" compare overlay); everyday radiation stays `baffle`.
 - 2026-11-22: PR #26 CHK-BEM-8 (BEM mouth self-`Z_rad` joined to waveguide) reviewed and merged to `main`.
 - 2026-11-19: CHK-BEM-7 spherical-triangle BEM; high-ka lit gap placed as not geometry-only.
 - 2026-11-19: PR #25 discontinuous linear BEM (CHK-BEM-6) reviewed and merged to `main`.

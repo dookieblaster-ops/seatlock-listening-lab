@@ -7,7 +7,16 @@ export type WorkerRequest =
   | { type: "init" }
   | { type: "call"; id: number; method: string; request: string }
   | { type: "design.check"; id: number; text: string }
-  | { type: "simulate"; id: number; text: string; revision: number; frequencies: number[] }
+  | {
+      type: "simulate";
+      id: number;
+      text: string;
+      revision: number;
+      frequencies: number[];
+      /** Defaults to `baffle` (everyday path). Pass `bem` for the boundary-element compare. */
+      radiation?: string;
+      bem_subdivisions?: number;
+    }
   | { type: "geometry"; id: number; text: string }
   | { type: "correct"; id: number; text: string }
   | {
@@ -106,7 +115,9 @@ self.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
         frequencies_hz: msg.frequencies,
         // The detailed model: as fast as the quick one, and it knows lines and tapers.
         enclosure: "waveguide",
-        radiation: "baffle",
+        // Everyday path stays `baffle`. The page's boundary-element compare passes `bem`.
+        radiation: msg.radiation ?? "baffle",
+        bem_subdivisions: msg.bem_subdivisions,
         // Evenness is judged a little off to the sides too (README 11.1).
         listening_window: true,
         // CTA-2034 curves and Olive preference rating (README 2.6).

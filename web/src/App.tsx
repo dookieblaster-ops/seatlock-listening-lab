@@ -116,6 +116,10 @@ export default function App() {
   const outsideWorker = useRef<Worker | null>(null);
   const [outsideRuns, setOutsideRuns] = useState<OutsideRun[]>([]);
   const [outsideNote, setOutsideNote] = useState("");
+  const bemWorker = useRef<Worker | null>(null);
+  const [bemResult, setBemResult] = useState<SimulateResult | null>(null);
+  const [bemNote, setBemNote] = useState("");
+  const [bemElapsedMs, setBemElapsedMs] = useState(0);
 
   async function publish(next: Design, label: string) {
     const rev = ++revision.current;
@@ -981,9 +985,83 @@ export default function App() {
             >
               Cancel the outside
             </button>
+            <button
+              type="button"
+              data-testid="bem-run"
+              disabled={!canonical}
+              title="Solve the air around the cabinet with a boundary-element mesh of its outer shape (README 5.6). Draws over the everyday baffle model. Dense and slower; mouths stay rigid patches. Not the everyday path."
+              onClick={() => {
+                if (!canonical) {
+                  return;
+                }
+                bemWorker.current?.terminate();
+                const worker = new Worker(new URL("./engineWorker.ts", import.meta.url), { type: "module" });
+                bemWorker.current = worker;
+                setBemResult(null);
+                setBemNote("Solving the boundary-element outside…");
+                const started = performance.now();
+                let ready = false;
+                worker.onmessage = (event: MessageEvent<{ type: string; version?: string; json?: string; message?: string }>) => {
+                  const message = event.data;
+                  if (message.type === "ready") {
+                    ready = true;
+                    worker.postMessage({
+                      type: "simulate",
+                      id: 1,
+                      text: canonical,
+                      revision: revision.current,
+                      frequencies: grid,
+                      radiation: "bem",
+                      bem_subdivisions: 4,
+                    });
+                    return;
+                  }
+                  if (message.type === "result" && message.json) {
+                    const result = JSON.parse(message.json) as SimulateResult;
+                    const failed =
+                      result.error ?? result.issues.find((issue) => issue.severity === "error")?.message;
+                    if (failed || result.summed_spl_db.length === 0) {
+                      setBemNote(`The boundary-element outside failed: ${failed ?? "it gave no result."}`);
+                    } else {
+                      setBemElapsedMs(performance.now() - started);
+                      setBemResult(result);
+                      setBemNote(
+                        `The boundary-element outside finished in ${((performance.now() - started) / 1000).toFixed(1)} s.`,
+                      );
+                    }
+                    worker.terminate();
+                    bemWorker.current = null;
+                    return;
+                  }
+                  if (message.type === "error") {
+                    setBemNote(`The boundary-element outside failed: ${message.message ?? "unknown error"}`);
+                    worker.terminate();
+                    bemWorker.current = null;
+                  } else if (!ready && message.type !== "ready") {
+                    setBemNote(`The boundary-element outside failed: unexpected worker reply.`);
+                  }
+                };
+                worker.postMessage({ type: "init" });
+              }}
+            >
+              Run the boundary-element outside
+            </button>
+            <button
+              type="button"
+              data-testid="bem-cancel"
+              onClick={() => {
+                bemWorker.current?.terminate();
+                bemWorker.current = null;
+                setBemNote("The boundary-element outside was canceled.");
+              }}
+            >
+              Cancel the boundary-element outside
+            </button>
           </div>
           <p data-testid="outside-note">{outsideNote}</p>
           {outsideRuns.length > 0 && <OutsideThreeD runs={outsideRuns} quick={sim} />}
+          <p data-testid="bem-note">{bemNote}</p>
+          {bemResult && <BemOutside result={bemResult} quick={sim} elapsedMs={bemElapsedMs} />}
           <p data-testid="fdtd-note">{fdtdNote}</p>
           {fdtdNote.includes("unreachable") || fdtdNote.includes("RuntimeError") ? (
             <p data-testid="fdtd-error">{fdtdNote}</p>
@@ -1733,6 +1811,49 @@ function PanelSource({
 }
 
 type OutsideRun = { dx: number; elapsedMs: number; result: SimulateResult };
+
+/** Boundary-element outside (`bem`, README 5.6), against the everyday baffle model. */
+function BemOutside({
+  result,
+  quick,
+  elapsedMs,
+}: {
+  result: SimulateResult;
+  quick: SimulateResult | null;
+  elapsedMs: number;
+}) {
+  const label = `${result.fidelity.enclosure} enclosure, ${result.fidelity.radiation} radiation, ${result.fidelity.room} room. ${result.fidelity.ignored.join(" ")}`;
+  return (
+    <div data-testid="bem-results">
+      <p data-testid="bem-timing">
+        Boundary-element mesh of the outer shape in {(elapsedMs / 1000).toFixed(1)} s. Mouths are still rigid patches;
+        mutual mouth loads are left out. Not the everyday model.
+      </p>
+      <Graph
+        title="Level with the boundary-element outside"
+        explanation="Green is the boundary-element model of the air around the cabinet. Brown is the everyday baffle model."
+        freqs={result.frequencies_hz}
+        values={result.summed_spl_db}
+        overlay={quick?.summed_spl_db}
+        unit="dB SPL"
+        testId="bem-spl-graph"
+        fidelity={label}
+      />
+      {result.in_room && (
+        <Graph
+          title="Loudness in the room with the boundary-element outside"
+          explanation="Green is the sound at the listening position with the wall behind the speaker and the room's reverberant sound, from the boundary-element model. Brown is the direct sound alone."
+          freqs={result.frequencies_hz}
+          values={result.in_room.spl_db}
+          overlay={result.summed_spl_db}
+          unit="dB SPL"
+          testId="bem-room-graph"
+          fidelity={label}
+        />
+      )}
+    </div>
+  );
+}
 
 /** The air around the cabinet in 3D (README 5.6, `exterior`), against the everyday model. */
 function OutsideThreeD({ runs, quick }: { runs: OutsideRun[]; quick: SimulateResult | null }) {
