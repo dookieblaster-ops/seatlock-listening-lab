@@ -5,7 +5,7 @@ use std::time::Instant;
 use num_complex::Complex64;
 use seatlock_acoustics::{
     baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3, solve, solve_lossy,
-    solve_with_walls, spl_db, vented_sample, with_fixed_radiation_loads, PortSpec,
+    solve_with_radiation_matrix, solve_with_walls, spl_db, vented_sample, PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::{C0, P_REF, RHO0};
@@ -436,9 +436,10 @@ pub fn simulate_with_progress(
     let mut driver_chamber = 0usize;
     let mut node_pressures: std::collections::HashMap<usize, Vec<Vec<Complex64>>> =
         Default::default();
-    // BEM mouth self-impedances for the waveguide network (README 2.6 / 5.6). Computed once
-    // when radiation is `bem` and the detailed model will use them; openings stay rigid patches.
-    let bem_mouth_z: Option<Vec<Vec<Complex64>>> = if request.radiation == "bem" && !full_3d {
+    // BEM mouth impedance matrices (self + mutual) for the waveguide network (README 2.6 / 5.6).
+    // Computed once when radiation is `bem` and the detailed model will use them; openings stay
+    // rigid patches.
+    let bem_mouth_z: Option<Vec<Vec<Vec<Complex64>>>> = if request.radiation == "bem" && !full_3d {
         let mouths: Vec<SourcePatch> = port_poses(design, outer.as_ref())
             .into_iter()
             .map(|place| SourcePatch {
@@ -467,7 +468,7 @@ pub fn simulate_with_progress(
             let subdivisions = request
                 .bem_subdivisions
                 .unwrap_or(bem::DEFAULT_SUBDIVISIONS);
-            match bem::mouth_self_impedances(&scene, &mouths, &freqs, subdivisions) {
+            match bem::mouth_impedance_matrices(&scene, &mouths, &freqs, subdivisions) {
                 Ok(z) => {
                     fidelity.ignored.push(bem::NETWORK_NOTE.to_string());
                     Some(z)
@@ -592,17 +593,25 @@ pub fn simulate_with_progress(
                 match wave {
                     Some(Ok(network)) => {
                         for (bin, freq) in freqs.iter().enumerate() {
-                            let rooted;
-                            let root = match bem_mouth_loads(&network.opening_order, bem_mouth_z.as_ref(), bin)
-                            {
-                                Some(loads) => {
-                                    rooted = with_fixed_radiation_loads(&network.root, &loads);
-                                    &rooted
-                                }
-                                None => &network.root,
+                            let solved = match bem_mouth_matrix(
+                                &network.opening_order,
+                                bem_mouth_z.as_ref(),
+                                bin,
+                            ) {
+                                Some(z_rad) => solve_with_radiation_matrix(
+                                    &network.root,
+                                    *freq,
+                                    &z_rad,
+                                    request.losses,
+                                    &wall_y[bin],
+                                ),
+                                None => solve_with_walls(
+                                    &network.root,
+                                    *freq,
+                                    request.losses,
+                                    &wall_y[bin],
+                                ),
                             };
-                            let solved =
-                                solve_with_walls(root, *freq, request.losses, &wall_y[bin]);
                             for (slot, p) in &solved.pressures {
                                 if let Some(cell) = pressures[bin].get_mut(*slot) {
                                     *cell = *p;
@@ -734,22 +743,20 @@ pub fn simulate_with_progress(
                     let mut impedance = Vec::with_capacity(freqs.len());
                     let mut samples = Vec::with_capacity(freqs.len());
                     for (bin, freq) in freqs.iter().enumerate() {
-                        let rooted;
-                        let root = match bem_mouth_loads(
+                        let wave = match bem_mouth_matrix(
                             &network.opening_order,
                             bem_mouth_z.as_ref(),
                             bin,
                         ) {
-                            Some(loads) => {
-                                rooted = with_fixed_radiation_loads(&network.root, &loads);
-                                &rooted
-                            }
-                            None => &network.root,
-                        };
-                        let wave = if request.losses {
-                            solve_lossy(root, *freq)
-                        } else {
-                            solve(root, *freq)
+                            Some(z_rad) => solve_with_radiation_matrix(
+                                &network.root,
+                                *freq,
+                                &z_rad,
+                                request.losses,
+                                &[],
+                            ),
+                            None if request.losses => solve_lossy(&network.root, *freq),
+                            None => solve(&network.root, *freq),
                         };
                         let slots = network
                             .opening_order
@@ -2359,29 +2366,30 @@ struct PlacedSource {
     radius_m: f64,
 }
 
-/// Mouth loads for the waveguide tree in depth-first Radiation-leaf order, from BEM
-/// self-impedances indexed by design port slot (`opening_order`).
-fn bem_mouth_loads(
+/// Mouth impedance matrix for the waveguide tree in depth-first Radiation-leaf order, from BEM
+/// matrices indexed by design port slot (`opening_order`). `mouth_z[bin][i][j]` is port slots.
+fn bem_mouth_matrix(
     opening_order: &[usize],
-    mouth_z: Option<&Vec<Vec<Complex64>>>,
+    mouth_z: Option<&Vec<Vec<Vec<Complex64>>>>,
     bin: usize,
-) -> Option<Vec<Complex64>> {
+) -> Option<Vec<Vec<Complex64>>> {
     let table = mouth_z?;
+    let matrix = table.get(bin)?;
     if opening_order.is_empty() {
         return None;
     }
-    Some(
-        opening_order
-            .iter()
-            .map(|&slot| {
-                table
-                    .get(slot)
-                    .and_then(|row| row.get(bin))
-                    .copied()
-                    .unwrap_or(Complex64::new(0.0, 0.0))
-            })
-            .collect(),
-    )
+    let n = opening_order.len();
+    let mut out = vec![vec![Complex64::new(0.0, 0.0); n]; n];
+    for (row, &slot_i) in opening_order.iter().enumerate() {
+        for (col, &slot_j) in opening_order.iter().enumerate() {
+            out[row][col] = matrix
+                .get(slot_i)
+                .and_then(|r| r.get(slot_j))
+                .copied()
+                .unwrap_or(Complex64::new(0.0, 0.0));
+        }
+    }
+    Some(out)
 }
 
 /// True when `point`, on a flat surface with the normal `outward`, is inside the surface's

@@ -1,8 +1,11 @@
 //! The `bem` radiation model inside `simulate` (README section 5.6), including mouth
-//! self-impedances joined to the waveguide network (CHK-BEM-8).
+//! radiation impedances joined to the waveguide network (CHK-BEM-8 / CHK-BEM-9).
 
-use seatlock_acoustics::{radiation_impedance, with_fixed_radiation_loads, AcousticNode};
-use seatlock_core::constants::C0;
+use num_complex::Complex64;
+use seatlock_acoustics::{
+    radiation_impedance, solve_with_radiation_matrix, with_fixed_radiation_loads, AcousticNode,
+};
+use seatlock_core::constants::{C0, RHO0};
 use seatlock_core::registry::{RadiationScene, SourcePatch};
 use seatlock_sim::bem::{self, NETWORK_NOTE};
 use seatlock_sim::{builtin, simulate, SimulateRequest, SimulateResult};
@@ -117,7 +120,8 @@ fn a_tube_design_runs_under_bem_without_falling_back_to_errors() {
 }
 
 /// CHK-BEM-8: a circular patch on a large flat face at low `ka` has self-impedance near the
-/// flush analytic radiation load (README 5.4 / 5.6).
+/// flush analytic radiation load (README 5.4 / 5.6). Seed 16 and `ka = 0.10` keep the bin under
+/// the hand-over; a 150 mm patch with a tight mouth footprint keeps the mesh area near the piston.
 #[test]
 fn chk_bem_8_mouth_self_impedance_matches_flush_piston_at_low_ka() {
     let registry = builtin();
@@ -137,16 +141,16 @@ fn chk_bem_8_mouth_self_impedance_matches_flush_piston_at_low_ka() {
         baffle_width_m: 4.0,
         reference_m: [2.0, 0.0, 2.0],
     };
-    let radius = 0.05;
+    let radius = 0.15;
     let area = PI * radius * radius;
     let mouth = SourcePatch {
         position_m: [2.0, 0.0, 2.0],
         outward: [0.0, -1.0, 0.0],
         area_m2: area,
     };
-    let ka = 0.25;
+    let ka = 0.10;
     let freq = ka * C0 / (2.0 * PI * radius);
-    let table = bem::mouth_self_impedances(&scene, &[mouth], &[freq], 6).expect("Z_rad");
+    let table = bem::mouth_self_impedances(&scene, &[mouth], &[freq], 16).expect("Z_rad");
     let bem_z = table[0][0];
     let k = 2.0 * PI * freq / C0;
     let analytic = radiation_impedance(area, true, k);
@@ -155,6 +159,11 @@ fn chk_bem_8_mouth_self_impedance_matches_flush_piston_at_low_ka() {
     assert!(
         bem_z.re > 0.0 && bem_z.im > 0.0,
         "Z_rad should be mass-like with positive resistance: {bem_z}"
+    );
+    // Must not be exactly the analytic fallback (that would mean the bin was above the mesh).
+    assert!(
+        (bem_z - analytic).norm() / analytic.norm().max(1e-12) > 1e-6,
+        "Z_rad matched analytic exactly; mesh hand-over swallowed the BEM solve"
     );
     assert!(
         re_err < 0.35 && im_err < 0.25,
@@ -204,7 +213,7 @@ fn bem_joins_mouth_loads_into_the_waveguide_network() {
     );
     let label = bem.fidelity.ignored.join(" ");
     assert!(
-        label.contains("self-impedance") || label.contains(NETWORK_NOTE),
+        label.contains("radiation impedance") || label.contains(NETWORK_NOTE),
         "joined-network note missing: {label}"
     );
     // Joining BEM Z_rad must change the enclosure load the woofer sees vs analytic mouths.
@@ -224,5 +233,114 @@ fn bem_joins_mouth_loads_into_the_waveguide_network() {
     assert!(
         moved,
         "bem waveguide woofer Z matched analytic mouths at every bin; join did not take effect"
+    );
+}
+
+/// CHK-BEM-9: mutual mouth impedance on a large face is reciprocal and near the half-space
+/// point-source estimate at low `ka`; a two-port waveguide's load moves when mutuals are kept.
+#[test]
+fn chk_bem_9_mutual_mouth_impedance_is_reciprocal_and_joins_the_network() {
+    let registry = builtin();
+    let fields = json!({
+        "width_m": 4.0,
+        "height_m": 4.0,
+        "depth_m": 4.0,
+        "wall_m": 0.02,
+        "edge_radius_m": 0.0
+    });
+    let shape = registry
+        .create_outer("box", fields.as_object().unwrap())
+        .expect("box");
+    let scene = RadiationScene {
+        shape: shape.as_ref(),
+        space: "full",
+        baffle_width_m: 4.0,
+        reference_m: [2.0, 0.0, 2.0],
+    };
+    let radius = 0.05;
+    let area = PI * radius * radius;
+    let separation = 0.40;
+    let mouth_a = SourcePatch {
+        position_m: [2.0 - separation / 2.0, 0.0, 2.0],
+        outward: [0.0, -1.0, 0.0],
+        area_m2: area,
+    };
+    let mouth_b = SourcePatch {
+        position_m: [2.0 + separation / 2.0, 0.0, 2.0],
+        outward: [0.0, -1.0, 0.0],
+        area_m2: area,
+    };
+    // ka=0.15 and seed 16: frequency stays under the mesh hand-over on this 4 m box.
+    let ka = 0.15;
+    let freq = ka * C0 / (2.0 * PI * radius);
+    let matrices =
+        bem::mouth_impedance_matrices(&scene, &[mouth_a, mouth_b], &[freq], 16).expect("Z");
+    let z = &matrices[0];
+    let z11 = z[0][0];
+    let z22 = z[1][1];
+    let z12 = z[0][1];
+    let z21 = z[1][0];
+    assert!(
+        z11.re > 0.0 && z11.im > 0.0,
+        "Z11 should be mass-like: {z11}"
+    );
+    assert!(
+        z22.re > 0.0 && z22.im > 0.0,
+        "Z22 should be mass-like: {z22}"
+    );
+    let recip = (z12 - z21).norm() / z11.norm().max(1e-12);
+    assert!(
+        recip < 0.05,
+        "mutual not reciprocal: Z12={z12} Z21={z21} rel={recip}"
+    );
+    // Half-space point sources: p = j ω ρ₀ e^{-jkd} / (2 π d) for unit U (baffle image).
+    let k = 2.0 * PI * freq / C0;
+    let omega = 2.0 * PI * freq;
+    let d = separation;
+    let point = Complex64::new(0.0, omega * RHO0) * Complex64::new((-k * d).cos(), (-k * d).sin())
+        / (2.0 * PI * d);
+    let mutual_err = (z12 - point).norm() / point.norm().max(1e-12);
+    assert!(
+        mutual_err < 0.45,
+        "Z12={z12} point={point} rel_err={mutual_err}"
+    );
+    assert!(
+        z12.norm() / z11.norm() > 0.05,
+        "mutual too small vs self: |Z12|/|Z11|={}",
+        z12.norm() / z11.norm()
+    );
+
+    // Two equal ports: diagonal-only vs full matrix must change the chamber load.
+    let duct = |z_leaf: AcousticNode| AcousticNode::Duct {
+        length_m: 0.12,
+        area_in_m2: area,
+        area_out_m2: area,
+        added_length_m: 0.849 * radius,
+        load: Box::new(z_leaf),
+    };
+    let tree = AcousticNode::Parallel(vec![
+        AcousticNode::Compliance { volume_m3: 0.03 },
+        duct(AcousticNode::Radiation {
+            area_m2: area,
+            flush: false,
+        }),
+        duct(AcousticNode::Radiation {
+            area_m2: area,
+            flush: false,
+        }),
+    ]);
+    let diag = vec![
+        vec![z11, Complex64::new(0.0, 0.0)],
+        vec![Complex64::new(0.0, 0.0), z22],
+    ];
+    let full = z.clone();
+    let a = solve_with_radiation_matrix(&tree, freq, &diag, false, &[]);
+    let b = solve_with_radiation_matrix(&tree, freq, &full, false, &[]);
+    let moved = (a.z_in - b.z_in).norm() / a.z_in.norm().max(1e-12);
+    assert!(
+        moved > 1e-4,
+        "mutual join left Z_in unchanged: diag={} full={} rel={moved}",
+        a.z_in,
+        b.z_in
     );
 }

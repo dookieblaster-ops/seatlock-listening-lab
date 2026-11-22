@@ -45,21 +45,29 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-22 — Cursor — Handoff: start here. Mutual mouths / PLA damping next
+### 2026-11-22 — Cursor — Handoff: start here. True openings / PLA damping next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (PR #27 page offer merged). Level 3.
+- **Context:** branch `cursor/bem-mutual-mouths-641f` (PR onto `main`). Level 3.
 
-**Done this session:** (1) Reviewed and merged PR #26 (CHK-BEM-8). (2) Page offer of `bem` (PR #27): "Run the boundary-element outside" in its own worker (default seed 4), overlay vs everyday baffle; cancel button; README 5.6 / 14. Everyday `engineWorker` simulate stays `baffle`. Merged to `main`.
+**Done this session:** CHK-BEM-9 mutual BEM mouth loads. `mouth_impedance_matrices` (self + mutual from the same LU); waveguide joins the full matrix by iterating effective loads; tight mouth footprint for self-Z. CHK-BEM-8 retuned under the mesh hand-over (was vacuous on analytic fallback). Openings still rigid patches.
 
-**Open, in order:** (1) Optional BEM: mutual mouth loads; true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Optional BEM: true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — keep `bem` off the everyday path. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — keep `bem` off the everyday path. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `e2e/bem.spec.ts` passed (~22 s) on Cursor cloud; `npm run typecheck` + vite build ok. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-sim --release --test bem` 7 passed; clippy `-D warnings` on seatlock-acoustics / seatlock-sim / seatlock-bem. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** mutual BEM mouth loads, or PLA/TPU damping when a source appears.
+**Next step:** true open mouths, or PLA/TPU damping when a source appears.
+
+### 2026-11-22 — Cursor — Handoff: Mutual mouths / PLA damping next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (PR #27 page offer merged). Level 3. Superseded by CHK-BEM-9 above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-22 — Cursor — Handoff: Page offer of bem / PLA damping next (superseded)
 
@@ -378,6 +386,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: CHK-BEM-9 mutual BEM mouth loads joined to the waveguide network.
 - 2026-11-22: Page offer of `bem` ("Run the boundary-element outside" compare overlay); everyday radiation stays `baffle`.
 - 2026-11-22: PR #26 CHK-BEM-8 (BEM mouth self-`Z_rad` joined to waveguide) reviewed and merged to `main`.
 - 2026-11-19: CHK-BEM-7 spherical-triangle BEM; high-ka lit gap placed as not geometry-only.

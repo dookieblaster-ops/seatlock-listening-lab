@@ -1,6 +1,6 @@
 //! The `bem` radiation model (README section 5.6): exterior CBIE on a mesh of the cabinet's
-//! outer shape, with baffle fallback above the mesh's frequency limit. Mouth self-impedances
-//! from the same solve join the waveguide network (README 2.6).
+//! outer shape, with baffle fallback above the mesh's frequency limit. Mouth radiation
+//! impedances (self and mutual) from the same solve join the waveguide network (README 2.6).
 
 use num_complex::Complex64;
 use seatlock_acoustics::BaffleRadiation;
@@ -24,37 +24,45 @@ pub const CHIEF_NOTE: &str = "Boundary-element outside: CHIEF interior points ke
      frequencies nonsingular on constant elements.";
 pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are rigid patches that \
      move, not true mouths.";
-pub const NETWORK_NOTE: &str = "Boundary-element outside: each mouth's self-impedance from the \
-     mesh replaces the analytic radiation load in the detailed air network; mutual loads \
-     between mouths are left out.";
+pub const NETWORK_NOTE: &str = "Boundary-element outside: each mouth's radiation impedance \
+     matrix from the mesh (self and mutual) replaces the analytic radiation loads in the \
+     detailed air network.";
 
 pub struct BemRadiation {
     pub subdivisions: u32,
 }
 
-/// Acoustic self-impedance of each mouth patch: area-mean surface pressure under unit volume
-/// velocity on that patch alone (`Z = p_avg / U` with `U = 1`). One row per mouth, one column
-/// per frequency. Above the mesh frequency limit the analytic flush impedance is used.
-pub fn mouth_self_impedances(
+/// Radiation impedance matrix of the mouth patches: `Z[i][j] = p_avg on mouth i` under unit
+/// volume velocity on mouth j alone (others rigid). One matrix per frequency
+/// (`out[bin][i][j]`). Above the mesh frequency limit the diagonal is the analytic flush
+/// impedance and mutual terms are zero.
+pub fn mouth_impedance_matrices(
     scene: &RadiationScene,
     mouths: &[SourcePatch],
     freqs_hz: &[f64],
     subdivisions: u32,
-) -> Result<Vec<Vec<Complex64>>, String> {
-    let mut out = vec![vec![Complex64::new(0.0, 0.0); freqs_hz.len()]; mouths.len()];
-    if mouths.is_empty() || freqs_hz.is_empty() {
+) -> Result<Vec<Vec<Vec<Complex64>>>, String> {
+    let n = mouths.len();
+    let mut out = vec![vec![vec![Complex64::new(0.0, 0.0); n]; n]; freqs_hz.len()];
+    if n == 0 || freqs_hz.is_empty() {
         return Ok(out);
     }
     let size = scene.shape.outer_size_m()?;
     let mesh = mesh_from_aabb_seed(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
     let edge = mean_edge_length(&mesh);
     let valid = valid_hz(edge);
+    // Mouth loads use a tight piston footprint (not the looser field-source reach), so the
+    // radiating area matches the opening used in the analytic compare.
     let placements: Vec<Option<(Vec<usize>, Vec<Complex64>)>> = mouths
         .iter()
         .map(|mouth| {
-            let triangles = triangles_of_source(&mesh, mouth);
+            let triangles = triangles_of_mouth(&mesh, mouth);
             unit_velocity(&mesh, &triangles).map(|v_n| (triangles, v_n))
         })
+        .collect();
+    let triangles: Vec<Vec<usize>> = placements
+        .iter()
+        .map(|p| p.as_ref().map(|(t, _)| t.clone()).unwrap_or_default())
         .collect();
 
     for (bin, &freq) in freqs_hz.iter().enumerate() {
@@ -63,21 +71,49 @@ pub fn mouth_self_impedances(
         }
         if freq > valid {
             let k = 2.0 * std::f64::consts::PI * freq / C0;
-            for (mouth, row) in mouths.iter().zip(out.iter_mut()) {
-                row[bin] = seatlock_acoustics::radiation_impedance(mouth.area_m2, true, k);
+            for (i, mouth) in mouths.iter().enumerate() {
+                out[bin][i][i] = seatlock_acoustics::radiation_impedance(mouth.area_m2, true, k);
             }
             continue;
         }
         let system = NeumannSystem::assemble(&mesh, freq)?;
-        for (mouth_index, placement) in placements.iter().enumerate() {
-            let Some((triangles, v_n)) = placement else {
+        for (j, placement) in placements.iter().enumerate() {
+            let Some((_, v_n)) = placement else {
                 let k = 2.0 * std::f64::consts::PI * freq / C0;
-                out[mouth_index][bin] =
-                    seatlock_acoustics::radiation_impedance(mouths[mouth_index].area_m2, true, k);
+                out[bin][j][j] =
+                    seatlock_acoustics::radiation_impedance(mouths[j].area_m2, true, k);
                 continue;
             };
             let p_surf = system.solve_velocity(v_n)?;
-            out[mouth_index][bin] = area_mean_pressure(&mesh, triangles, &p_surf);
+            for (i, tris) in triangles.iter().enumerate() {
+                if tris.is_empty() {
+                    if i == j {
+                        let k = 2.0 * std::f64::consts::PI * freq / C0;
+                        out[bin][i][i] =
+                            seatlock_acoustics::radiation_impedance(mouths[i].area_m2, true, k);
+                    }
+                    continue;
+                }
+                out[bin][i][j] = area_mean_pressure(&mesh, tris, &p_surf);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Diagonal of [`mouth_impedance_matrices`] (self-impedance per mouth per frequency).
+pub fn mouth_self_impedances(
+    scene: &RadiationScene,
+    mouths: &[SourcePatch],
+    freqs_hz: &[f64],
+    subdivisions: u32,
+) -> Result<Vec<Vec<Complex64>>, String> {
+    let matrices = mouth_impedance_matrices(scene, mouths, freqs_hz, subdivisions)?;
+    let n = mouths.len();
+    let mut out = vec![vec![Complex64::new(0.0, 0.0); freqs_hz.len()]; n];
+    for (bin, matrix) in matrices.iter().enumerate() {
+        for i in 0..n {
+            out[i][bin] = matrix[i][i];
         }
     }
     Ok(out)
@@ -130,13 +166,25 @@ fn valid_hz(edge_m: f64) -> f64 {
     C0 / (ELEMENTS_PER_WAVELENGTH * edge_m.max(1e-6))
 }
 
-/// Triangles that belong to a source: facing the same way and near its piston.
+/// Triangles that belong to a field source: facing the same way and near its piston.
 fn triangles_of_source(mesh: &TriangleMesh, source: &SourcePatch) -> Vec<usize> {
+    triangles_near(
+        mesh,
+        source,
+        source.radius_m().max(1e-4) * 1.5 + mean_triangle_scale(mesh) * 0.75,
+    )
+}
+
+/// Triangles that carry a mouth's radiation load: facing the same way, centroid inside the
+/// piston (plus a small margin), so the mesh area stays near the opening's area.
+fn triangles_of_mouth(mesh: &TriangleMesh, source: &SourcePatch) -> Vec<usize> {
+    triangles_near(mesh, source, source.radius_m().max(1e-4) * 1.15)
+}
+
+fn triangles_near(mesh: &TriangleMesh, source: &SourcePatch, reach: f64) -> Vec<usize> {
     if source.outward == [0.0; 3] || source.area_m2 <= 0.0 {
         return Vec::new();
     }
-    let radius = source.radius_m().max(1e-4);
-    let reach = radius * 1.5 + mean_triangle_scale(mesh) * 0.75;
     let mut hits = Vec::new();
     for (index, (centroid, normal)) in mesh.centroids.iter().zip(mesh.normals.iter()).enumerate() {
         if dot(*normal, source.outward) < 0.5 {

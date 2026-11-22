@@ -238,6 +238,77 @@ pub fn with_fixed_radiation_loads(node: &AcousticNode, loads: &[Complex64]) -> A
     replace_radiation(node, loads, &mut index)
 }
 
+/// Effective radiation load for each mouth from a full impedance matrix and mouth volume
+/// velocities: `Z_eff[i] = (Z U)_i / U_i`. Tiny `U_i` keeps the self term `Z[i][i]`.
+pub fn effective_radiation_loads(z: &[Vec<Complex64>], openings: &[Complex64]) -> Vec<Complex64> {
+    let mut loads = Vec::with_capacity(z.len());
+    for (i, row) in z.iter().enumerate() {
+        let mut pressure = Complex64::new(0.0, 0.0);
+        for (j, &zij) in row.iter().enumerate() {
+            let u = openings.get(j).copied().unwrap_or_default();
+            pressure += zij * u;
+        }
+        let u_i = openings.get(i).copied().unwrap_or_default();
+        if u_i.norm() < 1e-18 {
+            loads.push(row.get(i).copied().unwrap_or_default());
+        } else {
+            loads.push(pressure / u_i);
+        }
+    }
+    loads
+}
+
+/// Solve a waveguide tree whose radiation leaves are terminated by the full mouth impedance
+/// matrix `z_rad` (DFS leaf order). Starts from the diagonal and iterates effective loads
+/// until the opening velocities settle (or eight passes). One mouth, or a diagonal matrix,
+/// matches [`with_fixed_radiation_loads`] in one step.
+pub fn solve_with_radiation_matrix(
+    node: &AcousticNode,
+    freq_hz: f64,
+    z_rad: &[Vec<Complex64>],
+    lossy: bool,
+    walls: &[Complex64],
+) -> WaveguideResult {
+    let n = z_rad.len();
+    if n == 0 {
+        return if lossy {
+            solve_with_walls(node, freq_hz, true, walls)
+        } else if walls.is_empty() {
+            solve(node, freq_hz)
+        } else {
+            solve_with_walls(node, freq_hz, false, walls)
+        };
+    }
+    let mut loads: Vec<Complex64> = (0..n)
+        .map(|i| z_rad[i].get(i).copied().unwrap_or_default())
+        .collect();
+    let mut solved = {
+        let rooted = with_fixed_radiation_loads(node, &loads);
+        solve_with_walls(&rooted, freq_hz, lossy, walls)
+    };
+    for _ in 0..8 {
+        if solved.openings.len() != n {
+            break;
+        }
+        let next = effective_radiation_loads(z_rad, &solved.openings);
+        let mut settled = true;
+        for (old, new) in loads.iter().zip(next.iter()) {
+            let scale = old.norm().max(new.norm()).max(1e-12);
+            if (old - new).norm() / scale > 1e-6 {
+                settled = false;
+                break;
+            }
+        }
+        loads = next;
+        let rooted = with_fixed_radiation_loads(node, &loads);
+        solved = solve_with_walls(&rooted, freq_hz, lossy, walls);
+        if settled {
+            break;
+        }
+    }
+    solved
+}
+
 fn replace_radiation(node: &AcousticNode, loads: &[Complex64], index: &mut usize) -> AcousticNode {
     match node {
         AcousticNode::Radiation { area_m2, flush } => {
