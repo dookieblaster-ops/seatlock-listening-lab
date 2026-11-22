@@ -49,9 +49,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-page-offer-5ade` (PR onto `main`). Level 3.
+- **Context:** `main` (PR #27 page offer merged). Level 3.
 
-**Done this session:** (1) Reviewed and merged PR #26 (CHK-BEM-8). (2) Page offer of `bem`: "Run the boundary-element outside" in its own worker (default seed 4), overlay vs everyday baffle; cancel button; README 5.6 / 14. Everyday `engineWorker` simulate stays `baffle`.
+**Done this session:** (1) Reviewed and merged PR #26 (CHK-BEM-8). (2) Page offer of `bem` (PR #27): "Run the boundary-element outside" in its own worker (default seed 4), overlay vs everyday baffle; cancel button; README 5.6 / 14. Everyday `engineWorker` simulate stays `baffle`. Merged to `main`.
 
 **Open, in order:** (1) Optional BEM: mutual mouth loads; true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
