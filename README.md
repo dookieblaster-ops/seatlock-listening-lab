@@ -169,6 +169,9 @@ docs/new-chat.md   paste for opening a fresh lead chat (section 1.4)
 AGENTS.md          pointer that sends coding agents to this file (CLAUDE.md imports it)
 start.sh           the one command the owner runs
 check.sh           the one command that runs every check
+.github/workflows/ Check on GitHub (same suite as check.sh) on every PR and push to main
+docs/backups.md    owner inspection: Actions, protect main, optional second backup remote
+tools/             cloud-check.sh; mirror-backup.sh (push all branches/tags to remote `backup`)
 engine/            Rust workspace
   crates/
     seatlock-core        constants, units, complex helpers, frequency grids, design types, errors
@@ -184,14 +187,13 @@ web/               TypeScript and React app
 catalog/           drivers/, exciters/, panels/, damping/, fills/, electronics/, printers/, stock/, materials.json
 targets/           quality targets
 designs/examples/  example designs used by checks and demos
-docs/              archives: older COMS.md threads and STATUS.md history
-tools/             cloud-check.sh: ./check.sh for Claude's cloud workspace (not for the owner)
+docs/              archives: older COMS.md threads and STATUS.md history; backups.md for the owner
 ```
 
 Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock-dsp` and `seatlock-rt` never depend on physics crates. Nothing under `engine/` depends on the browser except the two wrapper crates. You may merge or split crates if you keep that direction and record why.
 
 - `./start.sh` checks that the tools are installed and, if one is missing, prints the exact command to install it on Linux Mint. It builds the engine, installs web dependencies when needed, starts the app, and opens the browser. It must work from a fresh clone.
-- `./check.sh` runs formatting, lints, `cargo test --workspace`, the WebAssembly build, the TypeScript type check, unit tests, and one headless-browser test that opens the app and loads an example design.
+- `./check.sh` runs formatting, lints, `cargo test --workspace`, the WebAssembly build, the TypeScript type check, unit tests, and one headless-browser test that opens the app and loads an example design. GitHub Actions runs the same suite on every pull request and every push to `main` (`.github/workflows/check.yml`). Owner steps for Actions, protecting `main`, and an optional second backup remote are in `docs/backups.md`.
 
 ### 3.2 The engine's front door
 

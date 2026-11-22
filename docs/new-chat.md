@@ -30,8 +30,9 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test; optional high-ka lit-gap diagnosis only if it blocks
-2. Criton leftovers only if a source appears
+1. Owner backup clicks if still open (`docs/backups.md`: Actions, protect `main`, optional second remote)
+2. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test; optional high-ka lit-gap diagnosis only if it blocks
+3. Criton leftovers only if a source appears
 
 Already in: printed PLA η = 0.075 (Rothe 2021); varioShore Young’s 40 MPa (maker TDS); passive R/L/C tune, CTA-2034 Olive preference as the ranked score, preference scoring speedup, budget 8 in woofers, non-box page fields, BEM scaffold (CHK-BEM-1…10; true open mouths; mouth `Z_rad` matrix joined to waveguide including mutuals; page offer of `bem`; high-ka lit gap not geometry-only; re-entrant occupancy remesh) and `bem` radiation on the true outer shape (AABB seed or remesh), multi-source generator harden; C-Note MT and Criton 3TD-X vs ASR.
 

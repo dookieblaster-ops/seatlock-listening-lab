@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-22 (sourced PLA loss factor; varioShore Young’s from maker TDS)
+Updated: 2026-11-22 (GitHub Check workflow + owner backup inspection)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -67,6 +67,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Level 3 as a whole is not complete.** Done: the room estimate, the outside in 3D, the panel speaker, folded and tapered lines with their editor, and both halves of the Level 3 end-to-end check (the full 3D part of `folded-line` runs on request: it takes minutes). Not started: losses in the 3D model, the 3D wave views, coupled chambers with loops, fill, passive radiators, drivers mounted on ducts, curved outer shapes, FIR filters, corrections C5, C6, C7, and C10, the Level 3 optimizer, real exciters and panel materials in the catalog, and the `folded-line` half of the end-to-end check. The list with details is in the newest handoff in `COMS.md`.
 - **Laptop:** `./start.sh` runs to the end on the owner's Linux Mint laptop (owner, 2026-11-10). `./check.sh` itself has not been run on that machine (owner asked agents to cover it from the cloud). The same suite via `tools/cloud-check.sh` passed most recently 2026-11-17 (engine 257, browser 44, stable 1.100).
 - **Agent coordination:** each chat is a session that starts from the newest handoff in `COMS.md` (README section 1.4). The paste for a new chat is in `docs/new-chat.md`. No claude.ai project is needed. Lead sessions may be Claude or Cursor cloud; the newest handoff in `COMS.md` is the source of truth for what to do next. Older COMS threads are in `docs/coms-archive.md`.
+- **Version backups / Check on GitHub** (Cursor, 2026-11-22). `.github/workflows/check.yml` runs `./check.sh` on every PR and push to `main`. `tools/mirror-backup.sh` pushes all branches/tags to a remote named `backup` once the owner adds it. Owner inspection steps (enable Actions, protect `main`, optional second remote) are in `docs/backups.md`. Waiting on the owner for those clicks; the agent cannot turn on Actions or branch protection from this token (403 / Pro for rulesets on private repos).
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
@@ -95,6 +96,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 5. Panel speaker open items and the rest of Level 3 (README section 12).
 0b. LCM track: curves, BMR scale, self-check ~25 %, tilt placed; optional shrink self-check further.
 6. Owner questions waiting: 2 (playback hardware), 6 (panel material, wall distance, in-room tilt), 8 (depth-scanning phone).
+7. Owner inspection (docs/backups.md): enable Actions; protect `main` (no force-push / no delete; require `./check.sh` if GitHub allows); optional second private backup repo URL for remote `backup`.
 
 ## What has been verified
 
@@ -146,6 +148,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-22, Cursor cloud (lead review of PR #29): accepted CHK-BEM-10; open apertures keep CHK-BEM-8/9. Re-ran open_apertures 2 + sim bem 8 (~161 s) + clippy `-D warnings` on bem/sim/acoustics; merged to `main`. Full `tools/cloud-check.sh` not re-run this turn.
 - 2026-11-22, Cursor cloud (lead): BEM remesh for re-entrant shells. `mesh_outer_shape` keeps the AABB seed when star-convex; otherwise occupancy remesh. L-shape that the seed refused now remeshes; boxes still seed. `seatlock-bem` outer_shape 4 + open_apertures 2; `seatlock-sim --test bem` 8 (~148 s); clippy `-D warnings` on bem/sim/acoustics. Full `tools/cloud-check.sh` not re-run this turn.
 - 2026-11-22, Cursor cloud (lead): sourced printed-PLA loss factor η = 0.075 (Rothe et al. Materials 2021 Table 7 middle of 0.055–0.095) on `pla` and `pla-printed`; varioShore Young’s 40 MPa from colorFabb TDS 2023-11-28 (was derived 4.09 MPa); soft TPU loss kept at Irvine rubber 0.10 (Irska Z-SEMIFLEX tanδ 0.26 at 25 °C rejected — that filament’s Tα is near room temp). Wall spring check 20 Hz bound 0.02 dB. `seatlock-sim --test walls` 10 + `materials` 5; clippy `-D warnings` on sim/acoustics. Full `tools/cloud-check.sh` not re-run this turn.
+- 2026-11-22, Cursor cloud (lead): GitHub Actions Check workflow + `docs/backups.md` + `tools/mirror-backup.sh`. Waiting on owner to enable Actions / protect main / optional backup remote URL.
 - 2026-11-22, Cursor cloud (lead): page offer of `bem` — "Run the boundary-element outside" in its own worker, overlay vs baffle; everyday path unchanged. `e2e/bem.spec.ts` passed (~22 s); typecheck + vite build ok.
 - 2026-11-17, Cursor cloud (owner: run what's slated for the laptop): laptop not linked from this session; ran `tools/cloud-check.sh` (same steps as `./check.sh`). All checks passed: engine 257, browser 44, stable 1.100 (~26 min).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).

@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-22 — Cursor — Handoff: start here. Soft-TPU DMA / lit-gap / Criton next
+### 2026-11-22 — Cursor — Handoff: start here. Owner backup clicks, then soft-TPU / lit-gap
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (PR #31 sourced PLA damping merged). Level 3.
+- **Context:** branch `cursor/vc-backups-ci-5fc9` (PR onto `main`). Level 3.
 
-**Done this session:** Printed PLA loss factor η = 0.075 sourced from Rothe et al. Materials 2021 Table 7 (middle of six FFF PLA beam fits 0.055–0.095) on `catalog/materials.json` `pla` and `catalog/panels/pla-printed.json`. varioShore Young’s set to 40 MPa from colorFabb TDS 2023-11-28 foamed print (was derived 4.09 MPa). Soft TPU core loss kept at Irvine rubber 0.10 — Irska Z-SEMIFLEX DMTA tanδ 0.26 at 25 °C not used (that filament’s Tα is near room temp). Wall spring check: 10 Hz within 0.01 dB, 20 Hz within 0.02 dB. Solid PLA wall peak on `sealed-test` ~1.89 dB (was ~5.3 dB under assumed η = 0.02); varioShore core resonance ~243 Hz / ~2.1 dB (was ~137 Hz / ~9 dB under soft derived E). PR #31 merged to `main`.
+**Done this session:** Version-control backups package. `.github/workflows/check.yml` runs `./check.sh` on every PR and push to `main` (CI installs Playwright with `--with-deps`). `docs/backups.md` is the owner inspection checklist (enable Actions, protect `main`, optional second remote). `tools/mirror-backup.sh` pushes `--all` and `--tags` to a remote named `backup` once added. README layout + check bullet updated. Soft-TPU DMA and BEM lit-gap unchanged.
 
-**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Owner: enable Actions + protect `main` + optional backup remote URL (`docs/backups.md`). After Actions is on, confirm the Check is green. (2) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (3) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (4) Criton leftovers only if a source appears. (5) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9/10. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. PLA η is one constant (Rothe also shows frequency dependence). Open-aperture collar is a first cut. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Agent cannot set branch protection / Actions permissions from this token (403; private rulesets need GitHub Pro). Do not put tokens in chat — owner pastes only a backup **repo URL**. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-sim --release --test walls` 10 passed; `materials` 5 passed; clippy `-D warnings` on seatlock-sim / seatlock-acoustics. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `tools/mirror-backup.sh` correctly refuses when remote `backup` is missing. Workflow and docs reviewed in-repo; full `./check.sh` / Actions not yet run (needs owner to allow Actions).
 
-**Next step:** soft-TPU DMA when a source appears, or high-ka lit-gap only if it blocks.
+**Next step:** wait for owner Actions / protection / backup-URL reply; then confirm green Check and wire `backup` if a URL was given. Product queue resumes at soft-TPU DMA or lit-gap.
+
+### 2026-11-22 — Cursor — Handoff: Soft-TPU DMA / lit-gap / Criton next (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (PR #31 sourced PLA damping merged). Level 3. Superseded by backups handoff above.
+
+**Done this session:** Printed PLA η = 0.075; varioShore Young’s 40 MPa. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-22 — Cursor — Handoff: PLA damping / lit-gap next (superseded)
 
@@ -434,6 +444,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: GitHub Check workflow + backup inspection docs landed (owner clicks still open).
 - 2026-11-22: PR #31 sourced PLA damping (η = 0.075) and varioShore Young’s (40 MPa) merged to `main`.
 - 2026-11-22: Printed PLA loss factor sourced (Rothe 2021 η = 0.075); varioShore Young’s from maker TDS (40 MPa foamed).
 - 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.

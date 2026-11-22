@@ -48,7 +48,11 @@ echo "==> web checks"
   npm run typecheck
   npm run test
   npm run build
-  npx playwright install chromium
+  if [[ -n "${CI:-}" ]]; then
+    npx playwright install --with-deps chromium
+  else
+    npx playwright install chromium
+  fi
   npm run test:e2e
 )
 
