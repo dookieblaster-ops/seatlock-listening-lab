@@ -49,17 +49,27 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-open-mouths-596c` (CHK-BEM-10). Level 3.
+- **Context:** `main` (PR #29 CHK-BEM-10 reviewed and merged). Level 3.
 
-**Done this session:** CHK-BEM-10 true open mouths. Outer BEM mesh cuts each directed source as an exact-area aperture disk (skin removed, collar keeps the surface closed); mouth `Z_rad` and field transfer drive those disks. README 5.6 / 2.6 / §13 and STATUS updated. Prior: CHK-BEM-9 mutual loads on `main`.
+**Done this session:** Reviewed and merged PR #29 (CHK-BEM-10 true open mouths). Outer BEM mesh cuts each directed source as an exact-area aperture disk (skin removed, collar keeps the surface closed); mouth `Z_rad` and field transfer drive those disks. CHK-BEM-8/9 still pass under open apertures. README 5.6 / 2.6 / §13 already true on the branch.
 
 **Open, in order:** (1) Optional BEM: remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8/9/10. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — keep `bem` off the everyday path. Open-aperture collar is a first cut (coarse face grids leave a polygonal rim). Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-bem --release --test open_apertures` 2 passed; `cargo test -p seatlock-sim --release --test bem` 8 passed (~159 s); clippy `-D warnings` on seatlock-bem / seatlock-sim / seatlock-acoustics. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-bem --release --test open_apertures` 2 passed; `cargo test -p seatlock-sim --release --test bem` 8 passed (~161 s); clippy `-D warnings` on seatlock-bem / seatlock-sim / seatlock-acoustics. Full `tools/cloud-check.sh` not re-run this turn.
 
 **Next step:** remesh for re-entrant shells, or PLA/TPU damping when a source appears.
+
+### 2026-11-22 — Cursor — Handoff: Remesh / PLA damping next (superseded; PR #29)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-open-mouths-596c` (PR #29). **Merged to `main` by lead 2026-11-22.**
+
+**Done this session:** CHK-BEM-10 true open mouths. Superseded by the review handoff above.
+
+**Next step:** none (merged).
 
 ### 2026-11-22 — Cursor — Handoff: True openings / PLA damping next (superseded)
 
@@ -404,6 +414,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: PR #29 CHK-BEM-10 (true open mouths) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-10 true open mouths (exact-area aperture disks cut into the outer BEM mesh).
 - 2026-11-22: PR #28 CHK-BEM-9 (mutual BEM mouth loads) reviewed and merged to `main`.
 - 2026-11-22: CHK-BEM-9 mutual BEM mouth loads joined to the waveguide network.
