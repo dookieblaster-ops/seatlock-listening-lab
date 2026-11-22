@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/vc-backups-ci-5fc9` (PR onto `main`). Level 3.
+- **Context:** `main` (PR #32 Check workflow + backups docs merged). Level 3.
 
 **Done this session:** Version-control backups package. `.github/workflows/check.yml` runs `./check.sh` on every PR and push to `main` (CI installs Playwright with `--with-deps`). `docs/backups.md` is the owner inspection checklist (enable Actions, protect `main`, optional second remote). `tools/mirror-backup.sh` pushes `--all` and `--tags` to a remote named `backup` once added. README layout + check bullet updated. Soft-TPU DMA and BEM lit-gap unchanged.
 
