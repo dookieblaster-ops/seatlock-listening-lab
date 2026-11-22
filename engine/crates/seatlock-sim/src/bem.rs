@@ -5,7 +5,8 @@
 use num_complex::Complex64;
 use seatlock_acoustics::BaffleRadiation;
 use seatlock_bem::{
-    field_pressure, mean_edge_length, mesh_from_aabb_seed, NeumannSystem, TriangleMesh,
+    field_pressure, mean_edge_length, mesh_from_aabb_seed, mesh_with_open_apertures, MouthAperture,
+    NeumannSystem, TriangleMesh,
 };
 use seatlock_core::constants::C0;
 use seatlock_core::registry::{
@@ -22,20 +23,22 @@ pub const SHAPE_MESH_NOTE: &str = "Boundary-element outside: the mesh follows th
      outer shape from a bounding-box seed; deeply re-entrant skins are not yet remeshed.";
 pub const CHIEF_NOTE: &str = "Boundary-element outside: CHIEF interior points keep irregular \
      frequencies nonsingular on constant elements.";
-pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are rigid patches that \
-     move, not true mouths.";
+pub const OPENINGS_NOTE: &str = "Boundary-element outside: openings are true open apertures \
+     cut into the outer mesh (exact-area disks), not rigid skin patches.";
 pub const NETWORK_NOTE: &str = "Boundary-element outside: each mouth's radiation impedance \
      matrix from the mesh (self and mutual) replaces the analytic radiation loads in the \
      detailed air network.";
+/// Rim segments on each open-aperture disk (CHK-BEM-10).
+const APERTURE_SEGMENTS: usize = 16;
 
 pub struct BemRadiation {
     pub subdivisions: u32,
 }
 
-/// Radiation impedance matrix of the mouth patches: `Z[i][j] = p_avg on mouth i` under unit
+/// Radiation impedance matrix of the mouth apertures: `Z[i][j] = p_avg on mouth i` under unit
 /// volume velocity on mouth j alone (others rigid). One matrix per frequency
 /// (`out[bin][i][j]`). Above the mesh frequency limit the diagonal is the analytic flush
-/// impedance and mutual terms are zero.
+/// impedance and mutual terms are zero. Mouths are true open apertures cut into the mesh.
 pub fn mouth_impedance_matrices(
     scene: &RadiationScene,
     mouths: &[SourcePatch],
@@ -47,22 +50,12 @@ pub fn mouth_impedance_matrices(
     if n == 0 || freqs_hz.is_empty() {
         return Ok(out);
     }
-    let size = scene.shape.outer_size_m()?;
-    let mesh = mesh_from_aabb_seed(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
+    let (mesh, mouth_tris) = open_mouth_mesh(scene, mouths, subdivisions)?;
     let edge = mean_edge_length(&mesh);
     let valid = valid_hz(edge);
-    // Mouth loads use a tight piston footprint (not the looser field-source reach), so the
-    // radiating area matches the opening used in the analytic compare.
-    let placements: Vec<Option<(Vec<usize>, Vec<Complex64>)>> = mouths
+    let placements: Vec<Option<Vec<Complex64>>> = mouth_tris
         .iter()
-        .map(|mouth| {
-            let triangles = triangles_of_mouth(&mesh, mouth);
-            unit_velocity(&mesh, &triangles).map(|v_n| (triangles, v_n))
-        })
-        .collect();
-    let triangles: Vec<Vec<usize>> = placements
-        .iter()
-        .map(|p| p.as_ref().map(|(t, _)| t.clone()).unwrap_or_default())
+        .map(|tris| unit_velocity(&mesh, tris))
         .collect();
 
     for (bin, &freq) in freqs_hz.iter().enumerate() {
@@ -78,14 +71,14 @@ pub fn mouth_impedance_matrices(
         }
         let system = NeumannSystem::assemble(&mesh, freq)?;
         for (j, placement) in placements.iter().enumerate() {
-            let Some((_, v_n)) = placement else {
+            let Some(v_n) = placement else {
                 let k = 2.0 * std::f64::consts::PI * freq / C0;
                 out[bin][j][j] =
                     seatlock_acoustics::radiation_impedance(mouths[j].area_m2, true, k);
                 continue;
             };
             let p_surf = system.solve_velocity(v_n)?;
-            for (i, tris) in triangles.iter().enumerate() {
+            for (i, tris) in mouth_tris.iter().enumerate() {
                 if tris.is_empty() {
                     if i == j {
                         let k = 2.0 * std::f64::consts::PI * freq / C0;
@@ -99,6 +92,40 @@ pub fn mouth_impedance_matrices(
         }
     }
     Ok(out)
+}
+
+/// Outer-shape mesh with each mouth cut as an open aperture disk. Returns the mesh and the
+/// disk triangle indices per mouth.
+pub fn open_mouth_mesh(
+    scene: &RadiationScene,
+    mouths: &[SourcePatch],
+    subdivisions: u32,
+) -> Result<(TriangleMesh, Vec<Vec<usize>>), String> {
+    let size = scene.shape.outer_size_m()?;
+    let seed = mesh_from_aabb_seed(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
+    let apertures: Vec<MouthAperture> = mouths
+        .iter()
+        .filter(|m| m.area_m2 > 0.0 && m.outward != [0.0; 3])
+        .map(|m| MouthAperture {
+            position_m: m.position_m,
+            outward: m.outward,
+            radius_m: m.radius_m().max(1e-4),
+        })
+        .collect();
+    if apertures.is_empty() {
+        return Ok((seed, vec![Vec::new(); mouths.len()]));
+    }
+    let (mesh, disks) = mesh_with_open_apertures(&seed, &apertures, APERTURE_SEGMENTS)?;
+    // Map back onto the original mouth list (skipped empty mouths stay empty).
+    let mut out = vec![Vec::new(); mouths.len()];
+    let mut disk_i = 0;
+    for (i, mouth) in mouths.iter().enumerate() {
+        if mouth.area_m2 > 0.0 && mouth.outward != [0.0; 3] {
+            out[i] = disks[disk_i].clone();
+            disk_i += 1;
+        }
+    }
+    Ok((mesh, out))
 }
 
 /// Diagonal of [`mouth_impedance_matrices`] (self-impedance per mouth per frequency).
@@ -173,12 +200,6 @@ fn triangles_of_source(mesh: &TriangleMesh, source: &SourcePatch) -> Vec<usize> 
         source,
         source.radius_m().max(1e-4) * 1.5 + mean_triangle_scale(mesh) * 0.75,
     )
-}
-
-/// Triangles that carry a mouth's radiation load: facing the same way, centroid inside the
-/// piston (plus a small margin), so the mesh area stays near the opening's area.
-fn triangles_of_mouth(mesh: &TriangleMesh, source: &SourcePatch) -> Vec<usize> {
-    triangles_near(mesh, source, source.radius_m().max(1e-4) * 1.15)
 }
 
 fn triangles_near(mesh: &TriangleMesh, source: &SourcePatch, reach: f64) -> Vec<usize> {
@@ -303,7 +324,21 @@ impl RadiationModel for BemRadiation {
         if sources.is_empty() || points_m.is_empty() {
             return Ok(transfers);
         }
-        let (mesh, _edge, valid) = self.mesh_for(scene)?;
+        // Cut every finite directed source as an open aperture so pistons and mouths share the
+        // same exact-area disks (CHK-BEM-10). Empty / unplaced sources keep the baffle value.
+        let directed: Vec<SourcePatch> = sources
+            .iter()
+            .filter(|s| s.area_m2 > 0.0 && s.outward != [0.0; 3])
+            .cloned()
+            .collect();
+        let (mesh, disks) = if directed.is_empty() {
+            let (mesh, _edge, _valid) = self.mesh_for(scene)?;
+            (mesh, Vec::new())
+        } else {
+            open_mouth_mesh(scene, &directed, self.subdivisions)?
+        };
+        let edge = mean_edge_length(&mesh);
+        let valid = valid_hz(edge);
         let bins: Vec<usize> = (0..freqs_hz.len())
             .filter(|&bin| freqs_hz[bin] > 0.0 && freqs_hz[bin] <= valid)
             .collect();
@@ -311,9 +346,19 @@ impl RadiationModel for BemRadiation {
             return Ok(transfers);
         }
 
+        let mut disk_i = 0;
         let placements: Vec<Option<Vec<Complex64>>> = sources
             .iter()
-            .map(|source| unit_velocity(&mesh, &triangles_of_source(&mesh, source)))
+            .map(|source| {
+                if source.area_m2 > 0.0 && source.outward != [0.0; 3] {
+                    let tris = disks.get(disk_i).cloned().unwrap_or_default();
+                    disk_i += 1;
+                    unit_velocity(&mesh, &tris)
+                        .or_else(|| unit_velocity(&mesh, &triangles_of_source(&mesh, source)))
+                } else {
+                    None
+                }
+            })
             .collect();
 
         let total_steps = bins.len().max(1);

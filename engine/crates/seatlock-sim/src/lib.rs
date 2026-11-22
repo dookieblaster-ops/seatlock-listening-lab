@@ -437,8 +437,8 @@ pub fn simulate_with_progress(
     let mut node_pressures: std::collections::HashMap<usize, Vec<Vec<Complex64>>> =
         Default::default();
     // BEM mouth impedance matrices (self + mutual) for the waveguide network (README 2.6 / 5.6).
-    // Computed once when radiation is `bem` and the detailed model will use them; openings stay
-    // rigid patches.
+    // Computed once when radiation is `bem` and the detailed model will use them; mouths are
+    // open apertures cut into the outer mesh (CHK-BEM-10).
     let bem_mouth_z: Option<Vec<Vec<Vec<Complex64>>>> = if request.radiation == "bem" && !full_3d {
         let mouths: Vec<SourcePatch> = port_poses(design, outer.as_ref())
             .into_iter()
@@ -471,6 +471,7 @@ pub fn simulate_with_progress(
             match bem::mouth_impedance_matrices(&scene, &mouths, &freqs, subdivisions) {
                 Ok(z) => {
                     fidelity.ignored.push(bem::NETWORK_NOTE.to_string());
+                    fidelity.ignored.push(bem::OPENINGS_NOTE.to_string());
                     Some(z)
                 }
                 Err(err) => {

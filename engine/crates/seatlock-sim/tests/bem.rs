@@ -1,5 +1,6 @@
 //! The `bem` radiation model inside `simulate` (README section 5.6), including mouth
-//! radiation impedances joined to the waveguide network (CHK-BEM-8 / CHK-BEM-9).
+//! radiation impedances joined to the waveguide network (CHK-BEM-8 / CHK-BEM-9) and true
+//! open apertures (CHK-BEM-10).
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
@@ -7,7 +8,7 @@ use seatlock_acoustics::{
 };
 use seatlock_core::constants::{C0, RHO0};
 use seatlock_core::registry::{RadiationScene, SourcePatch};
-use seatlock_sim::bem::{self, NETWORK_NOTE};
+use seatlock_sim::bem::{self, NETWORK_NOTE, OPENINGS_NOTE};
 use seatlock_sim::{builtin, simulate, SimulateRequest, SimulateResult};
 use serde_json::{json, Value};
 use std::f64::consts::PI;
@@ -342,5 +343,81 @@ fn chk_bem_9_mutual_mouth_impedance_is_reciprocal_and_joins_the_network() {
         "mutual join left Z_in unchanged: diag={} full={} rel={moved}",
         a.z_in,
         b.z_in
+    );
+}
+
+/// CHK-BEM-10: mouths are true open apertures (exact-area disks cut into the outer mesh),
+/// not rigid skin patches. Disk area within 2 % of πr²; self-Z still within CHK-BEM-8 bounds;
+/// the fidelity label names open apertures; a vented waveguide run still joins mouth loads.
+#[test]
+fn chk_bem_10_open_apertures_match_mouth_area_and_keep_z_rad() {
+    let registry = builtin();
+    let fields = json!({
+        "width_m": 4.0,
+        "height_m": 4.0,
+        "depth_m": 4.0,
+        "wall_m": 0.02,
+        "edge_radius_m": 0.0
+    });
+    let shape = registry
+        .create_outer("box", fields.as_object().unwrap())
+        .expect("box");
+    let scene = RadiationScene {
+        shape: shape.as_ref(),
+        space: "full",
+        baffle_width_m: 4.0,
+        reference_m: [2.0, 0.0, 2.0],
+    };
+    let radius = 0.15;
+    let area = PI * radius * radius;
+    let mouth = SourcePatch {
+        position_m: [2.0, 0.0, 2.0],
+        outward: [0.0, -1.0, 0.0],
+        area_m2: area,
+    };
+    let (mesh, disks) = bem::open_mouth_mesh(&scene, &[mouth], 16).expect("open mesh");
+    assert_eq!(disks.len(), 1);
+    let disk_area: f64 = disks[0].iter().map(|&i| mesh.areas[i]).sum();
+    let area_err = (disk_area - area).abs() / area;
+    assert!(
+        area_err < 0.02,
+        "open aperture area {disk_area:.6} vs πr² {area:.6} (rel {area_err:.3})"
+    );
+
+    let ka = 0.10;
+    let freq = ka * C0 / (2.0 * PI * radius);
+    let table = bem::mouth_self_impedances(&scene, &[mouth], &[freq], 16).expect("Z_rad");
+    let bem_z = table[0][0];
+    let k = 2.0 * PI * freq / C0;
+    let analytic = radiation_impedance(area, true, k);
+    let re_err = (bem_z.re - analytic.re).abs() / analytic.re.max(1e-9);
+    let im_err = (bem_z.im - analytic.im).abs() / analytic.im.abs().max(1e-9);
+    assert!(bem_z.re > 0.0 && bem_z.im > 0.0, "Z_rad={bem_z}");
+    assert!(
+        (bem_z - analytic).norm() / analytic.norm().max(1e-12) > 1e-6,
+        "Z_rad matched analytic exactly; mesh hand-over swallowed the BEM solve"
+    );
+    assert!(
+        re_err < 0.35 && im_err < 0.25,
+        "ka={ka}: bem Z={bem_z:.4} analytic={analytic:.4} re_err={re_err:.3} im_err={im_err:.3}"
+    );
+
+    let freqs = [40.0, 80.0];
+    let bem = run_waveguide(&load_example("two-way-vented"), "bem", &freqs);
+    assert!(
+        bem.issues
+            .iter()
+            .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        bem.issues
+    );
+    let label = bem.fidelity.ignored.join(" ");
+    assert!(
+        label.contains("open aperture") || label.contains(OPENINGS_NOTE),
+        "open-aperture note missing: {label}"
+    );
+    assert!(
+        label.contains("radiation impedance") || label.contains(NETWORK_NOTE),
+        "network note missing: {label}"
     );
 }
