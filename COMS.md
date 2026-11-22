@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-22 — Cursor — Handoff: start here. PLA/TPU damping next
+### 2026-11-22 — Cursor — Handoff: start here. Page offer of bem / PLA damping next
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/bem-join-network-ff91` (PR onto `main`). Level 3.
+- **Context:** `main`, after review merge of PR #26 (CHK-BEM-8). Level 3.
 
-**Done this session:** CHK-BEM-8 — join BEM to the driver network. With `radiation: "bem"` + enclosure `waveguide`, each outside mouth's BEM self-impedance (`p_avg` under unit volume velocity on rigid patch triangles) replaces the analytic radiation leaf (`AcousticNode::FixedRadiation` / `with_fixed_radiation_loads`). Above the mesh limit, flush analytic Z. Mutual mouth loads left out. Lumped runs keep analytic end corrections and say so. Openings still rigid patches. Large-face patch at `ka = 0.25` within 35 % Re / 25 % Im of flush; vented `two-way-vented` woofer Z moves vs analytic mouths.
+**Done this session:** Reviewed PR #26 against README 2.6 / 5.4 / 5.6 / CHK-BEM-8. No defects found (self-`Z_rad` replaces the mouth leaf only; chamber-end `0.849*a` stays; openings remain rigid patches; lumped keeps analytic). Re-ran: `cargo test -p seatlock-sim --release --test bem` 6 passed; `seatlock-bem` release suite; `chk_wg` 3; clippy `-D warnings` on acoustics/sim/bem. Fast-forwarded to `main`.
 
-**Open, in order:** (1) Real PLA/TPU damping — do not invent. (2) Criton leftovers only if a source appears. (3) Optional BEM leftovers: mutual mouth loads; true open mouths; remesh for re-entrant imported shells; high-ka lit-gap diagnosis only if it blocks; page offer of `bem`. (4) Optional: owner may change `preference_min` (default 5.0).
+**Open, in order:** (1) Optional BEM: **page offer of `bem`** (worker already passes `bem_subdivisions`; dense O(N²) — keep off the everyday path). Then mutual mouth loads / true open mouths / remesh for re-entrant shells; high-ka lit-gap diagnosis only if it blocks. (2) Real PLA/TPU damping — do not invent (needs a source: tap test / DMA / published loss factor). (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-2/3/4/5/6/7/8. Do not claim curved or continuous linear closes the ka≳1 lit gap. Do not switch the default solve to Burton–Miller on constant elements. Dense O(N²) — a worker when the page is wired; do not make `bem` the everyday radiation. Openings remain rigid patches. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-sim --release --test bem` 6 passed; clippy `-D warnings` on seatlock-acoustics + seatlock-sim. Full cloud-check not re-run this turn.
+**Last check:** as above on Cursor cloud (pinned 1.99.1). Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** real PLA/TPU damping when a source appears; otherwise Criton leftovers or optional BEM polish.
+**Next step:** wire `bem` on the page (compare overlay like exterior), or PLA/TPU damping when a source appears.
+
+### 2026-11-22 — Cursor — Handoff: PLA/TPU damping next (merged)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/bem-join-network-ff91` (PR #26). **Merged to `main` by lead 2026-11-22.**
+
+**Done this session:** CHK-BEM-8 — join BEM to the driver network. Superseded by the review handoff above.
+
+**Next step:** none (merged).
 
 ### 2026-11-19 — Cursor — Handoff: Join BEM to network next (superseded)
 
@@ -360,6 +370,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-22: PR #26 CHK-BEM-8 (BEM mouth self-`Z_rad` joined to waveguide) reviewed and merged to `main`.
 - 2026-11-19: CHK-BEM-7 spherical-triangle BEM; high-ka lit gap placed as not geometry-only.
 - 2026-11-19: PR #25 discontinuous linear BEM (CHK-BEM-6) reviewed and merged to `main`.
 - 2026-11-18: Discontinuous linear BEM (CHK-BEM-6); high-ka rigid-sphere gap placed as faceted geometry.

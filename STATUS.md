@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-22 (CHK-BEM-8: BEM mouth Z_rad joined to waveguide network)
+Updated: 2026-11-22 (CHK-BEM-8 reviewed and merged; page offer of bem next)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -83,7 +83,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
 0p. Helper stack #12–#19 merged; CHK-BEM-2 and CHK-BEM-3 on `main` 2026-11-16. High-ka rigid-sphere vs smooth series placed as a constant-element limit.
-0. **Next:** Real PLA/TPU damping — do not invent. Optional: mutual BEM mouth loads; true open mouths; high-ka rigid lit-gap diagnosis (not geometry — CHK-BEM-7); Burton–Miller only on a basis that keeps the dipole; page offer of `bem`. Multi-source generator harden is in.
+0. **Next:** Page offer of `bem` (compare overlay; keep off the everyday path). Then mutual BEM mouth loads / true open mouths / remesh; high-ka lit-gap diagnosis only if it blocks. Real PLA/TPU damping — do not invent (needs a source). Multi-source generator harden and CHK-BEM-8 join are in.
 1. Research plan details as above.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -136,6 +136,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-19, Cursor cloud (lead review of PR #25): accepted CHK-BEM-6; clarified crate docs (flat linear does not close high-ka gap). Re-ran bem 19 + sim bem 3 + clippy `-D warnings` + wasm check; fast-forwarded to `main`.
 - 2026-11-19, Cursor cloud (lead): CHK-BEM-7 spherical-triangle CBIE + continuous-linear probe. High-ka lit gap is not chordal geometry. Next: join network or formulation diagnosis.
 - 2026-11-22, Cursor cloud (lead): BEM mouth self-`Z_rad` joined to waveguide (CHK-BEM-8). `FixedRadiation` + `mouth_self_impedances`; openings still rigid; mutual loads later. `seatlock-sim --test bem` 6 passed; clippy on touched crates.
+- 2026-11-22, Cursor cloud (lead review of PR #26): accepted CHK-BEM-8; mouth leaf only replaced (chamber-end correction kept). Re-ran sim bem 6 + bem suite + chk_wg 3 + clippy `-D warnings` on acoustics/sim/bem; fast-forwarded to `main`.
 - 2026-11-17, Cursor cloud (owner: run what's slated for the laptop): laptop not linked from this session; ran `tools/cloud-check.sh` (same steps as `./check.sh`). All checks passed: engine 257, browser 44, stable 1.100 (~26 min).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).
 
