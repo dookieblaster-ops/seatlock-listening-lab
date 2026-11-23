@@ -49,9 +49,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (living wiki landed 2026-11-23). Level 3.
+- **Context:** `main` (wiki agent-duty README update). Level 3.
 
-**Done this session:** Living software wiki under `docs/wiki/` (Home portal, How-to-maintain, article template, Architecture, Data-flow, Extension-points, Checks-and-CI, one article per engine crate, Web-app, Catalog-and-designs). README §1.2 / §3.1 and AGENTS.md link it. Spec stays in README; wiki is structure only. Owner backup clicks from PR #32 still open.
+**Done this session:** README 1.3 / 1.4 now require leads and helpers to keep `docs/wiki/` true in the same commit as structure changes (How-to-maintain echoes it). Earlier: living wiki under `docs/wiki/`. Owner backup clicks from PR #32 still open.
 
 **Open, in order:** (1) Owner: enable Actions + protect `main` + optional backup remote URL (`docs/backups.md`). (2) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (3) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (4) Criton leftovers only if a source appears. (5) Optional: owner may change `preference_min` (default 5.0). Keep wiki articles true when architecture changes.
 

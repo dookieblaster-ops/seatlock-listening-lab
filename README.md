@@ -49,6 +49,7 @@ A simulator is worth using only if its numbers can be trusted. These rules exist
 - **Label every result with the model that produced it**, and list what that model could not represent (section 5.8).
 - **Keep physics out of the interface and the interface out of the physics** (section 3).
 - **Keep this README true.** When the owner changes what the product is, or you find the specification wrong, change the README in the same commit as the code and note it in `STATUS.md`.
+- **Keep the software wiki true.** `docs/wiki/` explains how each part of the software fits together (start at `docs/wiki/Home.md`; maintain rules in `docs/wiki/How-to-maintain.md`). When you add, move, rename, or change the responsibility of a crate, module, worker, or data flow, update the matching wiki article in the same commit. Do not leave structure docs for a later session.
 
 ### 1.4 Sessions, handoffs, and helpers
 
@@ -56,8 +57,8 @@ Each chat is a separate session with no memory of the others. Sessions pass work
 
 | Role | Who | Job |
 | --- | --- | --- |
-| Lead architect and engineer | A Claude session, or a Cursor cloud agent (from 2026-11-14) | Owns architecture, cross-track order, and changes to this specification, and writes the code. Ends every session with a handoff in `COMS.md`. Assigns work to helpers and reviews and merges their branches. Pushes finished lead work to `main`. |
-| Helper | Another coding agent: a second Claude chat, or a Cursor agent on a branch | Implements the assignment the lead posted, on its own branch. Runs the checks, keeps commits small, and reports only verified results. Escalates gaps in the spec to the lead through `COMS.md`. Never merges into `main`. |
+| Lead architect and engineer | A Claude session, or a Cursor cloud agent (from 2026-11-14) | Owns architecture, cross-track order, and changes to this specification, and writes the code. Keeps `docs/wiki/` true when structure changes (section 1.3). Ends every session with a handoff in `COMS.md`. Assigns work to helpers and reviews and merges their branches. Pushes finished lead work to `main`. |
+| Helper | Another coding agent: a second Claude chat, or a Cursor agent on a branch | Implements the assignment the lead posted, on its own branch. Runs the checks, keeps commits small, updates wiki articles for parts that assignment changes, and reports only verified results. Escalates gaps in the spec to the lead through `COMS.md`. Never merges into `main`. |
 
 Only one lead session works on `main` at a time. When a task needs a stronger model than the one in use, the lead tells the owner and posts a brief in `COMS.md` for that session; `STATUS.md` records which work is held for it.
 

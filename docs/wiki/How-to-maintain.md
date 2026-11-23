@@ -12,6 +12,8 @@ Keep a **living**, **parsable** map of the software. The README remains the spec
 
 ## Rules
 
+Maintaining this wiki is an **agent responsibility** (README section 1.3 and the lead/helper jobs in section 1.4), not an optional extra.
+
 1. **One job per article.** Prefer a new page over a mega-page.
 2. **Keep the table at the top.** Every article starts with the Kind / Summary / Code / Spec / Updated / Status table so tools and humans can scan it.
 3. **Update `Updated` when you change meaning**, not for typo-only edits.
@@ -19,7 +21,7 @@ Keep a **living**, **parsable** map of the software. The README remains the spec
 5. **Do not copy the README.** Summarize and link section numbers for physics, checks, and product rules.
 6. **Do not invent behavior.** If you are unsure, read the code or STATUS; leave a “Status: stub” note rather than guessing.
 7. **Add a Home row** when you add an article.
-8. **After a session that changes architecture**, update the affected wiki pages before the handoff (same rule as STATUS / COMS).
+8. **After a session that changes architecture**, update the affected wiki pages before the handoff (same rule as STATUS / COMS). Do not leave wiki drift for a later session.
 
 ## Parsable conventions
 

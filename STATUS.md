@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-23 (living software wiki under docs/wiki/)
+Updated: 2026-11-23 (wiki maintenance is an agent duty in README 1.3 / 1.4)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -68,7 +68,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 - **Laptop:** `./start.sh` runs to the end on the owner's Linux Mint laptop (owner, 2026-11-10). `./check.sh` itself has not been run on that machine (owner asked agents to cover it from the cloud). The same suite via `tools/cloud-check.sh` passed most recently 2026-11-17 (engine 257, browser 44, stable 1.100).
 - **Agent coordination:** each chat is a session that starts from the newest handoff in `COMS.md` (README section 1.4). The paste for a new chat is in `docs/new-chat.md`. No claude.ai project is needed. Lead sessions may be Claude or Cursor cloud; the newest handoff in `COMS.md` is the source of truth for what to do next. Older COMS threads are in `docs/coms-archive.md`.
 - **Version backups / Check on GitHub** (Cursor, 2026-11-22). `.github/workflows/check.yml` runs `./check.sh` on every PR and push to `main`. `tools/mirror-backup.sh` pushes all branches/tags to a remote named `backup` once the owner adds it. Owner inspection steps (enable Actions, protect `main`, optional second remote) are in `docs/backups.md`. Waiting on the owner for those clicks; the agent cannot turn on Actions or branch protection from this token (403 / Pro for rulesets on private repos).
-- **Living software wiki** (Cursor, 2026-11-23). `docs/wiki/Home.md` indexes Wikipedia-style articles for architecture, data flow, each engine crate, the web app, catalog, checks/CI, and extension points. Template + maintain rules in `docs/wiki/`. Spec stays in README; wiki is structure/responsibility only.
+- **Living software wiki** (Cursor, 2026-11-23). `docs/wiki/Home.md` indexes Wikipedia-style articles for architecture, data flow, each engine crate, the web app, catalog, checks/CI, and extension points. Template + maintain rules in `docs/wiki/`. Spec stays in README; wiki is structure/responsibility only. README 1.3 / 1.4 make keeping the wiki true a lead and helper duty (same commit as structure changes).
 - The specification was rewritten on 2026-11-09, when the owner redefined the product as a speaker design simulator (README section 2).
 - Later on 2026-11-09 the owner widened it: the cabinet's outside may be any novel shape, and the lab must take novel radiators such as rear-facing DML panels. The README gained extension points (3.3), open outer shapes and mounts (6.2), radiators as a family with surface sources (5.6), DML panels (5.9), a simple room estimate (5.10), correction feature C10, and the checks CHK-EXT-1, CHK-EXT-2, CHK-RAD-1, CHK-PLATE-1, CHK-ROOM-1.
 - The earlier work is kept on the `legacy` branch: a native Android shell that played silence from a Rust engine. It is not this product. Do not port from it.
