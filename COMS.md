@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-23 — Cursor — Handoff: start here. Owner backup clicks, then soft-TPU / lit-gap
+### 2026-11-23 — Cursor — Handoff: start here. Soft-TPU / lit-gap; owner backup leftovers
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (wiki agent-duty README update). Level 3.
+- **Context:** `main` (rustfmt Check fix). Level 3.
 
-**Done this session:** README 1.3 / 1.4 now require leads and helpers to keep `docs/wiki/` true in the same commit as structure changes (How-to-maintain echoes it). Earlier: living wiki under `docs/wiki/`. Owner backup clicks from PR #32 still open.
+**Done this session:** Attached repo, fetched all branches, pulled `main`. No open helper PRs. Actions was already on; every Check run failed on rustfmt in `outer_shape_mesh.rs` and `bem.rs` — formatted and pushed. Clippy `-D warnings` clean on the fix. Owner Actions enable click is done (no further action). Protect-`main` needs GitHub Pro on this private repo — skip unless owner wants Pro. Optional second backup remote URL still open.
 
-**Open, in order:** (1) Owner: enable Actions + protect `main` + optional backup remote URL (`docs/backups.md`). (2) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (3) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (4) Criton leftovers only if a source appears. (5) Optional: owner may change `preference_min` (default 5.0). Keep wiki articles true when architecture changes.
+**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). Keep wiki articles true when architecture changes.
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** wiki pages reviewed in-repo (markdown only). Full `./check.sh` / Actions not re-run this turn.
+**Last check:** `cargo fmt --check` ok; `cargo clippy --workspace --all-targets -- -D warnings` ok (pinned 1.99.1). Full `./check.sh` / Actions re-run expected on this push.
 
-**Next step:** wait for owner Actions / backup-URL reply; product queue resumes at soft-TPU DMA or lit-gap.
+**Next step:** product queue at soft-TPU DMA (only with a source) or lit-gap if it blocks; ask owner only for backup URL / Pro if they care.
+
+### 2026-11-23 — Cursor — Handoff: Owner backup clicks, then soft-TPU / lit-gap (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (wiki agent-duty README update). Level 3. Superseded by rustfmt/Actions handoff above.
+
+**Done this session:** README 1.3 / 1.4 wiki duty. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-22 — Cursor — Handoff: Owner backup clicks, then soft-TPU / lit-gap (superseded)
 
@@ -454,8 +464,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-23: GitHub Actions confirmed on; rustfmt fixed so Check can pass; protect-`main` still Pro-gated; optional backup URL still open.
 - 2026-11-23: Living software wiki at `docs/wiki/` (structure articles; README remains the spec).
-- 2026-11-22: GitHub Check workflow + backup inspection docs landed (owner clicks still open).
+- 2026-11-22: GitHub Check workflow + backup inspection docs landed (Actions later confirmed on).
 - 2026-11-22: PR #31 sourced PLA damping (η = 0.075) and varioShore Young’s (40 MPa) merged to `main`.
 - 2026-11-22: Printed PLA loss factor sourced (Rothe 2021 η = 0.075); varioShore Young’s from maker TDS (40 MPa foamed).
 - 2026-11-22: PR #30 BEM remesh for re-entrant shells reviewed and merged to `main`.

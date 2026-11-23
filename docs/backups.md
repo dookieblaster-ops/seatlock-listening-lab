@@ -12,13 +12,15 @@ This page is for the owner. Agents keep the checks and the workflow file true; y
 
 Open the repo on GitHub while signed in as the owner.
 
-### 1. Allow Actions (required for the Check)
+### 1. Allow Actions (required for the Check) — done 2026-11-23
+
+Actions is already on: the Check workflow runs on every push and pull request. You do not need to change this unless you later turn Actions off.
+
+If you ever need to re-enable it:
 
 1. **Settings → Actions → General**
 2. Under "Actions permissions", choose **Allow all actions and reusable workflows** (or at least allow actions created by GitHub).
 3. Save.
-
-Without this, the Check workflow never runs.
 
 ### 2. Protect `main` (strongly recommended)
 
