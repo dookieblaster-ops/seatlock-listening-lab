@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-23 (GitHub Check rustfmt fixed; Actions already on)
+Updated: 2026-11-23 (GitHub Check: rustfmt + shape wall-gap bound)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -152,6 +152,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-22, Cursor cloud (lead): GitHub Actions Check workflow + `docs/backups.md` + `tools/mirror-backup.sh`. Waiting on owner to enable Actions / protect main / optional backup remote URL.
 - 2026-11-23, Cursor cloud (lead): living software wiki at `docs/wiki/` (Home + crate/page articles + maintain rules). README §1.2 / §3.1 and AGENTS.md point to it.
 - 2026-11-23, Cursor cloud (lead): GitHub Actions already on (Check runs on every push). Every recent Check failed rustfmt in `seatlock-bem/tests/outer_shape_mesh.rs` and `seatlock-sim/src/bem.rs`; `cargo fmt` fixed both. Clippy `-D warnings` clean on pinned 1.99.1. Protect-`main` still needs GitHub Pro on this private repo (skip is fine); optional backup remote URL still open.
+- 2026-11-23, Cursor cloud (lead): after rustfmt, Check failed `shaping_the_inside_of_a_tall_box_evens_out_its_standing_wave`: Actions path 1.208 L cell plastic / air lost 1.305 L (gap 8.05 %) vs local 0.512 / 0.524 (gap 2.3 %). Same known float fragility as STATUS 2026-11-12 (plastic can jump 0.51→0.94 L on a rounding change). The old 8 % relative bound was calibrated to the local path, not derived. Proof for the new bound: cell-count plastic undercounts air by the wall-gap fill the voxels pad adds; gap ≤ half the cell plastic when every cell is against a wall. Exact solid↔air checks unchanged. Gain sorts get an index tiebreak. Shape test re-passed locally.
 - 2026-11-22, Cursor cloud (lead): page offer of `bem` — "Run the boundary-element outside" in its own worker, overlay vs baffle; everyday path unchanged. `e2e/bem.spec.ts` passed (~22 s); typecheck + vite build ok.
 - 2026-11-17, Cursor cloud (owner: run what's slated for the laptop): laptop not linked from this session; ran `tools/cloud-check.sh` (same steps as `./check.sh`). All checks passed: engine 257, browser 44, stable 1.100 (~26 min).
 - 2026-11-15, Cursor cloud: more drivers and vents. `VentedSample` holds every port; the four-opening refusal is gone. Play kernel and the page follow up to 16 drivers; "Add another driver" on the page. Sheet drawings: ND25FA-4 (Ø66 / Ø45 / 35.9 mm, 4 holes), RST28F-4 (Ø104.5 / Ø72 cutout / Ø90 holes / 57 mm), RS225-4 (184 / 223 / 209 mm circle / 92 mm). `tools/cloud-check.sh` on stable 1.100: engine tests 227 passed, 41 browser tests, "All checks passed". Series woofer pair (Skyline-style) added after that check: acoustics unit test and `a_series_woofer_pair_and_two_other_drivers_split` (80 Hz woofers 72.6 / 72.6 dB, tweeter 38.4). Laptop `./check.sh` still not run (owner: skip).

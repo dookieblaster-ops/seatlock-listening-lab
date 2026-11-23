@@ -642,9 +642,11 @@ pub fn shape_inside(
             let g = shaper.back(&x, beta, &current.gradient);
             // Steps are sized by a typical large slope, not the single largest, which is
             // often one cell beside the driver.
-            let mut sizes: Vec<f64> = g.iter().map(|v| v.abs()).collect();
-            sizes.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            let scale = sizes[(sizes.len() * 9) / 10];
+            let mut sizes: Vec<(f64, usize)> =
+                g.iter().enumerate().map(|(i, v)| (v.abs(), i)).collect();
+            // Index tiebreak keeps the percentile pick stable when two slopes match.
+            sizes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap().then(a.1.cmp(&b.1)));
+            let scale = sizes[(sizes.len() * 9) / 10].0;
             step_count += 1;
             if scale > 0.0 {
                 let mut accepted = false;
@@ -703,7 +705,9 @@ pub fn shape_inside(
                 (gain > 0.0).then_some((gain, index))
             })
             .collect();
-        gains.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        // Index tiebreak: equal gains keep cell order so a finishing batch is not
+        // shuffled by platform float noise alone.
+        gains.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap().then(a.1.cmp(&b.1)));
         let mut trial = plastic.clone();
         let mut added = 0.0;
         for &(_, index) in gains.iter().take(batch) {
