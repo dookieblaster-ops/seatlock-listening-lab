@@ -23,6 +23,7 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 1. `README.md` — specification (sections 1–4 and 12 always; then the part you touch)
 2. `STATUS.md` — what exists, decisions, next steps summary
 3. `COMS.md` — newest handoff at the top of the active thread (start here)
+4. `docs/wiki/Home.md` — living software map (read articles for parts you change)
 
 `AGENTS.md` loads those three for Claude Code automatically.
 

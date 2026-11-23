@@ -4,9 +4,12 @@ The specification and the working rules for this repository are in `README.md`. 
 
 Then read `COMS.md`. Its newest handoff, at the top of the active thread, says what to do next (README section 1.4). The paste for opening a fresh chat is in `docs/new-chat.md`.
 
+Living software documentation (how each crate and the page fit together) is in `docs/wiki/Home.md`. Read the articles for parts you change, and keep them true in the same commit when architecture moves.
+
 The lines below make Claude Code load those files automatically. Other tools can ignore them.
 
 @README.md
 @STATUS.md
 @COMS.md
 @docs/new-chat.md
+@docs/wiki/Home.md

@@ -32,11 +32,11 @@ The owner designs speakers and directs this project in plain language. The owner
 
 ### 1.2 Every session
 
-1. Read this file, `STATUS.md`, and `COMS.md`. The newest handoff at the top of the active thread in `COMS.md` says what to do next (section 1.4).
+1. Read this file, `STATUS.md`, and `COMS.md`. The newest handoff at the top of the active thread in `COMS.md` says what to do next (section 1.4). For structure of a part you will change, also read the matching article under `docs/wiki/` (start at `docs/wiki/Home.md`).
 2. Run `./check.sh`. In Claude's cloud workspace, run `tools/cloud-check.sh`, which takes the same steps there (`STATUS.md`, "How the work is done"). If it fails before you have changed anything, repairing it comes first.
 3. Choose work using the level rule in section 12.
 4. Work in small commits. Every commit leaves `./check.sh` passing.
-5. Before you stop, update `STATUS.md`, post a handoff in `COMS.md` that the next session can start from without asking anyone, commit, and push.
+5. Before you stop, update `STATUS.md`, keep `docs/wiki/` true if architecture moved, post a handoff in `COMS.md` that the next session can start from without asking anyone, commit, and push.
 
 You start each session with no memory of the last one. Whatever is not in the repository is lost, so `STATUS.md` and the newest handoff have to be true at the end of every session.
 
@@ -171,6 +171,7 @@ start.sh           the one command the owner runs
 check.sh           the one command that runs every check
 .github/workflows/ Check on GitHub (same suite as check.sh) on every PR and push to main
 docs/backups.md    owner inspection: Actions, protect main, optional second backup remote
+docs/wiki/         living software wiki (how each part works; start at docs/wiki/Home.md)
 tools/             cloud-check.sh; mirror-backup.sh (push all branches/tags to remote `backup`)
 engine/            Rust workspace
   crates/
@@ -187,13 +188,14 @@ web/               TypeScript and React app
 catalog/           drivers/, exciters/, panels/, damping/, fills/, electronics/, printers/, stock/, materials.json
 targets/           quality targets
 designs/examples/  example designs used by checks and demos
-docs/              archives: older COMS.md threads and STATUS.md history; backups.md for the owner
+docs/              archives; backups.md; wiki/ living software documentation
 ```
 
 Dependencies point one way, from `seatlock-core` up to `seatlock-sim`. `seatlock-dsp` and `seatlock-rt` never depend on physics crates. Nothing under `engine/` depends on the browser except the two wrapper crates. You may merge or split crates if you keep that direction and record why.
 
 - `./start.sh` checks that the tools are installed and, if one is missing, prints the exact command to install it on Linux Mint. It builds the engine, installs web dependencies when needed, starts the app, and opens the browser. It must work from a fresh clone.
 - `./check.sh` runs formatting, lints, `cargo test --workspace`, the WebAssembly build, the TypeScript type check, unit tests, and one headless-browser test that opens the app and loads an example design. GitHub Actions runs the same suite on every pull request and every push to `main` (`.github/workflows/check.yml`). Owner steps for Actions, protecting `main`, and an optional second backup remote are in `docs/backups.md`.
+- Living software documentation (Wikipedia-style, parsable articles for each major part) lives in `docs/wiki/` — start at `docs/wiki/Home.md`. Keep it true when architecture changes; the README remains the product/physics specification.
 
 ### 3.2 The engine's front door
 
