@@ -49,7 +49,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/living-wiki-5fc9` (PR onto `main`). Level 3.
+- **Context:** `main` (living wiki landed 2026-11-23). Level 3.
 
 **Done this session:** Living software wiki under `docs/wiki/` (Home portal, How-to-maintain, article template, Architecture, Data-flow, Extension-points, Checks-and-CI, one article per engine crate, Web-app, Catalog-and-designs). README §1.2 / §3.1 and AGENTS.md link it. Spec stays in README; wiki is structure only. Owner backup clicks from PR #32 still open.
 
@@ -59,7 +59,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Last check:** wiki pages reviewed in-repo (markdown only). Full `./check.sh` / Actions not re-run this turn.
 
-**Next step:** merge wiki PR; wait for owner Actions / backup-URL reply; product queue resumes at soft-TPU DMA or lit-gap.
+**Next step:** wait for owner Actions / backup-URL reply; product queue resumes at soft-TPU DMA or lit-gap.
 
 ### 2026-11-22 — Cursor — Handoff: Owner backup clicks, then soft-TPU / lit-gap (superseded)
 
