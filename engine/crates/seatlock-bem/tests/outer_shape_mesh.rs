@@ -17,7 +17,12 @@ fn cylinder_inside(diameter: f64, length: f64, p: [f64; 3]) -> bool {
 
 /// Thick L-shaped solid: bottom bar and left upright. AABB centre sits in the missing corner.
 fn l_inside(size: [f64; 3], p: [f64; 3]) -> bool {
-    if p[0] <= 0.0 || p[0] >= size[0] || p[1] <= 0.0 || p[1] >= size[1] || p[2] <= 0.0 || p[2] >= size[2]
+    if p[0] <= 0.0
+        || p[0] >= size[0]
+        || p[1] <= 0.0
+        || p[1] >= size[1]
+        || p[2] <= 0.0
+        || p[2] >= size[2]
     {
         return false;
     }

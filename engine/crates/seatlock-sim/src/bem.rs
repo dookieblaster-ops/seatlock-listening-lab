@@ -105,8 +105,7 @@ pub fn open_mouth_mesh(
     subdivisions: u32,
 ) -> Result<(TriangleMesh, Vec<Vec<usize>>, OuterMeshKind), String> {
     let size = scene.shape.outer_size_m()?;
-    let (seed, kind) =
-        mesh_outer_shape(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
+    let (seed, kind) = mesh_outer_shape(size, subdivisions, |p| scene.shape.contains_cabinet(p))?;
     let apertures: Vec<MouthAperture> = mouths
         .iter()
         .filter(|m| m.area_m2 > 0.0 && m.outward != [0.0; 3])
