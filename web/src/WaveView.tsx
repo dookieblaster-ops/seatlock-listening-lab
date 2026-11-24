@@ -78,7 +78,8 @@ void main() {
 
 export function WaveView({ report, cabinet }: Props) {
   const host = useRef<HTMLDivElement>(null);
-  const [mode, setMode] = useState<Mode>(report.field.pulse ? "pulse" : "standing");
+  const hasPulse = Boolean(report.field.pulse && report.field.pulse.frames.length > 1);
+  const [mode, setMode] = useState<Mode>(hasPulse ? "pulse" : "standing");
   const [playing, setPlaying] = useState(true);
   const [threshold, setThreshold] = useState(0.12);
   const modeRef = useRef(mode);
@@ -87,7 +88,6 @@ export function WaveView({ report, cabinet }: Props) {
   const phaseRef = useRef(0);
   const frameRef = useRef(0);
 
-  const hasPulse = Boolean(report.field.pulse && report.field.pulse.frames.length > 1);
   const band = report.field.standing[0];
 
   useEffect(() => {
@@ -273,9 +273,16 @@ export function WaveView({ report, cabinet }: Props) {
           colorAttr.setXYZ(i, scratch.r, scratch.g, scratch.b);
           scaleAttr.setX(i, baseSize * (0.35 + 1.4 * mag));
         }
-      } else if (report.field.pulse) {
+      } else if (report.field.pulse && report.field.pulse.frames.length > 0) {
         const frames = report.field.pulse.frames;
-        const frame = frames[Math.min(Math.floor(frameRef.current), frames.length - 1)];
+        const index = Math.max(
+          0,
+          Math.min(Math.floor(frameRef.current || 0), frames.length - 1),
+        );
+        const frame = frames[index];
+        if (!frame || frame.length < count) {
+          return;
+        }
         const peak = Math.max(report.field.pulse.max_abs, 1e-12);
         for (let i = 0; i < count; i++) {
           const value = frame[i] / peak;
@@ -288,6 +295,21 @@ export function WaveView({ report, cabinet }: Props) {
           pressureColor(value, scratch);
           colorAttr.setXYZ(i, scratch.r, scratch.g, scratch.b);
           scaleAttr.setX(i, baseSize * (0.3 + 1.6 * mag));
+        }
+      } else {
+        // No usable pulse: paint the standing band so the canvas is never blank.
+        const peak = Math.max(band.max_abs, 1e-12);
+        for (let i = 0; i < count; i++) {
+          const value = band.re[i] / peak;
+          const mag = Math.abs(value);
+          if (mag < thresh) {
+            colorAttr.setXYZ(i, 0, 0, 0);
+            scaleAttr.setX(i, 0);
+            continue;
+          }
+          pressureColor(value, scratch);
+          colorAttr.setXYZ(i, scratch.r, scratch.g, scratch.b);
+          scaleAttr.setX(i, baseSize * (0.35 + 1.4 * mag));
         }
       }
       colorAttr.needsUpdate = true;
@@ -349,8 +371,11 @@ export function WaveView({ report, cabinet }: Props) {
       if (playingRef.current) {
         if (modeRef.current === "standing") {
           phaseRef.current += dt * 1.85;
-        } else if (report.field.pulse) {
-          frameRef.current = (frameRef.current + dt * 16) % report.field.pulse.frames.length;
+        } else {
+          const n = report.field.pulse?.frames.length ?? 0;
+          if (n > 0) {
+            frameRef.current = (frameRef.current + dt * 16) % n;
+          }
         }
       }
       paint();
