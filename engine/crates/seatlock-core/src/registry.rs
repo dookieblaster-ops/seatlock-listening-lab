@@ -305,9 +305,32 @@ pub struct SourcePatch {
     pub position_m: [f64; 3],
     pub outward: [f64; 3],
     pub area_m2: f64,
+    /// Cut an open aperture into the BEM outer mesh for this patch (driver holes and port
+    /// mouths). Wall vibration patches leave the skin closed and drive Neumann velocity on it.
+    pub open: bool,
 }
 
 impl SourcePatch {
+    /// A driver hole or port mouth: open in the outer mesh when the boundary-element model runs.
+    pub fn aperture(position_m: [f64; 3], outward: [f64; 3], area_m2: f64) -> Self {
+        Self {
+            position_m,
+            outward,
+            area_m2,
+            open: true,
+        }
+    }
+
+    /// A vibrating wall tile: closed skin, prescribed velocity only.
+    pub fn skin(position_m: [f64; 3], outward: [f64; 3], area_m2: f64) -> Self {
+        Self {
+            position_m,
+            outward,
+            area_m2,
+            open: false,
+        }
+    }
+
     /// Radius of the round piston with this patch's area.
     pub fn radius_m(&self) -> f64 {
         (self.area_m2.max(0.0) / std::f64::consts::PI).sqrt()

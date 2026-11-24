@@ -56,11 +56,7 @@ fn scene<'a>(shape: &'a Panel, space: &'a str) -> RadiationScene<'a> {
 }
 
 fn center_patch() -> SourcePatch {
-    SourcePatch {
-        position_m: [0.15, 0.0, 0.15],
-        outward: [0.0, -1.0, 0.0],
-        area_m2: PI * 0.01 * 0.01,
-    }
+    SourcePatch::aperture([0.15, 0.0, 0.15], [0.0, -1.0, 0.0], PI * 0.01 * 0.01)
 }
 
 /// Volume velocity of a simple source that radiates 1 W into all directions.

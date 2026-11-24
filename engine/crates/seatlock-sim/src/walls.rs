@@ -745,15 +745,15 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
                         x + mid_offset[0] + tile.mid_u,
                         y + mid_offset[1] + tile.mid_v,
                     );
-                    SourcePatch {
-                        position_m: [
+                    SourcePatch::skin(
+                        [
                             centre[0] + x * along[0] + y * across[0],
                             centre[1] + x * along[1] + y * across[1],
                             centre[2] + x * along[2] + y * across[2],
                         ],
                         outward,
-                        area_m2: element_area,
-                    }
+                        element_area,
+                    )
                 })
                 .collect();
             walls.push(PlacedWall {
@@ -1069,15 +1069,15 @@ pub fn chamber_walls(
                             .iter()
                             .map(|[x, y]| {
                                 let (x, y) = (x + tile.mid_u, y + tile.mid_v);
-                                SourcePatch {
-                                    position_m: [
+                                SourcePatch::skin(
+                                    [
                                         skin[0] + x * along[0] + y * across[0],
                                         skin[1] + x * along[1] + y * across[1],
                                         skin[2] + x * along[2] + y * across[2],
                                     ],
                                     outward,
-                                    area_m2: area,
-                                }
+                                    area,
+                                )
                             })
                             .collect();
                         walls.push(PlacedWall {

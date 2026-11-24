@@ -49,17 +49,17 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/wave-field-viz-741a` (PR). Level 3. Owner asked for mind-blowing inside/outside/room visualization graphics.
+- **Context:** branch `cursor/wave-field-viz-741a` (PR #33). Level 3. Owner asked for mind-blowing inside/outside/room visualization graphics.
 
-**Done this session:** Level 3 D wave views. FDTD `fields` capture (standing DFT + pulse frames). `seatlock-sim::wavefield` for inside (FDTD), outside (BEM probe grid), room (coarse bass FDTD, assumed room proportions from volume). Wasm `simulate.wavefield`. Page: Show sound inside / outside / in the room + `WaveView` (teal/amber additive field, cutaway shell, orbit, standing/pulse). Wiki: Web-app, fdtd, sim, wasm, Data-flow. STATUS updated.
+**Done this session:** Level 3 D wave views (inside/outside/room). Then Check CI failed: BEM e2e "open aperture disk was lost" with walls on (pre-existing on `main` too) — wall tiles were cut as BEM mouths. Fixed: `SourcePatch.open` / `aperture` vs `skin`; BEM cuts only open mouths. Page-like bem+walls repro passes. Generate e2e timeout also pre-existing on `main` (Actions slowness).
 
-**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). (6) Wave-view polish later if wanted: denser outside pulse via exterior FDTD, true room dimensions fields, browser e2e for the three buttons. Keep wiki articles true when architecture changes.
+**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). (6) Wave-view polish later if wanted; generate e2e flaky timeout on Actions if it still fails after this push. Keep wiki articles true when architecture changes.
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
 
-**Last check:** `cargo test -p seatlock-sim --release --test wavefield` 3 passed; clippy `-D warnings` on fdtd/sim/wasm; web `tsc` + vitest 7 passed. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `bem_page_repro` + `wavefield` 3 + bem/walls suites green locally; clippy `-D warnings` on core/sim. Re-pushing for Actions Check.
 
-**Next step:** review/merge this PR; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
+**Next step:** confirm Actions green on PR #33; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
 
 ### 2026-11-23 — Cursor — Handoff: Soft-TPU / lit-gap; owner backup leftovers (superseded)
 

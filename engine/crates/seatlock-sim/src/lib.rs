@@ -444,10 +444,12 @@ pub fn simulate_with_progress(
     let bem_mouth_z: Option<Vec<Vec<Vec<Complex64>>>> = if request.radiation == "bem" && !full_3d {
         let mouths: Vec<SourcePatch> = port_poses(design, outer.as_ref())
             .into_iter()
-            .map(|place| SourcePatch {
-                position_m: place.position,
-                outward: place.outward,
-                area_m2: std::f64::consts::PI * place.radius_m * place.radius_m,
+            .map(|place| {
+                SourcePatch::aperture(
+                    place.position,
+                    place.outward,
+                    std::f64::consts::PI * place.radius_m * place.radius_m,
+                )
             })
             .collect();
         if mouths.is_empty() {
@@ -1351,11 +1353,7 @@ pub fn simulate_with_progress(
         }
         // A source the shape cannot place has no direction, and every model then treats it
         // as a simple source at the middle of the front.
-        let unplaced = SourcePatch {
-            position_m: reference,
-            outward: [0.0; 3],
-            area_m2: 0.0,
-        };
+        let unplaced = SourcePatch::aperture(reference, [0.0; 3], 0.0);
         let surface = radiator.surface(&freqs);
         let is_surface = surface.is_some();
         let mut patches: Vec<SourcePatch> = if let Some(elements) = surface {
@@ -1397,11 +1395,9 @@ pub fn simulate_with_progress(
                     _ => Ok(pose),
                 });
                 patches.push(match pose {
-                    Ok(pose) => SourcePatch {
-                        position_m: pose.position_m,
-                        outward: pose.outward,
-                        area_m2: element.area_m2,
-                    },
+                    Ok(pose) => {
+                        SourcePatch::aperture(pose.position_m, pose.outward, element.area_m2)
+                    }
                     Err(err) => {
                         off_surface.get_or_insert(err);
                         unplaced
@@ -1424,11 +1420,11 @@ pub fn simulate_with_progress(
             let placed = placed_sources(design, outer.as_ref(), part, sources.len());
             (0..sources.len())
                 .map(|slot| match placed.get(slot) {
-                    Some(place) => SourcePatch {
-                        position_m: place.position,
-                        outward: place.outward,
-                        area_m2: std::f64::consts::PI * place.radius_m * place.radius_m,
-                    },
+                    Some(place) => SourcePatch::aperture(
+                        place.position,
+                        place.outward,
+                        std::f64::consts::PI * place.radius_m * place.radius_m,
+                    ),
                     None => unplaced,
                 })
                 .collect()

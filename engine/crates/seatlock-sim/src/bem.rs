@@ -330,18 +330,19 @@ impl RadiationModel for BemRadiation {
         if sources.is_empty() || points_m.is_empty() {
             return Ok(transfers);
         }
-        // Cut every finite directed source as an open aperture so pistons and mouths share the
-        // same exact-area disks (CHK-BEM-10). Empty / unplaced sources keep the baffle value.
-        let directed: Vec<SourcePatch> = sources
+        // Cut open apertures only for patches marked `open` (driver holes and port mouths,
+        // CHK-BEM-10). Wall vibration tiles leave the skin closed and drive Neumann velocity
+        // on existing triangles — cutting whole walls as mouths removes the cabinet.
+        let apertures: Vec<SourcePatch> = sources
             .iter()
-            .filter(|s| s.area_m2 > 0.0 && s.outward != [0.0; 3])
+            .filter(|s| s.open && s.area_m2 > 0.0 && s.outward != [0.0; 3])
             .cloned()
             .collect();
-        let (mesh, disks, kind) = if directed.is_empty() {
+        let (mesh, disks, kind) = if apertures.is_empty() {
             let (mesh, kind, _edge, _valid) = self.mesh_for(scene)?;
             (mesh, Vec::new(), kind)
         } else {
-            open_mouth_mesh(scene, &directed, self.subdivisions)?
+            open_mouth_mesh(scene, &apertures, self.subdivisions)?
         };
         let edge = mean_edge_length(&mesh);
         let valid = valid_hz(edge);
@@ -356,13 +357,16 @@ impl RadiationModel for BemRadiation {
         let placements: Vec<Option<Vec<Complex64>>> = sources
             .iter()
             .map(|source| {
-                if source.area_m2 > 0.0 && source.outward != [0.0; 3] {
+                if source.area_m2 <= 0.0 || source.outward == [0.0; 3] {
+                    return None;
+                }
+                if source.open {
                     let tris = disks.get(disk_i).cloned().unwrap_or_default();
                     disk_i += 1;
                     unit_velocity(&mesh, &tris)
                         .or_else(|| unit_velocity(&mesh, &triangles_of_source(&mesh, source)))
                 } else {
-                    None
+                    unit_velocity(&mesh, &triangles_of_source(&mesh, source))
                 }
             })
             .collect();

@@ -144,11 +144,7 @@ fn chk_bem_8_mouth_self_impedance_matches_flush_piston_at_low_ka() {
     };
     let radius = 0.15;
     let area = PI * radius * radius;
-    let mouth = SourcePatch {
-        position_m: [2.0, 0.0, 2.0],
-        outward: [0.0, -1.0, 0.0],
-        area_m2: area,
-    };
+    let mouth = SourcePatch::aperture([2.0, 0.0, 2.0], [0.0, -1.0, 0.0], area);
     let ka = 0.10;
     let freq = ka * C0 / (2.0 * PI * radius);
     let table = bem::mouth_self_impedances(&scene, &[mouth], &[freq], 16).expect("Z_rad");
@@ -261,16 +257,8 @@ fn chk_bem_9_mutual_mouth_impedance_is_reciprocal_and_joins_the_network() {
     let radius = 0.05;
     let area = PI * radius * radius;
     let separation = 0.40;
-    let mouth_a = SourcePatch {
-        position_m: [2.0 - separation / 2.0, 0.0, 2.0],
-        outward: [0.0, -1.0, 0.0],
-        area_m2: area,
-    };
-    let mouth_b = SourcePatch {
-        position_m: [2.0 + separation / 2.0, 0.0, 2.0],
-        outward: [0.0, -1.0, 0.0],
-        area_m2: area,
-    };
+    let mouth_a = SourcePatch::aperture([2.0 - separation / 2.0, 0.0, 2.0], [0.0, -1.0, 0.0], area);
+    let mouth_b = SourcePatch::aperture([2.0 + separation / 2.0, 0.0, 2.0], [0.0, -1.0, 0.0], area);
     // ka=0.15 and seed 16: frequency stays under the mesh hand-over on this 4 m box.
     let ka = 0.15;
     let freq = ka * C0 / (2.0 * PI * radius);
@@ -370,11 +358,7 @@ fn chk_bem_10_open_apertures_match_mouth_area_and_keep_z_rad() {
     };
     let radius = 0.15;
     let area = PI * radius * radius;
-    let mouth = SourcePatch {
-        position_m: [2.0, 0.0, 2.0],
-        outward: [0.0, -1.0, 0.0],
-        area_m2: area,
-    };
+    let mouth = SourcePatch::aperture([2.0, 0.0, 2.0], [0.0, -1.0, 0.0], area);
     let (mesh, disks, _kind) = bem::open_mouth_mesh(&scene, &[mouth], 16).expect("open mesh");
     assert_eq!(disks.len(), 1);
     let disk_area: f64 = disks[0].iter().map(|&i| mesh.areas[i]).sum();
