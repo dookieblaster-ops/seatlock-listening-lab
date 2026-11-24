@@ -2,6 +2,9 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+// One attempt only: a hung or over-long generate already burns ~15 minutes; retrying doubles CI.
+test.describe.configure({ retries: 0 });
+
 test("the lab generates cabinets, ranks them, checks the best in 3D, and opens one", async ({ page }) => {
   test.setTimeout(900_000);
   await page.goto("/");

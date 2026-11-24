@@ -49,7 +49,8 @@ export function Generate({ text, onOpen }: { text: string; onOpen: (design: unkn
       }
       const finished: FamilyResult[] = [];
       const queue = [...families];
-      const lanes = Math.max(2, Math.min(6, (navigator.hardwareConcurrency || 4) - 1));
+      // Cap lanes so several large Wasm modules do not OOM the tab (Actions Check hang).
+      const lanes = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
       const lane = async () => {
         for (let family = queue.shift(); family; family = queue.shift()) {
           const { index, label } = family;
@@ -71,8 +72,12 @@ export function Generate({ text, onOpen }: { text: string; onOpen: (design: unkn
               ...old,
               [index]: `${label}: done, ${value.evaluations} scored, ${value.thrown_out} could not be built.`,
             }));
-          } catch {
-            return;
+          } catch (error) {
+            setProgress((old) => ({
+              ...old,
+              [index]: `${label}: ${(error as Error).message || "failed"}`,
+            }));
+            // Keep draining the queue; one dead worker must not stall the whole search.
           }
         }
       };

@@ -30,6 +30,9 @@ type ComboResult = {
   notes: string[];
 };
 
+/** Per-job wall limit so a stuck Wasm call cannot leave the page spinning forever. */
+const JOB_TIMEOUT_MS = 10 * 60 * 1000;
+
 export function runJob(
   method: string,
   request: Record<string, unknown>,
@@ -39,17 +42,38 @@ export function runJob(
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./jobWorker.ts", import.meta.url), { type: "module" });
     workers.push(worker);
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        worker.terminate();
+      } catch {
+        /* already gone */
+      }
+      fn();
+    };
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error(`The job timed out after ${JOB_TIMEOUT_MS / 60000} minutes.`)));
+    }, JOB_TIMEOUT_MS);
     worker.onmessage = (event: MessageEvent<JobMessage>) => {
       const message = event.data;
       if (message.type === "progress") {
         onProgress(message.done, message.total);
       } else if (message.type === "result") {
-        worker.terminate();
-        resolve(message.json);
+        finish(() => resolve(message.json));
       } else {
-        worker.terminate();
-        reject(new Error(message.message));
+        finish(() => reject(new Error(message.message)));
       }
+    };
+    // Without this, a crashed or OOM-killed worker leaves the Promise pending forever —
+    // Generate then never leaves "Proposing cabinets..." (Actions Check hang).
+    worker.onerror = (event) => {
+      finish(() => reject(new Error(event.message || "The job worker failed.")));
+    };
+    worker.onmessageerror = () => {
+      finish(() => reject(new Error("The job worker returned a bad message.")));
     };
     worker.postMessage({ method, request });
   });
