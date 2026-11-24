@@ -6,7 +6,7 @@
 | **Summary** | Orchestrates a design into simulation results, cost, preference score, optimizer, and generator. |
 | **Code** | `engine/crates/seatlock-sim/` |
 | **Spec** | README §3.2, §9, §11 |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-24 |
 | **Status** | living |
 
 ## Overview
@@ -30,6 +30,7 @@ Front door of the engine after Wasm unwraps JSON. `simulate` wires geometry, aco
 | `cost` | Line-item build cost |
 | `optimize` / `generate` | Search and cabinet proposals |
 | `exterior` / `shape` / `voxels` | 3D exterior and inside-shaping hooks |
+| `wavefield` | Inside / outside / room pressure fields for the page |
 | `compare` | Kit copies vs published curves |
 
 ## How it works
@@ -40,7 +41,7 @@ Front door of the engine after Wasm unwraps JSON. `simulate` wires geometry, aco
 
 ## Checks
 
-- CHK-E2E-*; crate integration tests (`bem`, `walls`, `criton`, `lcm`, `generate`, …).
+- CHK-E2E-*; crate integration tests (`bem`, `walls`, `wavefield`, `criton`, `lcm`, `generate`, …).
 
 ## See also
 

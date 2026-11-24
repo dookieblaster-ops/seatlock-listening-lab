@@ -71,6 +71,8 @@ pub struct Options {
     /// face's velocity update (a Rayleigh model: one figure at every frequency; the material's
     /// own mass and the air it shuts off are left out).
     pub damping: Vec<(u8, usize, f32)>,
+    /// Optional pressure-field capture for the 3D wave views (README Level 3 D).
+    pub capture: Option<crate::fields::FieldCapture>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -87,6 +89,8 @@ pub struct Response {
     pub extrapolated: bool,
     pub canceled: bool,
     pub elapsed_ms: f64,
+    /// Captured pressure field, when `Options.capture` was set.
+    pub field: Option<crate::fields::CapturedField>,
 }
 
 /// Runs the grid. `progress(steps, max_steps)` is called every `progress_every` steps and stops
@@ -241,6 +245,10 @@ pub fn run(
         .filter(|&&(axis, c, _)| open[axis as usize].get(c).is_some_and(|m| *m != 0.0))
         .map(|&(axis, c, sigma)| (axis, c, (sigma as f64 * dt / (2.0 * RHO0)) as f32))
         .collect();
+    let mut accumulator = options
+        .capture
+        .as_ref()
+        .map(|cap| crate::fields::FieldAccumulator::new(grid, cap, dt));
     while steps < options.max_steps {
         let time = steps as f64 * dt;
         let pulse = (-((time - t0) / sigma).powi(2)).exp();
@@ -299,6 +307,9 @@ pub fn run(
         }
         for special in &specials {
             pressure[special.cell] = special.updated as f32;
+        }
+        if let Some(acc) = accumulator.as_mut() {
+            acc.step(&pressure, steps, time);
         }
         for (index, opening) in grid.openings.iter().enumerate() {
             let mut flow = 0.0;
@@ -381,6 +392,7 @@ pub fn run(
             decayed: true,
             extrapolated: true,
             canceled: false,
+            field: accumulator.map(|a| a.finish()),
             ..Response::default()
         };
         for (bin, z) in spectra.z.iter().enumerate() {
@@ -405,6 +417,7 @@ pub fn run(
         extrapolated: false,
         canceled,
         elapsed_ms: 0.0,
+        field: accumulator.map(|a| a.finish()),
     };
     for &freq in &options.frequencies_hz {
         let p = spectrum(&samples_p, freq);

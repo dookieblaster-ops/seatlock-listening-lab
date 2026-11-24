@@ -6,7 +6,7 @@
 | **Summary** | One design document passes through simulate, correct, score, cost, listen, and export. |
 | **Code** | `seatlock-sim`, `seatlock-wasm`, `web/src/useEngine.ts`, `web/src/useListen.ts` |
 | **Spec** | README §2.1, §3.2 |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-24 |
 | **Status** | living |
 
 ## Overview
@@ -52,6 +52,16 @@ simulate → impulse / coefficient package
 ```
 
 Passive boards fold into listen impulses; leftover digital radiator blocks are not played when `dsp.passive` is set.
+
+### Wave views
+
+```
+Design + WaveFieldRequest (inside | outside | room)
+  → seatlock_sim::wavefield → CapturedField
+  → wavefieldWorker → WaveView (standing wave / pulse)
+```
+
+Inside uses FDTD field capture; outside samples BEM exterior pressure on a probe grid; room is a coarse bass FDTD of an assumed rectangular room from the simple-room volume.
 
 ### Export
 

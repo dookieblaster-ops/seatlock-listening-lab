@@ -34,8 +34,10 @@ pub mod solids;
 pub mod split;
 pub mod voxels;
 pub mod walls;
+pub mod wavefield;
 pub use cost::{CabinetParts, CostLine, CostReport};
 pub use preference::{Cta2034Report, PreferenceScore};
+pub use wavefield::{wave_field, WaveFieldReport, WaveFieldRequest};
 
 pub fn builtin() -> Registry {
     let mut registry = Registry::new();
@@ -2164,6 +2166,7 @@ fn full_3d_enclosure(
         relaxed: Vec::new(),
         loss_per_s,
         damping,
+        capture: None,
     };
     let response = seatlock_fdtd::grid::run(&grid, &options, progress);
     if response.canceled {

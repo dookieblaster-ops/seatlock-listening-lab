@@ -8,3 +8,4 @@ edition.workspace = true
 num-complex.workspace = true
 nalgebra = { version = "0.33", default-features = false, features = ["std"] }
 seatlock-core = { path = "../seatlock-core" }
+serde = { workspace = true }

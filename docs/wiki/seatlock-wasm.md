@@ -6,7 +6,7 @@
 | **Summary** | WebAssembly C-ABI bridge: allocate, free, and JSON `call` for worker methods. |
 | **Code** | `engine/crates/seatlock-wasm/` |
 | **Spec** | README §3 (build rules) |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-24 |
 | **Status** | living |
 
 ## Overview
@@ -21,7 +21,7 @@ Thin wrapper around `seatlock-sim` for the browser. Workers post a method name +
 ## How it works
 
 1. Page worker instantiates `seatlock_wasm.wasm`.
-2. Calls map to `simulate`, geometry, correction, optimize, listen package, catalog reads, …
+2. Calls map to `simulate`, `simulate.full3d`, `simulate.wavefield`, geometry, correction, optimize, listen package, catalog reads, …
 3. Design revision is threaded so stale answers can be dropped.
 
 ## Checks

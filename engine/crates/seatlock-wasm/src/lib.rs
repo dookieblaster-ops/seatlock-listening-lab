@@ -6,7 +6,7 @@ use seatlock_core::catalog;
 use seatlock_core::{design_check, CheckResult, ENGINE_VERSION};
 use seatlock_sim::{
     builtin, compare, correction_plan_with, geometry_report, listen_package, optimize,
-    simulate_json, simulate_with_progress, SimulateRequest,
+    simulate_json, simulate_with_progress, wavefield, SimulateRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +48,15 @@ struct CallRequest {
     /// Face grid for `bem` radiation (README 3.2). Absent means the solver's default.
     #[serde(default)]
     bem_subdivisions: Option<u32>,
+    /// Wave-field view: `inside`, `outside`, or `room`.
+    #[serde(default)]
+    domain: Option<String>,
+    #[serde(default)]
+    frequency_hz: Option<f64>,
+    #[serde(default)]
+    dx_m: Option<f64>,
+    #[serde(default)]
+    pulse: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -136,6 +145,10 @@ fn parse_request(request: &str) -> CallRequest {
         fdtd_dx_m: None,
         exterior_dx_m: None,
         bem_subdivisions: None,
+        domain: None,
+        frequency_hz: None,
+        dx_m: None,
+        pulse: None,
     })
 }
 
@@ -239,6 +252,36 @@ fn compare_call(method: &str, request: &str) -> String {
     match reply {
         Ok(value) => value.to_string(),
         Err(err) => error(err.to_string()),
+    }
+}
+
+/// Pressure field for the 3D wave views (README Level 3 D).
+fn wave_field(request: &str) -> String {
+    let parsed = parse_request(request);
+    let text = parsed.text.clone().unwrap_or_default();
+    let design: seatlock_core::DesignFile = match serde_json::from_str(&text) {
+        Ok(design) => design,
+        Err(error) => {
+            return serde_json::to_string(&ErrorReply {
+                error: error.to_string(),
+            })
+            .unwrap()
+        }
+    };
+    let req = wavefield::WaveFieldRequest {
+        domain: parsed.domain.unwrap_or_else(|| "inside".into()),
+        frequency_hz: parsed.frequency_hz,
+        dx_m: parsed.dx_m.or(parsed.fdtd_dx_m),
+        pulse: parsed.pulse.unwrap_or(true),
+    };
+    match wavefield::wave_field(&design, &req, &builtin(), &mut report_progress) {
+        Ok(report) => serde_json::to_string(&report).unwrap_or_else(|error| {
+            serde_json::to_string(&ErrorReply {
+                error: error.to_string(),
+            })
+            .unwrap()
+        }),
+        Err(error) => serde_json::to_string(&ErrorReply { error }).unwrap(),
     }
 }
 
@@ -421,6 +464,7 @@ fn dispatch(method: &str, request: &str) -> String {
             }
         }
         "simulate.full3d" => full_3d(request),
+        "simulate.wavefield" => wave_field(request),
         "compare.reference" | "compare.methods" | "optimize.combos" | "optimize.combo"
         | "shape.inside" | "generate.families" | "generate.family" => compare_call(method, request),
         other => serde_json::to_string(&ErrorReply {

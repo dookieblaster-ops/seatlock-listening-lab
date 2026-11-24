@@ -134,6 +134,7 @@ fn run_f32(grid: &Grid, relaxed: Vec<(u8, usize, f32)>, freqs: &[f64]) -> grid::
             relaxed,
             loss_per_s: Vec::new(),
             damping: Vec::new(),
+            capture: None,
         },
         &mut |_, _| true,
     )

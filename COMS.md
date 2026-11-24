@@ -45,21 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-23 — Cursor — Handoff: start here. Soft-TPU / lit-gap; owner backup leftovers
+### 2026-11-24 — Cursor — Handoff: start here. Soft-TPU / lit-gap after wave views
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` (Check: rustfmt + shape wall-gap bound). Level 3.
+- **Context:** branch `cursor/wave-field-viz-741a` (PR). Level 3. Owner asked for mind-blowing inside/outside/room visualization graphics.
 
-**Done this session:** Actions already on. Rustfmt fixed. Then Check failed the tall-box shape test on Actions (1.208 L cells / 8.05 % wall-gap vs local 0.512 L / 2.3 %) — known float fragility of the finishing path. Replaced the underived 8 % relative bound with: air lost ≥ cell plastic, gap < half cell plastic (wall-lining upper bound); exact solid↔air checks kept. Gain sorts get index tiebreaks. Shape test re-passed locally. Protect-`main` still Pro-gated; optional backup URL still open.
+**Done this session:** Level 3 D wave views. FDTD `fields` capture (standing DFT + pulse frames). `seatlock-sim::wavefield` for inside (FDTD), outside (BEM probe grid), room (coarse bass FDTD, assumed room proportions from volume). Wasm `simulate.wavefield`. Page: Show sound inside / outside / in the room + `WaveView` (teal/amber additive field, cutaway shell, orbit, standing/pulse). Wiki: Web-app, fdtd, sim, wasm, Data-flow. STATUS updated.
 
-**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). Keep wiki articles true when architecture changes.
+**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). (6) Wave-view polish later if wanted: denser outside pulse via exterior FDTD, true room dimensions fields, browser e2e for the three buttons. Keep wiki articles true when architecture changes.
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Shaping outcome still platform-sensitive (STATUS).
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
 
-**Last check:** `cargo fmt --check` ok; shape test ok locally; `cargo clippy -p seatlock-sim --all-targets -- -D warnings` ok. Full Actions Check re-run on this push.
+**Last check:** `cargo test -p seatlock-sim --release --test wavefield` 3 passed; clippy `-D warnings` on fdtd/sim/wasm; web `tsc` + vitest 7 passed. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** confirm Actions green; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
+**Next step:** review/merge this PR; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
+
+### 2026-11-23 — Cursor — Handoff: Soft-TPU / lit-gap; owner backup leftovers (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` (Check: rustfmt + shape wall-gap bound). Level 3. Superseded by wave-views handoff above.
+
+**Done this session:** Actions already on. Rustfmt fixed. Shape wall-gap bound derived. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-23 — Cursor — Handoff: Owner backup clicks, then soft-TPU / lit-gap (superseded)
 
@@ -464,6 +474,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-24: 3D wave views (inside FDTD / outside BEM / room bass grid) on the page with animated standing wave and pulse.
 - 2026-11-23: GitHub Actions confirmed on; rustfmt fixed; shape wall-gap bound derived (Actions 8.05 % gap); protect-`main` still Pro-gated; optional backup URL still open.
 - 2026-11-23: Living software wiki at `docs/wiki/` (structure articles; README remains the spec).
 - 2026-11-22: GitHub Check workflow + backup inspection docs landed (Actions later confirmed on).

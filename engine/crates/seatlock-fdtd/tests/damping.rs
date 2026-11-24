@@ -46,6 +46,7 @@ fn duct(sigma: f64, freqs: &[f64]) -> Vec<Complex64> {
             relaxed: Vec::new(),
             loss_per_s: Vec::new(),
             damping,
+            capture: None,
         },
         &mut |_, _| true,
     );

@@ -6,7 +6,9 @@ use std::f64::consts::PI;
 pub mod adjoint;
 pub mod exterior;
 pub mod extrapolate;
+pub mod fields;
 pub mod grid;
+pub use fields::{CapturedField, FieldCapture, PulseFrames, StandingBand};
 pub use grid::Grid;
 
 /// Rigid rectangular cavity with a resistive source patch on the low-x wall.
@@ -498,6 +500,7 @@ pub fn helmholtz_neck(exterior_widths: f64) -> OpeningCurve {
         relaxed: Vec::new(),
         loss_per_s: Vec::new(),
         damping: Vec::new(),
+        capture: None,
     };
     let response = grid::run(&grid, &options, &mut |_, _| true);
     OpeningCurve {

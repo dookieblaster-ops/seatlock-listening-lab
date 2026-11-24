@@ -24,6 +24,8 @@ import {
 import type { FullMessage } from "./fdtdWorker";
 import { useEngine, type GeometryReport, type SimulateResult } from "./useEngine";
 import { coefficientMessage, useListen, type ListenSource } from "./useListen";
+import { WaveView, type WaveFieldReport } from "./WaveView";
+import type { WaveMessage } from "./wavefieldWorker";
 import "./App.css";
 
 type Design = {
@@ -118,6 +120,10 @@ export default function App() {
   const [outsideNote, setOutsideNote] = useState("");
   const bemWorker = useRef<Worker | null>(null);
   const [bemResult, setBemResult] = useState<SimulateResult | null>(null);
+  const waveWorker = useRef<Worker | null>(null);
+  const [waveReport, setWaveReport] = useState<WaveFieldReport | null>(null);
+  const [waveNote, setWaveNote] = useState("The 3D wave views have not been run.");
+  const [waveFreq, setWaveFreq] = useState(400);
   const [bemNote, setBemNote] = useState("");
   const [bemElapsedMs, setBemElapsedMs] = useState(0);
 
@@ -1058,6 +1064,119 @@ export default function App() {
               Cancel the boundary-element outside
             </button>
           </div>
+          <div className="row wave-launch">
+            <label>
+              Wave frequency (Hz)
+              <input
+                data-testid="wave-freq"
+                type="number"
+                min={20}
+                max={4000}
+                step={10}
+                value={waveFreq}
+                onChange={(event) => setWaveFreq(Number(event.target.value) || 400)}
+              />
+            </label>
+            {(
+              [
+                ["inside", "Show sound inside"],
+                ["outside", "Show sound outside"],
+                ["room", "Show sound in the room"],
+              ] as const
+            ).map(([domain, label]) => (
+              <button
+                key={domain}
+                type="button"
+                data-testid={`wave-run-${domain}`}
+                disabled={!canonical || (domain === "room" && design?.speaker.room?.kind !== "simple")}
+                title={
+                  domain === "inside"
+                    ? "Pressure field inside the cabinet: standing wave at this frequency, and a slow-motion pulse."
+                    : domain === "outside"
+                      ? "Pressure field around the cabinet from the boundary-element model at this frequency."
+                      : "Bass-only 3D wave model of the room (turn on the room estimate first)."
+                }
+                onClick={() => {
+                  if (!canonical) {
+                    return;
+                  }
+                  waveWorker.current?.terminate();
+                  const worker = new Worker(new URL("./wavefieldWorker.ts", import.meta.url), {
+                    type: "module",
+                  });
+                  waveWorker.current = worker;
+                  setWaveReport(null);
+                  setWaveNote(
+                    domain === "inside"
+                      ? "Solving the air inside for the wave view…"
+                      : domain === "outside"
+                        ? "Solving the air outside for the wave view…"
+                        : "Solving the room for the wave view…",
+                  );
+                  worker.onmessage = (event: MessageEvent<WaveMessage>) => {
+                    const message = event.data;
+                    if (message.type === "progress") {
+                      const percent = Math.min(
+                        99,
+                        Math.round((100 * message.steps) / Math.max(message.maxSteps, 1)),
+                      );
+                      setWaveNote(`Solving the wave view… ${percent}%`);
+                    } else if (message.type === "result") {
+                      const parsed = JSON.parse(message.json) as WaveFieldReport & { error?: string };
+                      if (parsed.error) {
+                        setWaveNote(`Wave view failed: ${parsed.error}`);
+                      } else {
+                        if (message.elapsedMs > 0) {
+                          parsed.elapsed_ms = message.elapsedMs;
+                        }
+                        setWaveReport(parsed);
+                        setWaveNote(
+                          `Wave view ready (${domain}, ${parsed.frequency_hz.toFixed(0)} Hz).`,
+                        );
+                      }
+                      worker.terminate();
+                      waveWorker.current = null;
+                    } else {
+                      setWaveNote(`Wave view failed: ${message.message}`);
+                      worker.terminate();
+                      waveWorker.current = null;
+                    }
+                  };
+                  worker.postMessage({
+                    text: canonical,
+                    domain,
+                    frequencyHz: waveFreq,
+                    pulse: domain !== "outside",
+                    dxM: domain === "room" ? 0.22 : domain === "outside" ? 0.022 : 0.012,
+                  });
+                }}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              data-testid="wave-cancel"
+              onClick={() => {
+                waveWorker.current?.terminate();
+                waveWorker.current = null;
+                setWaveNote("Wave view canceled.");
+              }}
+            >
+              Cancel wave view
+            </button>
+          </div>
+          <p data-testid="wave-note">{waveNote}</p>
+          {waveReport && (
+            <WaveView
+              report={waveReport}
+              cabinet={
+                solid && waveReport.domain !== "room"
+                  ? { positions: solid.positions, indices: solid.indices }
+                  : null
+              }
+            />
+          )}
           <p data-testid="outside-note">{outsideNote}</p>
           {outsideRuns.length > 0 && <OutsideThreeD runs={outsideRuns} quick={sim} />}
           <p data-testid="bem-note">{bemNote}</p>

@@ -283,6 +283,7 @@ dependencies = [
  "nalgebra",
  "num-complex",
  "seatlock-core",
+ "serde",
 ]
 
 [[package]]
