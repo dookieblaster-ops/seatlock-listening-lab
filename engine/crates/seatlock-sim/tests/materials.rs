@@ -68,6 +68,40 @@ fn every_panel_material_makes_a_panel_alone_or_as_a_core_between_pla_skins() {
 }
 
 #[test]
+fn every_sourced_exciter_has_motor_fields_and_a_price() {
+    let records = catalog::all("catalog/exciters/");
+    let sourced_exciters: Vec<_> = records
+        .iter()
+        .filter(|r| r["status"] == "sourced")
+        .collect();
+    assert!(
+        sourced_exciters.len() >= 2,
+        "expected at least two sourced exciters, got {}",
+        sourced_exciters.len()
+    );
+    for record in sourced_exciters {
+        sourced(record);
+        let id = record["id"].as_str().unwrap();
+        let pub_ = &record["published"];
+        for key in [
+            "re_ohm",
+            "bl_tm",
+            "coil_mass_kg",
+            "magnet_mass_kg",
+            "suspension_n_per_m",
+            "pe_w",
+        ] {
+            assert!(pub_[key].as_f64().unwrap() > 0.0, "{id} missing {key}");
+        }
+        assert!(
+            record["price"]["amount"].as_f64().unwrap() > 0.0,
+            "{id} needs a price"
+        );
+        assert!(catalog::exciter(id).is_some());
+    }
+}
+
+#[test]
 fn every_damping_fill_and_foaming_filament_record_is_usable() {
     let damping = catalog::all("catalog/damping/");
     assert!(damping.len() >= 3);

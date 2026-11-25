@@ -31,12 +31,11 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. Real exciters in `catalog/exciters/` from Dayton DAEX (or other) sheets opened in-session
+1. Level 3 remainder (3D losses / fill / loops / loft / FIR / …); Fable-held if still available
 2. Optional high-ka lit-gap only if it blocks; Criton leftovers only if a source appears
-3. Level 3 remainder (3D losses / fill / loops / loft / FIR / …); Fable-held if still available
-4. Optional: fix GitHub Actions billing; second backup remote URL / protect `main` (GitHub Pro on this private repo — skip is fine)
+3. Optional: fix GitHub Actions billing; second backup remote URL / protect `main` (GitHub Pro on this private repo — skip is fine)
 
-Already in on `main`: 3D wave views (inside / outside / room) with wow-pass; printed PLA η = 0.075 (Rothe 2021); varioShore Young’s 40 MPa (maker TDS); soft TPU loss still Irvine rubber 0.10 (no filament DMA found); passive R/L/C tune, CTA-2034 Olive preference as the ranked score, preference scoring speedup, budget 8 in woofers, non-box page fields, BEM scaffold (CHK-BEM-1…10; true open mouths; mouth `Z_rad` matrix joined to waveguide including mutuals; page offer of `bem`; high-ka lit gap not geometry-only; re-entrant occupancy remesh) and `bem` radiation on the true outer shape; multi-source generator harden; C-Note MT and Criton 3TD-X vs ASR; living wiki under `docs/wiki/`.
+Already in on `main` (exciters on branch pending merge if not yet): 3D wave views; Dayton DAEX25FHE-4 / DAEX25VT-4 exciters; printed PLA η = 0.075; varioShore Young’s 40 MPa; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
 
 ## What “done” looks like for a lead turn
 

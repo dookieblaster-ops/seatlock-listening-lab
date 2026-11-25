@@ -45,26 +45,34 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Real exciters next (PR #33 merged)
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after real exciters
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` @ `76036d4` (PR #33 merged on owner local-merge go-ahead). Level 3.
+- **Context:** branch `cursor/real-exciters-2d76` (merge to `main` when Check allows / local green). Level 3.
 
-**Done this session:** (1) Owner said yes to merge on local check. Fast-forwarded `main` with PR #33 (3D wave views + wow-pass; BEM aperture vs skin; Generate e2e path). PR #33 **merged**. (2) Soft-TPU / foamed-filament loss **skipped**: colorFabb varioShore TDS and Siraya Roamr TDS have no DMA / tan δ / loss factor; Irska Z-SEMIFLEX already rejected (Tα near room temp). Keep Irvine rubber 0.10 labeled. Do not invent.
+**Done this session:** (1) PR #33 merged to `main` on owner local-merge go-ahead. (2) Soft-TPU skipped (no filament DMA). (3) **Real exciters:** `dayton-daex25fhe-4` and `dayton-daex25vt-4` from Parts Express pedocs + product weight/price pages (read 2026-11-25). Magnet mass = product weight − Mms (labeled). Suspension from Mms·(2πFs)². Qms/Xmax unpublished. Example `rear-panel` uses DAEX25FHE-4. `test-exciter-a` kept for plate closed-form checks.
 
 **Open, in order:**
-1. **Real exciters** in `catalog/exciters/` from Dayton DAEX (or other) sheets opened in-session — replace `test-exciter-a` for the panel speaker (README 9.1 / 12).
+1. Merge this branch to `main` (Actions billing may still block Check — local panel/materials/plate green).
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
-4. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / … as capacity allows; Fable-held items stay held if still available.
-5. Optional: fix GitHub Actions billing so Check runs again; second backup remote / Pro protect-`main` (`docs/backups.md`).
+4. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / real panel loss factors / …; Fable-held if still available.
+5. Optional: fix GitHub Actions billing; second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping or exciter numbers. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not invent magnet mass without a published weight. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** Prior local re-verify on the merged tip (fmt, clippy sim/fdtd/wasm, wavefield 3, bem_page_repro, WaveView 5). Actions still billing-blocked on this account.
+**Last check:** `cargo test -p seatlock-sim --release --test panel` 5; `--test materials` 6; `seatlock-acoustics --test plate` 6; clippy `-D warnings` on seatlock-sim; fmt ok.
 
-**Next step:** source real exciters from open data sheets, or the next Level 3 remainder item that does not invent.
+**Next step:** merge exciters branch; then Level 3 remainder without inventing.
+
+### 2026-11-25 — Cursor — Handoff: Real exciters next (PR #33 merged) (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #33. Superseded by real-exciters handoff above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: Owner billing or local-merge for PR #33 (superseded)
 
@@ -521,6 +529,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-25: Real Dayton DAEX25FHE-4 and DAEX25VT-4 exciters sourced; `rear-panel` uses FHE-4.
 - 2026-11-25: PR #33 (3D wave views + wow-pass) merged to `main` on owner local-merge go-ahead; soft-TPU filament DMA skipped (no source).
 - 2026-11-24: 3D wave views (inside FDTD / outside BEM / room bass grid) on the page with animated standing wave and pulse.
 - 2026-11-23: GitHub Actions confirmed on; rustfmt fixed; shape wall-gap bound derived (Actions 8.05 % gap); protect-`main` still Pro-gated; optional backup URL still open.

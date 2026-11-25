@@ -1,0 +1,37 @@
+{
+  "id": "dayton-daex25vt-4",
+  "status": "sourced",
+  "maker": "Dayton Audio",
+  "model": "DAEX25VT-4",
+  "tier": "budget",
+  "kind": "exciter",
+  "note": "Vented 25 mm coin exciter. Coil mass is the sheet's Mms. Suspension stiffness is derived as Mms*(2π·Fs)² = 3655 N/m (sheet Cms 0.0003 matches that as m/N; the sheet's mm/N label is treated as a unit typo). Magnet mass is the published product weight 77.5 g (SoundImports) minus Mms. Qms and Xmax are not published; suspension loss is left at zero and travel is unlimited in the model with a label. Read 2026-11-25.",
+  "published": {
+    "re_ohm": 4.2,
+    "le_h": 0.00024,
+    "bl_tm": 3.86,
+    "coil_mass_kg": 0.00175,
+    "magnet_mass_kg": 0.07575,
+    "suspension_n_per_m": 3655.0,
+    "suspension_ns_per_m": 0.0,
+    "pe_w": 20.0,
+    "fs_hz": 230.0,
+    "qts": 0.83
+  },
+  "mounting": {
+    "footprint_diameter_m": 0.0514
+  },
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-222--dayton-audio-daex25vt-4-specifications.pdf",
+    "title": "Dayton Audio DAEX25VT-4 specification sheet (Parts Express pedocs 295-222)",
+    "read_on": "2026-11-25",
+    "note": "Product weight 77.5 g from SoundImports product page; used for magnet mass as above. Outside diameter 51.4 mm (2.02 in) from the Parts Express product dimensions."
+  },
+  "price": {
+    "amount": 14.29,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DAEX25VT-4-Vented-25mm-Exciter-20W-4-Ohm-295-222",
+    "read_on": "2026-11-25"
+  }
+}

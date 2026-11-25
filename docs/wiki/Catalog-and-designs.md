@@ -6,7 +6,7 @@
 | **Summary** | On-disk sourced parts and design documents the engine and page load; no invented numbers. |
 | **Code** | `catalog/`, `designs/`, `targets/` |
 | **Spec** | README §9, §1.3 |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-25 |
 | **Status** | living |
 
 ## Overview
@@ -25,7 +25,7 @@ Drivers, materials, stock, fills, and electronics live as JSON with source URLs 
 | `catalog/drivers/` | Driver T/S, prices, optional measured curves |
 | `catalog/materials.json` | Print filaments (incl. foaming) |
 | `catalog/panels/`, `fills/`, `damping/`, `stock/` | Panel, fill, damping, sheet/pipe stock |
-| `catalog/electronics/`, `exciters/`, `printers/` | Amps, DSP, exciters, printer rates |
+| `catalog/electronics/`, `exciters/`, `printers/` | Amps, DSP, exciters (incl. sourced Dayton DAEX25FHE-4 / DAEX25VT-4), printer rates |
 | `designs/examples/` | Lab examples (`sealed-test`, `folded-line`, …) |
 | `designs/imports/` | Kit copies (LCM, C-Note, Criton, …) with licenses |
 | `targets/` | e.g. `hifi-default.json` with `preference_min` |

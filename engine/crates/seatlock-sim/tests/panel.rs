@@ -158,10 +158,11 @@ fn the_cost_lists_the_exciter_and_the_panel() {
     let exciter = cost
         .lines
         .iter()
-        .find(|line| line.item == "Test Exciter A")
+        .find(|line| line.item.contains("DAEX25FHE-4") || line.item.contains("daex25fhe"))
         .expect("an exciter line");
     assert_eq!(exciter.quantity, 2.0);
-    assert_eq!(exciter.unit_usd, None);
+    assert_eq!(exciter.unit_usd, Some(15.98));
+    assert!((exciter.total_usd.unwrap() - 2.0 * 15.98).abs() < 1e-9);
     let panel = cost
         .lines
         .iter()
