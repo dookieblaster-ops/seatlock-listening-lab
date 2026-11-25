@@ -57,9 +57,9 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Job workers must reject on error/timeout or Generate stays on "Proposing…". Generate e2e is wall-clock heavy on Actions Wasm (CTA preference). Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
 
-**Last check:** tsc green after generate speed/e2e budget tweak. Re-pushing for Actions Check.
+**Last check:** Actions Check green on PR #33 (`42ef7e1`).
 
-**Next step:** confirm Actions green on PR #33; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
+**Next step:** review/merge PR #33; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
 
 ### 2026-11-23 — Cursor — Handoff: Soft-TPU / lit-gap; owner backup leftovers (superseded)
 
