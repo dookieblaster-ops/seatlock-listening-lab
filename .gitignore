@@ -6,6 +6,7 @@ node_modules/
 web/dist/
 web/public/seatlock_wasm.wasm
 web/public/seatlock_rt.wasm
+web/public/wave-demo/
 test-results/
 playwright-report/
 playwright/.cache/

@@ -6,7 +6,7 @@
 | **Summary** | React + Vite page: edit designs, show graphs and 3D, drive workers, listen, print. |
 | **Code** | `web/src/` |
 | **Spec** | README §3, §14 |
-| **Updated** | 2026-11-24 |
+| **Updated** | 2026-11-25 |
 | **Status** | living |
 
 ## Overview
@@ -27,7 +27,8 @@ The interface never computes physics. It edits a design document, calls engine w
 | `fdtdWorker.ts` / `jobWorker.ts` | Long jobs with progress |
 | `wavefieldWorker.ts` | Pressure-field capture for wave views |
 | `CabinetView.tsx` | three.js cabinet view |
-| `WaveView.tsx` | Animated inside / outside / room pressure fields |
+| `WaveView.tsx` | Animated inside / outside / room pressure fields (cutaway cabinet, demeaned signed-log scaling, intro/auto-orbit, pulse scrub) |
+| `waveDemo.tsx` / `wave-demo.html` | Local fixture preview for wave views (dev only; fixtures gitignored) |
 | `ImportedCabinet.tsx` / `importMesh.ts` | 3MF/STL import and hole marking |
 | `Graph.tsx` | Response plots |
 | `PassiveEditor.tsx` | Passive R/L/C netlist UI |

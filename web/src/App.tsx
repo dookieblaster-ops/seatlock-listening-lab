@@ -123,7 +123,7 @@ export default function App() {
   const waveWorker = useRef<Worker | null>(null);
   const [waveReport, setWaveReport] = useState<WaveFieldReport | null>(null);
   const [waveNote, setWaveNote] = useState("The 3D wave views have not been run.");
-  const [waveFreq, setWaveFreq] = useState(400);
+  const [waveFreq, setWaveFreq] = useState(750);
   const [bemNote, setBemNote] = useState("");
   const [bemElapsedMs, setBemElapsedMs] = useState(0);
 
@@ -1065,7 +1065,7 @@ export default function App() {
             </button>
           </div>
           <div className="row wave-launch">
-            <label>
+            <label title="Pick near a cabinet or room resonance so standing-wave nodes show clearly (sealed-test height mode is about 750 Hz).">
               Wave frequency (Hz)
               <input
                 data-testid="wave-freq"
@@ -1074,7 +1074,7 @@ export default function App() {
                 max={4000}
                 step={10}
                 value={waveFreq}
-                onChange={(event) => setWaveFreq(Number(event.target.value) || 400)}
+                onChange={(event) => setWaveFreq(Number(event.target.value) || 750)}
               />
             </label>
             {(

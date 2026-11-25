@@ -45,33 +45,42 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Wow the 3D sound views
+### 2026-11-25 — Cursor — Handoff: start here. Soft-TPU / lit-gap after wow views
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** PR #33 `cursor/wave-field-viz-741a` (Actions Check green). Level 3. Owner: improve 3D sound visualization — it should wow the user.
+- **Context:** PR #33 `cursor/wave-field-viz-741a` (wow-pass on WaveView). Level 3.
 
-**Done (this branch, ready to merge):** Inside / outside / room wave views (`simulate.wavefield` + `WaveView`). BEM+walls open-mouth fix (`SourcePatch.open`). WaveView pulse blank-canvas fix. Generate e2e unstick + speed path. Screenshots under `/opt/cursor/artifacts/wave-view-*.png` (cloud software WebGL — softer than a real GPU).
+**Done this session:** Owner-priority wow-pass on inside / outside / room sound views.
+- Readability: demeaned field + signed-log + percentile peak; NormalBlending point cloud (Additive + fog washed to white/black on software GL).
+- Cabinet as hero: front cutaway (+ ghost front), stronger edges, driver/listener orbs with halos.
+- Teaching motion: intro orbit, auto-orbit that pauses on drag, standing-wave breathe, pulse scrub + replay, pause snaps phase.
+- Default wave frequency 750 Hz (near sealed-test height mode). Outside stays standing-only (BEM frequency-domain) with a plain note.
+- Local demo: `web/wave-demo.html` + `src/waveDemo.tsx` (fixtures gitignored under `web/public/wave-demo/`; regenerate with `cargo run -p seatlock-sim --release --example dump_wavefield`).
+- Screenshots: `/opt/cursor/artifacts/wave-wow-*.png` and `wave-view-*.png`.
 
 **Open, in order:**
-1. **Wow the 3D sound views (owner priority).** Ship visual upgrades that make an audiophile stop and stare. Keep physics honest (fidelity notes stay true). Concrete levers, do not invent physics:
-   - **Readability over blob:** outside standing waves often wash to a white/amber ball; compress or percentile-scale amplitude, raise default "Hide quiet air", or use a signed log/diverging map so nodal planes and lobes read clearly.
-   - **Cabinet as hero:** stronger cutaway (clip plane or fade front face), clearer driver/listener orbs, optional wireframe only on edges; inside should feel like looking into the box, not a cloud with a faint cage.
-   - **Motion that teaches:** auto-orbit that pauses on drag; standing-wave phase that shows nodes breathing; pulse with a subtle time scrubber / replay; freeze-frame that still looks good (screenshot-stable phase).
-   - **Outside pulse:** optional exterior FDTD or quasi-time from multi-frequency BEM — only if cheap enough for the page; else say why standing-only.
-   - **Room view:** enable when the room estimate is on; show walls as a dim wire box and the listener; assume proportions stay labeled unless real room L×W×H fields exist.
-   - **Presence:** 2–3 intentional motions (orbit intro, phase breathe, pulse front); avoid glow spam / purple defaults; keep teal↔amber language; test on a real GPU, not only software WebGL.
-   - Touch `docs/wiki/Web-app.md` (and Data-flow if the pipeline moves) in the same commit.
-2. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent.
-3. Optional BEM high-ka lit-gap diagnosis only if it blocks.
-4. Criton leftovers only if a source appears.
-5. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
+1. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent.
+2. Optional BEM: high-ka lit-gap diagnosis only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`).
+5. Optional later: exterior pulse if a cheap path appears; real room L×W×H fields (STATUS Q8).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room proportions assumed — fidelity notes say so. Outside has no pulse today (frequency-domain BEM). Generate e2e is wall-clock heavy on Actions Wasm.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room proportions assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM). Software WebGL: avoid AdditiveBlending mega-points and distance fog at the orbit radius.
 
-**Last check:** Actions Check green on `42ef7e1` / follow-up docs commit `bf353b2`.
+**Last check:** `cargo test -p seatlock-sim --release --test wavefield` 3 passed; `npx vitest run src/WaveView.test.ts` 5 passed. Playwright screenshots of demo views show teal/amber structured fields. Full `tools/cloud-check.sh` / Actions not re-run this turn — re-run on push.
 
-**Next step:** merge PR #33 if not already, then ship item (1) wow-pass on the wave views; screenshots for the owner when done.
+**Next step:** confirm Actions green on this push; merge PR #33 when ready; then soft-TPU DMA (sourced only) or lit-gap if it blocks.
+
+### 2026-11-25 — Cursor — Handoff: Wow the 3D sound views (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** PR #33 `cursor/wave-field-viz-741a`. Superseded by wow-pass handoff above.
+
+**Done:** Wave-view scaffold + Check green; owner asked for wow-pass (done above).
+
+**Next step:** none (superseded).
 
 ### 2026-11-24 — Cursor — Handoff: Soft-TPU / lit-gap after wave views (superseded)
 
