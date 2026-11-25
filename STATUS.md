@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-25 (PR #33 lead-reviewed; Actions still blocked on billing)
+Updated: 2026-11-25 (PR #33 merged to main; next soft-TPU)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
@@ -89,7 +89,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
 0p. Helper stack #12–#19 merged; CHK-BEM-2 and CHK-BEM-3 on `main` 2026-11-16. High-ka rigid-sphere vs smooth series placed as a constant-element limit.
-0. **Next:** Owner: GitHub Actions billing / spending limit (jobs still will not start — run `45683296657`), or allow merge of PR #33 after local re-verify. Lead review accepted the PR (README 12 D; BEM mouth/skin split). Then soft-TPU DMA only with a sourced filament test (else skip). Optional BEM lit-gap / Criton / backup as before.
+0. **Next:** Soft-TPU DMA only with a sourced filament test (else skip). Optional BEM lit-gap / Criton / backup. Optional: restore GitHub Actions billing (jobs still die with empty steps). PR #33 (3D wave views + wow-pass) is merged on `main`.
 1. Research plan details as above.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -114,6 +114,7 @@ The full history is in `docs/status-history.md`. The latest state:
 - 2026-11-25, Cursor cloud (wrap): Owner asked to wrap for the next chat. Handoff: confirm Actions on PR #33 @ `5355eb7` (rustfmt follow-up after a 44 s fail on `d5f7ad0`), merge when green, then soft-TPU only with a source.
 - 2026-11-25, Cursor cloud: Actions Check on tip `9f2c018` did not start — GitHub annotation: payments failed or spending limit. Not a suite failure. Local: `cargo fmt --check` ok; clippy `-D warnings` on sim/fdtd/wasm ok; wavefield 3 passed; WaveView vitest 5 passed.
 - 2026-11-25, Cursor cloud (lead Check COMS): re-verified PR #33 @ `a20c206` — fmt, clippy `-D warnings` on sim/fdtd/wasm, wavefield 3, bem_page_repro 1, WaveView vitest 5 all green. Actions tip `45683296657` still empty-step failure (billing). Review accepted against README 12 D; merge gated on owner billing fix or local-merge go-ahead.
+- 2026-11-25, Cursor cloud: PR #33 merged to `main`. Handoff updated: next is soft-TPU (sourced only). Actions billing still blocked.
 - 2026-11-14, Cursor cloud: stable Rust is now 1.100.0 (was 1.97.0). Clippy's new `chunks_exact_to_as_chunks` and `needless_range_loop` lints failed the first check on unchanged `main`; fixed in `mesh.rs` and `seatlock-fdtd/tests/checks.rs`. `tools/cloud-check.sh` falls back to `npx playwright install chromium` when `/opt/pw-browsers` is missing. Full check on this commit's parents: rustfmt, clippy, 209 engine tests, bindings, both wasm modules, type check, vitest, build, 37 of 37 browser tests; after the hole-marking change, the three import browser tests pass (38 with the new one).
 - 2026-11-14, hole marks on the page (`web/src/ImportedCabinet.tsx`, `e2e/import.spec.ts`): placing a source with "The model already has this hole", changing the hole kind on a placed source, and free "Mark a sealed hole" / "Mark a moulded port mouth" marks, all store `hole` on the point and show in the list.
 - 2026-11-14, Erin's LCM CTA-2034 curves (`designs/imports/lcm/erin/cea2034.json`, test `the_lcm_matches_erins_shape_within_known_limits`): on-axis bass-mid Erin +0.30 dB vs lab −2.25 dB; RMS after midband align 4.72 / 1.55 / 2.15 dB below 300 Hz / 0.3–2 kHz / 2–10 kHz; BMR band 2.9 dB above the woofer's. Erin's file f6 33.6 Hz (published 33.7); file f3 36.7 Hz (published summary 38.1).

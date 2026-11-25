@@ -45,31 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Owner: billing or local-merge for PR #33
+### 2026-11-25 — Cursor — Handoff: start here. Soft-TPU after wave views on main
 
-- **To:** next lead session (Claude or Cursor) + owner (one product question)
+- **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `a20c206`. Level 3. Lead review done; merge still gated.
+- **Context:** `main` (PR #33 merged). Level 3. 3D wave views + wow-pass are on main.
 
-**Lead review (accepted if merge allowed):** Matches README 12 D (inside standing + pulse, outside BEM probes, bass room grid). `SourcePatch.open` / `aperture` vs `skin` keeps wall vibration off open BEM mouths (CHK-BEM-10 intact). Wiki articles already updated on the branch. No invented damping. Do not merge until the owner clears the gate below.
-
-**Re-verified this session (Cursor cloud):** `cargo fmt --check` ok; clippy `-D warnings` on seatlock-sim / seatlock-fdtd / seatlock-wasm ok; `cargo test -p seatlock-sim --release --test wavefield` 3 passed; `bem_page_repro` 1 passed; WaveView vitest 5 passed. Actions tip still fails with empty job steps (billing) — run `45683296657`. Earlier suite green on this PR at `bf353b2` / `42ef7e1` before the billing block.
-
-**Blocked for the owner (not a code bug):** GitHub Actions will not start Check jobs (“payments have failed or spending limit”). Fix billing / spending limit in GitHub settings, **or** reply that the lead may merge PR #33 after this local re-verify (recommendation: allow local-only merge so the wave views land; fix billing when convenient so Check keeps guarding `main`).
+**Done:** PR #33 merged (inside / outside / room wave views, BEM+walls `SourcePatch.open`, WaveView wow-pass, Generate e2e speed path). Actions Check still blocked by GitHub billing (empty job steps) — fix when convenient; last green suite on the PR was `42ef7e1` / `bf353b2` before the block.
 
 **Open, in order:**
-1. **Owner:** clear Actions billing, **or** say “merge on local check.”
-2. **Merge PR #33 into `main`** when that gate opens.
-3. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
-4. Optional BEM high-ka lit-gap only if it blocks.
-5. Criton leftovers only if a source appears.
-6. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
+1. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
+2. Optional BEM high-ka lit-gap diagnosis only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
+5. Optional: restore Actions billing so Check guards `main` again.
+6. Optional later polish on wave views if the owner wants more (outside pulse, real room L×W×H). Keep wiki true when architecture moves.
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Software WebGL: no Additive mega-points / fog at orbit radius.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Software WebGL: no Additive mega-points / fog at orbit radius. Room proportions assumed — fidelity notes say so.
 
-**Last check:** Local re-verify green (above). Full `tools/cloud-check.sh` not re-run this turn (Actions blocked; focused suite covers the PR surface).
+**Last check:** Merge landed; no new eng change this note. Actions still billing-blocked.
 
-**Next step:** Owner answers the billing / local-merge question → merge #33 → soft-TPU only with a source.
+**Next step:** soft-TPU DMA only with a sourced figure; otherwise skip to lit-gap only if it blocks.
+
+### 2026-11-25 — Cursor — Handoff: Owner billing or local-merge for PR #33 (superseded — merged)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** PR #33. Superseded — PR merged to `main`.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: Merge PR #33 (Actions billing block), then soft-TPU (superseded)
 
@@ -518,6 +522,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-25: PR #33 merged to `main` — 3D wave views + wow-pass (inside / outside / room), BEM wall-skin split, Generate e2e path.
 - 2026-11-24: 3D wave views (inside FDTD / outside BEM / room bass grid) on the page with animated standing wave and pulse.
 - 2026-11-23: GitHub Actions confirmed on; rustfmt fixed; shape wall-gap bound derived (Actions 8.05 % gap); protect-`main` still Pro-gated; optional backup URL still open.
 - 2026-11-23: Living software wiki at `docs/wiki/` (structure articles; README remains the spec).
