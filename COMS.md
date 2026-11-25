@@ -45,31 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Merge PR #33, then soft-TPU / lit-gap
+### 2026-11-25 — Cursor — Handoff: start here. Merge PR #33 (Actions billing block), then soft-TPU
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `5355eb7` (wow-pass + rustfmt). Level 3. Owner wrapped this chat — continue without asking.
+- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `9f2c018`. Level 3. Owner wrapped — continue without asking.
 
-**Done (ready to merge when Check is green):**
-- 3D wave views (inside FDTD / outside BEM / room bass grid) + wow-pass: demeaned signed-log, percentile peak, NormalBlending points, front cutaway cabinet, intro/auto-orbit, pulse scrub/replay, default 750 Hz.
-- BEM+walls open-mouth fix; Generate e2e unstick/speed path; rustfmt on `dump_wavefield` example.
-- Local demo `web/wave-demo.html` (fixtures gitignored; regenerate: `cargo run -p seatlock-sim --release --example dump_wavefield`).
-- Owner-facing screenshots under `/opt/cursor/artifacts/wave-wow-*.png` and `wave-view-*.png`.
+**Done (code ready; merge gated):**
+- 3D wave views + wow-pass (inside / outside / room). BEM+walls open-mouth fix; Generate e2e path; rustfmt on `dump_wavefield`.
+- Local demo `web/wave-demo.html` (fixtures gitignored). Screenshots `/opt/cursor/artifacts/wave-wow-*.png`.
+
+**Blocked for the owner (not a code bug):** GitHub Actions will not start jobs: “recent account payments have failed or your spending limit needs to be increased” (run `45682816767`, 2 s, no steps). Earlier long Check on `5355eb7` was cancelled by the wrap push. Owner: fix billing / spending limit in GitHub settings, or say the next lead may merge after a local `tools/cloud-check.sh` / `./check.sh` green.
 
 **Open, in order:**
-1. **Confirm Actions Check green on PR #33** (run was in progress at wrap: `45676839652`). If red, fix; if green, **merge PR #33 into `main`** (lead merge).
-2. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
-3. Optional BEM high-ka lit-gap diagnosis only if it blocks.
-4. Criton leftovers only if a source appears.
-5. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
-6. Optional later: exterior pulse if cheap; real room L×W×H (STATUS Q8).
+1. **Owner billing / spending limit** so Actions can run, **or** explicit go-ahead to merge on local check only.
+2. **Merge PR #33 into `main`** when Check is green (or owner allows local-only).
+3. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
+4. Optional BEM high-ka lit-gap only if it blocks.
+5. Criton leftovers only if a source appears.
+6. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room proportions assumed. Outside has no pulse (BEM frequency-domain). Software WebGL: no Additive mega-points / fog at orbit radius.
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Software WebGL: no Additive mega-points / fog at orbit radius.
 
-**Last check:** Local — wavefield 3 passed, WaveView vitest 5 passed, Playwright demo shots vivid. Actions — first wow-pass push failed rustfmt (fixed in `5355eb7`); re-run in progress at wrap. Confirm before merge.
+**Last check:** Local fmt/clippy/wavefield/WaveView expected green on this tip (re-verify in next session). Actions blocked on billing — not a suite failure.
 
-**Next step:** Check COMS → merge #33 when green → soft-TPU only with a source (else skip to next open item).
+**Next step:** Owner clears Actions billing (or allows local-only merge) → merge #33 → soft-TPU only with a source.
 
 ### 2026-11-25 — Cursor — Handoff: Soft-TPU / lit-gap after wow views (superseded)
 
