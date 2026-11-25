@@ -49,22 +49,21 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/real-exciters-2d76` (merge to `main` when Check allows / local green). Level 3.
+- **Context:** `main` @ `f529c2e` (PR #35 exciters merged). Level 3.
 
-**Done this session:** (1) PR #33 merged to `main` on owner local-merge go-ahead. (2) Soft-TPU skipped (no filament DMA). (3) **Real exciters:** `dayton-daex25fhe-4` and `dayton-daex25vt-4` from Parts Express pedocs + product weight/price pages (read 2026-11-25). Magnet mass = product weight − Mms (labeled). Suspension from Mms·(2πFs)². Qms/Xmax unpublished. Example `rear-panel` uses DAEX25FHE-4. `test-exciter-a` kept for plate closed-form checks.
+**Done this session:** (1) PR #33 merged to `main` on owner local-merge go-ahead. (2) Soft-TPU skipped (no filament DMA). (3) **Real exciters** merged (PR #35): `dayton-daex25fhe-4` and `dayton-daex25vt-4` from Parts Express pedocs + product weight/price pages (read 2026-11-25). Magnet mass = product weight − Mms (labeled). Suspension from Mms·(2πFs)². Qms/Xmax unpublished. Example `rear-panel` uses DAEX25FHE-4. `test-exciter-a` kept for plate closed-form checks.
 
 **Open, in order:**
-1. Merge this branch to `main` (Actions billing may still block Check — local panel/materials/plate green).
+1. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / real panel loss factors / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
-4. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / real panel loss factors / …; Fable-held if still available.
-5. Optional: fix GitHub Actions billing; second backup remote / Pro protect-`main`.
+4. Optional: fix GitHub Actions billing; second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not invent magnet mass without a published weight. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** `cargo test -p seatlock-sim --release --test panel` 5; `--test materials` 6; `seatlock-acoustics --test plate` 6; clippy `-D warnings` on seatlock-sim; fmt ok.
+**Last check:** `cargo test -p seatlock-sim --release --test panel` 5; `--test materials` 6; `seatlock-acoustics --test plate` 6; clippy `-D warnings` on seatlock-sim; fmt ok. Actions still billing-blocked.
 
-**Next step:** merge exciters branch; then Level 3 remainder without inventing.
+**Next step:** Level 3 remainder without inventing.
 
 ### 2026-11-25 — Cursor — Handoff: Real exciters next (PR #33 merged) (superseded)
 

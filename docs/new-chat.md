@@ -35,7 +35,7 @@ After **Check COMS.md** / **Go**, the newest handoff says to continue from the f
 2. Optional high-ka lit-gap only if it blocks; Criton leftovers only if a source appears
 3. Optional: fix GitHub Actions billing; second backup remote URL / protect `main` (GitHub Pro on this private repo — skip is fine)
 
-Already in on `main` (exciters on branch pending merge if not yet): 3D wave views; Dayton DAEX25FHE-4 / DAEX25VT-4 exciters; printed PLA η = 0.075; varioShore Young’s 40 MPa; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
+Already in on `main`: 3D wave views; Dayton DAEX25FHE-4 / DAEX25VT-4 exciters; printed PLA η = 0.075; varioShore Young’s 40 MPa; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
 
 ## What “done” looks like for a lead turn
 
