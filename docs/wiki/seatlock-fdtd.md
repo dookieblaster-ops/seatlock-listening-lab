@@ -6,12 +6,12 @@
 | **Summary** | Finite-difference time-domain solver for air inside the cabinet and, as `exterior` radiation, around it. |
 | **Code** | `engine/crates/seatlock-fdtd/` |
 | **Spec** | README §5.5, §5.6 (`exterior`) |
-| **Updated** | 2026-11-24 |
+| **Updated** | 2026-11-25 |
 | **Status** | living |
 
 ## Overview
 
-Voxel grid of air with a leapfrog update. Used for the `fdtd` enclosure model and for `exterior` radiation (cabinet as a rigid body in an outside block). Supports early stop by harmonic inversion and optional uniform / wall losses. Optional field capture feeds the page's 3D wave views.
+Voxel grid of air with a leapfrog update. Used for the `fdtd` enclosure model and for `exterior` radiation (cabinet as a rigid body in an outside block). Supports early stop by harmonic inversion, optional uniform / wall losses, and Rayleigh damping fill (imported damping parts or a chamber's `fill`). Optional field capture feeds the page's 3D wave views.
 
 ## Responsibilities
 

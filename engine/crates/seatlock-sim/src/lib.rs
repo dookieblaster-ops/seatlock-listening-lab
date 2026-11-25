@@ -423,6 +423,19 @@ pub fn simulate_with_progress(
                 .into(),
         );
     }
+    let chamber_fill_named = design
+        .speaker
+        .enclosure
+        .chambers
+        .iter()
+        .any(|chamber| chamber.get("fill").and_then(Value::as_str).is_some());
+    if chamber_fill_named && !full_3d {
+        fidelity.ignored.push(
+            "Damping fill in a chamber is modeled only by the full 3D model; this model treats \
+             filled chambers as empty air."
+                .into(),
+        );
+    }
     // Loads of chambers other than the first driver's, by chamber index, and for each
     // radiator which load it sees: 0 for the first driver's chamber, n + 1 for chamber n.
     let mut other_nodes: Vec<(

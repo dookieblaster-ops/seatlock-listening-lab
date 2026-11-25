@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after real exciters
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after chamber fill
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` @ `f529c2e` (PR #35 exciters merged). Level 3.
+- **Context:** branch `cursor/chamber-damping-fill-da03` (PR onto `main`). Level 3.
 
-**Done this session:** (1) PR #33 merged to `main` on owner local-merge go-ahead. (2) Soft-TPU skipped (no filament DMA). (3) **Real exciters** merged (PR #35): `dayton-daex25fhe-4` and `dayton-daex25vt-4` from Parts Express pedocs + product weight/price pages (read 2026-11-25). Magnet mass = product weight − Mms (labeled). Suspension from Mms·(2πFs)². Qms/Xmax unpublished. Example `rear-panel` uses DAEX25FHE-4. `test-exciter-a` kept for plate closed-form checks.
+**Done this session:** (1) Pulled `main` (exciters + wave views already in). (2) Soft-TPU still skipped (no filament DMA). (3) **Chamber damping fill:** `chambers[].fill` → `catalog/damping/` id; FDTD Rayleigh path (same as imported damping); cost by chamber box litres; page "Damping fill" on each air space; quick/detailed label filled chambers as empty air. Isover on sealed-test: tallest |Z_ab| 500 Hz–3 kHz ~1e7 → ~4e4. Closed stale PR #34.
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / real panel loss factors / …; Fable-held if still available.
+1. Level 3 remainder (STATUS / README 12): loops / loft / FIR / fill in quick+detailed / passive radiators / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
 4. Optional: fix GitHub Actions billing; second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not invent magnet mass without a published weight. Do not digitize graphs. Do not undo Q12.
+**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Two chambers without a duct still partition (fill is per chamber air, not a free region).
 
-**Last check:** `cargo test -p seatlock-sim --release --test panel` 5; `--test materials` 6; `seatlock-acoustics --test plate` 6; clippy `-D warnings` on seatlock-sim; fmt ok. Actions still billing-blocked.
+**Last check:** `cargo test -p seatlock-sim --release --test fill` 3; clippy `-D warnings` on seatlock-sim; fmt ok. Full `tools/cloud-check.sh` not re-run this turn. Actions still billing-blocked.
 
-**Next step:** Level 3 remainder without inventing.
+**Next step:** merge this PR when ready; then Level 3 remainder (loops / loft / FIR / …) without inventing.
+
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after real exciters (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` @ `f529c2e` (PR #35 exciters merged). Level 3. Superseded by chamber-fill handoff above.
+
+**Done this session:** Real exciters. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: Real exciters next (PR #33 merged) (superseded)
 
@@ -528,6 +538,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-25: Chamber damping fill in FDTD (`chambers[].fill` → catalog/damping); cost + page; quick/detailed still air-only with a label.
 - 2026-11-25: Real Dayton DAEX25FHE-4 and DAEX25VT-4 exciters sourced; `rear-panel` uses FHE-4.
 - 2026-11-25: PR #33 (3D wave views + wow-pass) merged to `main` on owner local-merge go-ahead; soft-TPU filament DMA skipped (no source).
 - 2026-11-24: 3D wave views (inside FDTD / outside BEM / room bass grid) on the page with animated standing wave and pulse.

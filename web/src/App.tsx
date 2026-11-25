@@ -664,6 +664,7 @@ export default function App() {
           <InsideEditor
             chambers={design.speaker.enclosure.chambers as Array<Record<string, unknown>>}
             ducts={design.speaker.enclosure.ducts as Array<Record<string, unknown>>}
+            catalogs={catalogs}
             onChange={(change) => {
               const next = structuredClone(design);
               change(
@@ -1740,16 +1741,19 @@ function PathField({ value, index, onChange }: { value: unknown; index: number; 
 function InsideEditor({
   chambers,
   ducts,
+  catalogs,
   onChange,
 }: {
   chambers: Rows;
   ducts: Rows;
+  catalogs: Catalogs | null;
   onChange: (change: (chambers: Rows, ducts: Rows) => void) => void;
 }) {
   const places = ["main", ...chambers.map((chamber) => String(chamber.id)), "outside"].filter(
     (place, index, all) => all.indexOf(place) === index,
   );
   const corner = (row: Record<string, unknown>, key: string, axis: number) => mm(numbers(row[key])[axis] ?? 0);
+  const damping = catalogs?.damping ?? [];
   return (
     <div data-testid="inside-editor">
       <h3 title="Boxes of air inside the cabinet. With none listed, the whole inside is one air space called main. Inside air that no chamber claims is printed solid, so chambers also make partitions.">
@@ -1775,6 +1779,21 @@ function InsideEditor({
               />
             )),
           )}
+          <label title="Damping fill packing this air space (mineral wool, glass wool, polyester). The full 3D model hears it; the everyday models treat a filled chamber as empty air and say so.">
+            Damping fill
+            <select
+              data-testid={`chamber-fill-${index}`}
+              value={chamber.fill == null ? "" : String(chamber.fill)}
+              onChange={(event) => onChange((rows) => {
+                rows[index].fill = event.target.value === "" ? null : event.target.value;
+              })}
+            >
+              <option value="">None</option>
+              {damping.map((m) => (
+                <option key={m.id} value={m.id}>{m.name ?? m.id}</option>
+              ))}
+            </select>
+          </label>
           <button type="button" onClick={() => onChange((rows) => {
             rows.splice(index, 1);
           })}>Remove this air space</button>

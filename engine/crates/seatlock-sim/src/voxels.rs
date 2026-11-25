@@ -580,16 +580,22 @@ pub fn cabinet_grid(
         .map(|axis| (high[axis] - low[axis] + dx).max(0.0))
         .fold(0.0, f64::max);
 
-    // Damping material: each inside cell's flow resistivity, and the faces between two inside
-    // cells carry the mean of theirs.
+    // Damping material: each inside cell's flow resistivity (imported damping parts and/or a
+    // chamber's `fill` from `catalog/damping/`), and the faces between two inside cells carry
+    // the mean of theirs.
     let sigma: Vec<f32> = (0..cells)
         .map(|cell| {
             if kind[cell] != INSIDE {
                 return 0.0;
             }
-            shape
-                .damping_at(lattice.center(lattice.coords(cell)))
-                .unwrap_or(0.0) as f32
+            let p = lattice.center(lattice.coords(cell));
+            let from_shape = shape.damping_at(p).unwrap_or(0.0);
+            let from_fill = chambers
+                .iter()
+                .find(|chamber| chamber.fill_sigma.is_some() && chamber.contains(p))
+                .and_then(|chamber| chamber.fill_sigma)
+                .unwrap_or(0.0);
+            from_shape.max(from_fill) as f32
         })
         .collect();
     let mut damping = Vec::new();
@@ -610,11 +616,17 @@ pub fn cabinet_grid(
                 }
             }
         }
-        notes.push(
+        let chamber_fill = chambers.iter().any(|c| c.fill_sigma.is_some());
+        notes.push(if chamber_fill {
+            "Damping fill in a chamber: one flow resistivity per material at every frequency \
+             (a Rayleigh model); the material's own mass and frame are left out. The quick and \
+             detailed models treat filled chambers as empty air."
+                .into()
+        } else {
             "Damping material: one flow resistivity per material at every frequency (a Rayleigh \
              model); the material's own mass and frame are left out."
-                .into(),
-        );
+                .into()
+        });
     }
 
     Ok(CabinetGrid {

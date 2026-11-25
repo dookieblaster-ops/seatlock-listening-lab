@@ -24,7 +24,7 @@ Drivers, materials, stock, fills, and electronics live as JSON with source URLs 
 | --- | --- |
 | `catalog/drivers/` | Driver T/S, prices, optional measured curves |
 | `catalog/materials.json` | Print filaments (incl. foaming) |
-| `catalog/panels/`, `fills/`, `damping/`, `stock/` | Panel, fill, damping, sheet/pipe stock |
+| `catalog/panels/`, `fills/`, `damping/`, `stock/` | Panel, wall fill, damping (also chamber `fill`), sheet/pipe stock |
 | `catalog/electronics/`, `exciters/`, `printers/` | Amps, DSP, exciters (incl. sourced Dayton DAEX25FHE-4 / DAEX25VT-4), printer rates |
 | `designs/examples/` | Lab examples (`sealed-test`, `folded-line`, …) |
 | `designs/imports/` | Kit copies (LCM, C-Note, Criton, …) with licenses |

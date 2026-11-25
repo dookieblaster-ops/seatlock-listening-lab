@@ -380,6 +380,49 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
             flow.map(|flow| printed_m3 * design.build.infill_fraction * n / flow / 3600.0);
     }
 
+    // Chamber damping fill (`chambers[].fill`, catalog/damping/): bought by the chamber's
+    // listed box volume in litres. Plastic placed in the chamber is not subtracted here; the
+    // page can shrink the chamber if the fill only packs part of it.
+    for chamber in &design.speaker.enclosure.chambers {
+        let Some(id) = chamber.get("fill").and_then(Value::as_str) else {
+            continue;
+        };
+        let name = chamber
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("chamber");
+        let min = chamber.get("min_m").and_then(Value::as_array);
+        let max = chamber.get("max_m").and_then(Value::as_array);
+        let volume = match (min, max) {
+            (Some(lo), Some(hi)) if lo.len() == 3 && hi.len() == 3 => {
+                let mut v = 1.0;
+                for i in 0..3 {
+                    let a = lo[i].as_f64().unwrap_or(0.0);
+                    let b = hi[i].as_f64().unwrap_or(0.0);
+                    v *= (b - a).max(0.0);
+                }
+                v
+            }
+            _ => 0.0,
+        };
+        let litres = volume * n * 1000.0;
+        match catalog::damping(id) {
+            Some(r) => lines.push(line(
+                format!("Damping fill, {name}: {}", name_of(&r, id)),
+                litres,
+                "L",
+                r.get("price_per_litre").and_then(Value::as_f64),
+                r.pointer("/price/read_on")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                r.pointer("/price/via").is_some(),
+            )),
+            None => problems.push(format!(
+                "Chamber {name}: fill {id} is not a damping material in the catalog."
+            )),
+        }
+    }
+
     // Printed parts.
     let material = catalog::material(&design.build.material);
     let density = material

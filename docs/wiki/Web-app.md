@@ -22,7 +22,7 @@ The interface never computes physics. It edits a design document, calls engine w
 
 | File / area | Role |
 | --- | --- |
-| `App.tsx` | Main editor and results layout |
+| `App.tsx` | Main editor and results layout (inside editor: chambers, ducts, chamber damping fill) |
 | `useEngine.ts` / `engineWorker.ts` | Sim worker RPC |
 | `fdtdWorker.ts` / `jobWorker.ts` | Long jobs with progress |
 | `wavefieldWorker.ts` | Pressure-field capture for wave views |

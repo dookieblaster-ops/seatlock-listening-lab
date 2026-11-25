@@ -587,6 +587,8 @@ pub fn cabinet_walls(design: &DesignFile, outer: &dyn OuterShape) -> Result<Cabi
             min_m: lo,
             max_m: hi,
             plastic_m3: 0.0,
+            fill: None,
+            fill_sigma: None,
             region: None,
         };
         let mut cabinet = chamber_walls(design, outer, std::slice::from_ref(&chamber))?;

@@ -18,6 +18,10 @@ pub struct Chamber {
     pub max_m: [f64; 3],
     /// Plastic placed in this chamber's air (the design's `voxels` solids), m^3.
     pub plastic_m3: f64,
+    /// Catalog damping material id filling this chamber's air (`catalog/damping/`), when set.
+    pub fill: Option<String>,
+    /// Flow resistivity of `fill` in Pa·s/m², resolved from the catalog when `fill` is set.
+    pub fill_sigma: Option<f64>,
     /// For an imported model with marked holes: the enclosed air space this chamber is, found
     /// from the model's geometry; `min_m` and `max_m` are then only its bounds.
     pub region: Option<(std::sync::Arc<AirRegions>, usize)>,
@@ -90,6 +94,8 @@ pub fn for_simulation(design: &DesignFile, shape: &dyn OuterShape) -> Result<Vec
                 min_m: lo,
                 max_m: hi,
                 plastic_m3: 0.0,
+                fill: None,
+                fill_sigma: None,
                 region: Some((air.clone(), index)),
             }
         })
@@ -122,11 +128,48 @@ pub fn chambers(design: &DesignFile) -> Result<Vec<Chamber>, String> {
         if out.iter().any(|other| other.id == id) || id == "outside" {
             return Err(format!("Two chambers are called {id}."));
         }
+        let fill = match raw.get("fill") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(
+                v.as_str()
+                    .ok_or_else(|| {
+                        format!("Chamber {id}: fill must be a damping material id or null.")
+                    })?
+                    .to_string(),
+            ),
+        };
+        let fill_sigma = match &fill {
+            None => None,
+            Some(material) => {
+                let record = seatlock_core::catalog::damping(material).ok_or_else(|| {
+                    format!(
+                        "Chamber {id}: fill {material} is not a damping material in the catalog."
+                    )
+                })?;
+                let sigma = record
+                    .get("flow_resistivity_pa_s_m2")
+                    .and_then(Value::as_f64)
+                    .ok_or_else(|| {
+                        format!(
+                            "Chamber {id}: damping material {material} has no flow resistivity."
+                        )
+                    })?;
+                if sigma <= 0.0 {
+                    return Err(format!(
+                        "Chamber {id}: damping material {material} has a non-positive flow \
+                         resistivity."
+                    ));
+                }
+                Some(sigma)
+            }
+        };
         out.push(Chamber {
             id,
             min_m,
             max_m,
             plastic_m3: 0.0,
+            fill,
+            fill_sigma,
             region: None,
         });
     }
