@@ -45,31 +45,34 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Owner: billing or local-merge for PR #33
+### 2026-11-25 — Cursor — Handoff: start here. Real exciters next (PR #33 merged)
 
-- **To:** next lead session (Claude or Cursor) + owner (one product question)
+- **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `a20c206`. Level 3. Lead review done; merge still gated.
+- **Context:** `main` @ `76036d4` (PR #33 merged on owner local-merge go-ahead). Level 3.
 
-**Lead review (accepted if merge allowed):** Matches README 12 D (inside standing + pulse, outside BEM probes, bass room grid). `SourcePatch.open` / `aperture` vs `skin` keeps wall vibration off open BEM mouths (CHK-BEM-10 intact). Wiki articles already updated on the branch. No invented damping. Do not merge until the owner clears the gate below.
-
-**Re-verified this session (Cursor cloud):** `cargo fmt --check` ok; clippy `-D warnings` on seatlock-sim / seatlock-fdtd / seatlock-wasm ok; `cargo test -p seatlock-sim --release --test wavefield` 3 passed; `bem_page_repro` 1 passed; WaveView vitest 5 passed. Actions tip still fails with empty job steps (billing) — run `45683296657`. Earlier suite green on this PR at `bf353b2` / `42ef7e1` before the billing block.
-
-**Blocked for the owner (not a code bug):** GitHub Actions will not start Check jobs (“payments have failed or spending limit”). Fix billing / spending limit in GitHub settings, **or** reply that the lead may merge PR #33 after this local re-verify (recommendation: allow local-only merge so the wave views land; fix billing when convenient so Check keeps guarding `main`).
+**Done this session:** (1) Owner said yes to merge on local check. Fast-forwarded `main` with PR #33 (3D wave views + wow-pass; BEM aperture vs skin; Generate e2e path). PR #33 **merged**. (2) Soft-TPU / foamed-filament loss **skipped**: colorFabb varioShore TDS and Siraya Roamr TDS have no DMA / tan δ / loss factor; Irska Z-SEMIFLEX already rejected (Tα near room temp). Keep Irvine rubber 0.10 labeled. Do not invent.
 
 **Open, in order:**
-1. **Owner:** clear Actions billing, **or** say “merge on local check.”
-2. **Merge PR #33 into `main`** when that gate opens.
-3. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
-4. Optional BEM high-ka lit-gap only if it blocks.
-5. Criton leftovers only if a source appears.
-6. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
+1. **Real exciters** in `catalog/exciters/` from Dayton DAEX (or other) sheets opened in-session — replace `test-exciter-a` for the panel speaker (README 9.1 / 12).
+2. Optional BEM high-ka lit-gap only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Level 3 remainder (STATUS / README 12): 3D losses / fill / loops / loft / FIR / … as capacity allows; Fable-held items stay held if still available.
+5. Optional: fix GitHub Actions billing so Check runs again; second backup remote / Pro protect-`main` (`docs/backups.md`).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Software WebGL: no Additive mega-points / fog at orbit radius.
+**Pitfalls:** Do not invent damping or exciter numbers. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12.
 
-**Last check:** Local re-verify green (above). Full `tools/cloud-check.sh` not re-run this turn (Actions blocked; focused suite covers the PR surface).
+**Last check:** Prior local re-verify on the merged tip (fmt, clippy sim/fdtd/wasm, wavefield 3, bem_page_repro, WaveView 5). Actions still billing-blocked on this account.
 
-**Next step:** Owner answers the billing / local-merge question → merge #33 → soft-TPU only with a source.
+**Next step:** source real exciters from open data sheets, or the next Level 3 remainder item that does not invent.
+
+### 2026-11-25 — Cursor — Handoff: Owner billing or local-merge for PR #33 (superseded)
+
+- **To:** next lead session (Claude or Cursor) + owner
+- **Status:** handoff
+- **Context:** PR #33. Superseded: owner allowed local-merge; #33 on `main`.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: Merge PR #33 (Actions billing block), then soft-TPU (superseded)
 
@@ -518,6 +521,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-25: PR #33 (3D wave views + wow-pass) merged to `main` on owner local-merge go-ahead; soft-TPU filament DMA skipped (no source).
 - 2026-11-24: 3D wave views (inside FDTD / outside BEM / room bass grid) on the page with animated standing wave and pulse.
 - 2026-11-23: GitHub Actions confirmed on; rustfmt fixed; shape wall-gap bound derived (Actions 8.05 % gap); protect-`main` still Pro-gated; optional backup URL still open.
 - 2026-11-23: Living software wiki at `docs/wiki/` (structure articles; README remains the spec).
