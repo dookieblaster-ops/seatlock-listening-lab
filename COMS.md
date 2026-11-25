@@ -45,21 +45,43 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-24 — Cursor — Handoff: start here. Soft-TPU / lit-gap after wave views
+### 2026-11-25 — Cursor — Handoff: start here. Wow the 3D sound views
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/wave-field-viz-741a` (PR #33). Level 3. Owner asked for mind-blowing inside/outside/room visualization graphics.
+- **Context:** PR #33 `cursor/wave-field-viz-741a` (Actions Check green). Level 3. Owner: improve 3D sound visualization — it should wow the user.
 
-**Done this session:** Level 3 D wave views (inside/outside/room). BEM+walls page e2e fixed (`SourcePatch.open`). WaveView blank-canvas pulse crash fixed. Generate Actions: worker reject/timeout, continue on failure, default 8 evals, e2e `__SEATLOCK_GENERATE_EVALS=6`, lanes ≤4, ~20 min e2e budget.
+**Done (this branch, ready to merge):** Inside / outside / room wave views (`simulate.wavefield` + `WaveView`). BEM+walls open-mouth fix (`SourcePatch.open`). WaveView pulse blank-canvas fix. Generate e2e unstick + speed path. Screenshots under `/opt/cursor/artifacts/wave-view-*.png` (cloud software WebGL — softer than a real GPU).
 
-**Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). (6) Wave-view polish later if wanted. Keep wiki articles true when architecture changes.
+**Open, in order:**
+1. **Wow the 3D sound views (owner priority).** Ship visual upgrades that make an audiophile stop and stare. Keep physics honest (fidelity notes stay true). Concrete levers, do not invent physics:
+   - **Readability over blob:** outside standing waves often wash to a white/amber ball; compress or percentile-scale amplitude, raise default "Hide quiet air", or use a signed log/diverging map so nodal planes and lobes read clearly.
+   - **Cabinet as hero:** stronger cutaway (clip plane or fade front face), clearer driver/listener orbs, optional wireframe only on edges; inside should feel like looking into the box, not a cloud with a faint cage.
+   - **Motion that teaches:** auto-orbit that pauses on drag; standing-wave phase that shows nodes breathing; pulse with a subtle time scrubber / replay; freeze-frame that still looks good (screenshot-stable phase).
+   - **Outside pulse:** optional exterior FDTD or quasi-time from multi-frequency BEM — only if cheap enough for the page; else say why standing-only.
+   - **Room view:** enable when the room estimate is on; show walls as a dim wire box and the listener; assume proportions stay labeled unless real room L×W×H fields exist.
+   - **Presence:** 2–3 intentional motions (orbit intro, phase breathe, pulse front); avoid glow spam / purple defaults; keep teal↔amber language; test on a real GPU, not only software WebGL.
+   - Touch `docs/wiki/Web-app.md` (and Data-flow if the pipeline moves) in the same commit.
+2. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent.
+3. Optional BEM high-ka lit-gap diagnosis only if it blocks.
+4. Criton leftovers only if a source appears.
+5. Optional: second backup remote / Pro protect-`main` (`docs/backups.md`).
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Job workers must reject on error/timeout or Generate stays on "Proposing…". Generate e2e is wall-clock heavy on Actions Wasm (CTA preference). Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room proportions assumed — fidelity notes say so. Outside has no pulse today (frequency-domain BEM). Generate e2e is wall-clock heavy on Actions Wasm.
 
-**Last check:** Actions Check green on PR #33 (`42ef7e1`).
+**Last check:** Actions Check green on `42ef7e1` / follow-up docs commit `bf353b2`.
 
-**Next step:** review/merge PR #33; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
+**Next step:** merge PR #33 if not already, then ship item (1) wow-pass on the wave views; screenshots for the owner when done.
+
+### 2026-11-24 — Cursor — Handoff: Soft-TPU / lit-gap after wave views (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/wave-field-viz-741a` (PR #33). Superseded by wow-views handoff above.
+
+**Done this session:** Level 3 D wave views; BEM+walls fix; WaveView paint fix; Generate Actions path. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-23 — Cursor — Handoff: Soft-TPU / lit-gap; owner backup leftovers (superseded)
 
