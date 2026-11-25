@@ -51,13 +51,13 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 - **Status:** handoff
 - **Context:** branch `cursor/wave-field-viz-741a` (PR #33). Level 3. Owner asked for mind-blowing inside/outside/room visualization graphics.
 
-**Done this session:** Level 3 D wave views (inside/outside/room). BEM+walls page e2e fixed (`SourcePatch.open`). WaveView blank-canvas pulse crash fixed. Generate Actions hang: `runJob` now rejects on worker error / 10 min timeout; Generate continues on family failure and caps lanes at 3; generate e2e retries=0.
+**Done this session:** Level 3 D wave views (inside/outside/room). BEM+walls page e2e fixed (`SourcePatch.open`). WaveView blank-canvas pulse crash fixed. Generate Actions: worker reject/timeout, continue on failure, default 8 evals, e2e `__SEATLOCK_GENERATE_EVALS=6`, lanes ≤4, ~20 min e2e budget.
 
 **Open, in order:** (1) Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test — do not invent. (2) Optional BEM: high-ka lit-gap diagnosis only if it blocks. (3) Criton leftovers only if a source appears. (4) Optional: owner may change `preference_min` (default 5.0). (5) Optional: second backup remote URL / Pro protect-`main` (`docs/backups.md`). (6) Wave-view polish later if wanted. Keep wiki articles true when architecture changes.
 
-**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Job workers must reject on error/timeout or Generate stays on "Proposing…". Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
+**Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration patches as open BEM mouths. Job workers must reject on error/timeout or Generate stays on "Proposing…". Generate e2e is wall-clock heavy on Actions Wasm (CTA preference). Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Room wave view proportions are assumed — fidelity notes say so. Outside has no pulse (frequency-domain BEM).
 
-**Last check:** vitest 7 + tsc green after generate hang fix. Re-pushing for Actions Check.
+**Last check:** tsc green after generate speed/e2e budget tweak. Re-pushing for Actions Check.
 
 **Next step:** confirm Actions green on PR #33; then soft-TPU DMA (only with a source) or lit-gap if it blocks.
 

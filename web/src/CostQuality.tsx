@@ -31,7 +31,7 @@ type ComboResult = {
 };
 
 /** Per-job wall limit so a stuck Wasm call cannot leave the page spinning forever. */
-const JOB_TIMEOUT_MS = 10 * 60 * 1000;
+const JOB_TIMEOUT_MS = 4 * 60 * 1000;
 
 export function runJob(
   method: string,

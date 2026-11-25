@@ -49,15 +49,18 @@ export function Generate({ text, onOpen }: { text: string; onOpen: (design: unkn
       }
       const finished: FamilyResult[] = [];
       const queue = [...families];
-      // Cap lanes so several large Wasm modules do not OOM the tab (Actions Check hang).
-      const lanes = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 4) - 1));
+      // Cap lanes so several Wasm modules do not OOM the tab; keep enough for wall-clock speed.
+      const lanes = Math.max(2, Math.min(4, navigator.hardwareConcurrency || 4));
+      // Prefer a page override (e2e can set window.__SEATLOCK_GENERATE_EVALS) so CI stays fast.
+      const evalOverride = Number((globalThis as { __SEATLOCK_GENERATE_EVALS?: number }).__SEATLOCK_GENERATE_EVALS);
+      const evaluations = Number.isFinite(evalOverride) && evalOverride > 0 ? Math.floor(evalOverride) : 8;
       const lane = async () => {
         for (let family = queue.shift(); family; family = queue.shift()) {
           const { index, label } = family;
           try {
             const json = await runJob(
               "generate.family",
-              { text, family: index, seed: 1, evaluations: 12 },
+              { text, family: index, seed: 1, evaluations },
               (done, total) => setProgress((old) => ({ ...old, [index]: `${label}: ${done} of ${total}` })),
               workers.current,
             );
