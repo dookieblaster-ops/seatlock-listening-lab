@@ -11,7 +11,11 @@ fn load_example(name: &str) -> seatlock_core::DesignFile {
 }
 
 fn main() {
-    let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/opt/cursor/artifacts".into()));
+    let out = PathBuf::from(
+        std::env::args()
+            .nth(1)
+            .unwrap_or_else(|| "/opt/cursor/artifacts".into()),
+    );
     fs::create_dir_all(&out).ok();
     let registry = builtin();
 
@@ -28,8 +32,16 @@ fn main() {
         &mut |_, _| true,
     )
     .expect("inside");
-    fs::write(out.join("wave-inside.json"), serde_json::to_string(&inside).unwrap()).unwrap();
-    eprintln!("inside cells {} @ {} Hz", inside.field.cells.len(), inside.frequency_hz);
+    fs::write(
+        out.join("wave-inside.json"),
+        serde_json::to_string(&inside).unwrap(),
+    )
+    .unwrap();
+    eprintln!(
+        "inside cells {} @ {} Hz",
+        inside.field.cells.len(),
+        inside.frequency_hz
+    );
 
     let outside = wave_field(
         &load_example("sealed-test"),
@@ -43,8 +55,16 @@ fn main() {
         &mut |_, _| true,
     )
     .expect("outside");
-    fs::write(out.join("wave-outside.json"), serde_json::to_string(&outside).unwrap()).unwrap();
-    eprintln!("outside cells {} @ {} Hz", outside.field.cells.len(), outside.frequency_hz);
+    fs::write(
+        out.join("wave-outside.json"),
+        serde_json::to_string(&outside).unwrap(),
+    )
+    .unwrap();
+    eprintln!(
+        "outside cells {} @ {} Hz",
+        outside.field.cells.len(),
+        outside.frequency_hz
+    );
 
     let mut design = load_example("sealed-test");
     design.speaker.room = Some(
@@ -70,6 +90,14 @@ fn main() {
         &mut |_, _| true,
     )
     .expect("room");
-    fs::write(out.join("wave-room.json"), serde_json::to_string(&room).unwrap()).unwrap();
-    eprintln!("room cells {} @ {} Hz", room.field.cells.len(), room.frequency_hz);
+    fs::write(
+        out.join("wave-room.json"),
+        serde_json::to_string(&room).unwrap(),
+    )
+    .unwrap();
+    eprintln!(
+        "room cells {} @ {} Hz",
+        room.field.cells.len(),
+        room.frequency_hz
+    );
 }
