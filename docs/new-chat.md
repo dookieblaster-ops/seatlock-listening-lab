@@ -31,7 +31,7 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. Owner billing / spending limit so Actions can run (or go-ahead to merge on local check) → merge **PR #33**
+1. Owner: fix GitHub Actions billing / spending limit, **or** say the lead may merge on local check → merge **PR #33** (lead review + local re-verify already green)
 2. Soft TPU / foamed-filament loss only with a filament-specific DMA or tap test (skip if no source); optional high-ka lit-gap only if it blocks
 3. Criton leftovers only if a source appears
 4. Optional: second backup remote URL / protect `main` (needs GitHub Pro on this private repo — skip is fine)

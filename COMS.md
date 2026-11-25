@@ -45,21 +45,21 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Merge PR #33 (Actions billing block), then soft-TPU
+### 2026-11-25 — Cursor — Handoff: start here. Owner: billing or local-merge for PR #33
 
-- **To:** next lead session (Claude or Cursor)
+- **To:** next lead session (Claude or Cursor) + owner (one product question)
 - **Status:** handoff
-- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `9f2c018`. Level 3. Owner wrapped — continue without asking.
+- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `a20c206`. Level 3. Lead review done; merge still gated.
 
-**Done (code ready; merge gated):**
-- 3D wave views + wow-pass (inside / outside / room). BEM+walls open-mouth fix; Generate e2e path; rustfmt on `dump_wavefield`.
-- Local demo `web/wave-demo.html` (fixtures gitignored). Screenshots `/opt/cursor/artifacts/wave-wow-*.png`.
+**Lead review (accepted if merge allowed):** Matches README 12 D (inside standing + pulse, outside BEM probes, bass room grid). `SourcePatch.open` / `aperture` vs `skin` keeps wall vibration off open BEM mouths (CHK-BEM-10 intact). Wiki articles already updated on the branch. No invented damping. Do not merge until the owner clears the gate below.
 
-**Blocked for the owner (not a code bug):** GitHub Actions will not start jobs: “recent account payments have failed or your spending limit needs to be increased” (run `45682816767`, 2 s, no steps). Earlier long Check on `5355eb7` was cancelled by the wrap push. Owner: fix billing / spending limit in GitHub settings, or say the next lead may merge after a local `tools/cloud-check.sh` / `./check.sh` green.
+**Re-verified this session (Cursor cloud):** `cargo fmt --check` ok; clippy `-D warnings` on seatlock-sim / seatlock-fdtd / seatlock-wasm ok; `cargo test -p seatlock-sim --release --test wavefield` 3 passed; `bem_page_repro` 1 passed; WaveView vitest 5 passed. Actions tip still fails with empty job steps (billing) — run `45683296657`. Earlier suite green on this PR at `bf353b2` / `42ef7e1` before the billing block.
+
+**Blocked for the owner (not a code bug):** GitHub Actions will not start Check jobs (“payments have failed or spending limit”). Fix billing / spending limit in GitHub settings, **or** reply that the lead may merge PR #33 after this local re-verify (recommendation: allow local-only merge so the wave views land; fix billing when convenient so Check keeps guarding `main`).
 
 **Open, in order:**
-1. **Owner billing / spending limit** so Actions can run, **or** explicit go-ahead to merge on local check only.
-2. **Merge PR #33 into `main`** when Check is green (or owner allows local-only).
+1. **Owner:** clear Actions billing, **or** say “merge on local check.”
+2. **Merge PR #33 into `main`** when that gate opens.
 3. Soft TPU / foamed-filament loss **only** with a filament-specific DMA or tap test — do not invent. Skip if no source.
 4. Optional BEM high-ka lit-gap only if it blocks.
 5. Criton leftovers only if a source appears.
@@ -67,9 +67,17 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Pitfalls:** Do not invent damping. Do not weaken CHK-BEM-*. Do not cut wall vibration as open BEM mouths. Do not dump README physics into the wiki. Do not put tokens in chat. Do not digitize graphs. Do not undo Q12. Software WebGL: no Additive mega-points / fog at orbit radius.
 
-**Last check:** Local fmt/clippy/wavefield/WaveView expected green on this tip (re-verify in next session). Actions blocked on billing — not a suite failure.
+**Last check:** Local re-verify green (above). Full `tools/cloud-check.sh` not re-run this turn (Actions blocked; focused suite covers the PR surface).
 
-**Next step:** Owner clears Actions billing (or allows local-only merge) → merge #33 → soft-TPU only with a source.
+**Next step:** Owner answers the billing / local-merge question → merge #33 → soft-TPU only with a source.
+
+### 2026-11-25 — Cursor — Handoff: Merge PR #33 (Actions billing block), then soft-TPU (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** PR #33 `cursor/wave-field-viz-741a` @ `9f2c018`. Superseded by lead-review handoff above.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: Soft-TPU / lit-gap after wow views (superseded)
 
