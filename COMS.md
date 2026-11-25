@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after FIR
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after waveguide loops
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/fir-blocks-da03` (PR onto `main`). Level 3. Chamber fill already on `main` (PR #36).
+- **Context:** branch `cursor/waveguide-loops-da03` (PR onto `main`). Level 3. FIR on `main` (PR #37).
 
-**Done this session:** (1) Merged chamber damping fill to `main`. (2) **FIR blocks and linear-phase crossovers:** kind `fir` (`taps`); crossover `family` `linear-phase`/`fir` orders 2/4/8 → 65/129/257-tap Hann sinc, complementary HP; `latency_samples` on trait; fidelity notes total FIR/delay latency. Not done: FIR WAV export, C7 auto correction, worklet FIR steps.
+**Done this session:** (1) Merged FIR to `main`. (2) **Waveguide loops:** when chambers/ducts form a loop, detailed model solves a nodal mesh of duct Y-parameters (same slicing/end corrections as the tree); fidelity notes the mesh; tree path unchanged (BEM mouths still iterate). Not a substitute for partition vibration (still lumped when partitions are active).
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): loops / loft / fill in quick+detailed / passive radiators / …; Fable-held if still available.
+1. Level 3 remainder (STATUS / README 12): loft / fill in quick+detailed / passive radiators / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
 4. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears.
 
-**Last check:** `cargo test -p seatlock-dsp --release --test fir --test checks` 6; `cargo test -p seatlock-sim --release --test fir` 1; clippy `-D warnings` on seatlock-core/dsp/sim; fmt ok. Full `tools/cloud-check.sh` not re-run this turn.
+**Last check:** `cargo test -p seatlock-acoustics --release --test mesh --test checks` (mesh 3 + WG); `cargo test -p seatlock-sim --release --test loops --test folded --test chamber_loads`; clippy `-D warnings` on acoustics/sim; fmt ok.
 
-**Next step:** merge this PR when ready; then Level 3 remainder (loops / loft / fill in everyday models / …) without inventing.
+**Next step:** merge this PR when ready; then Level 3 remainder (loft / fill in everyday models / …) without inventing.
+
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after FIR (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/fir-blocks-da03`. Superseded by waveguide-loops handoff above.
+
+**Done this session:** FIR blocks. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after chamber fill (superseded)
 

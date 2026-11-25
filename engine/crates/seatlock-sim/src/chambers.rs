@@ -4,7 +4,7 @@
 //! and ducts its edges. With no chambers listed, the whole inside is one chamber, `main`.
 
 use seatlock_acoustics::network::Duct;
-use seatlock_acoustics::{end_correction_m, PortSpec};
+use seatlock_acoustics::{end_correction_m, MeshDuct, PortSpec, WaveguideMesh};
 use seatlock_core::registry::{AirRegions, MouldedOpening, OuterShape};
 use seatlock_core::DesignFile;
 use serde_json::Value;
@@ -576,13 +576,86 @@ fn build(
 /// duct is a transmission line along its center line (a bend counts as straight, a taper is
 /// sliced), ending in the radiation load of its mouth or in the chamber at its far end, and
 /// that chamber in turn in its own ducts. Chambers are compliances. A network with a loop
-/// is not a tree, and is refused with the reason.
+/// is solved as a nodal mesh of the same duct Y-parameters (Level 3).
 pub struct WaveguideNetwork {
-    pub root: seatlock_acoustics::AcousticNode,
+    pub body: WaveguideBody,
     /// For each opening the solved result lists, in its order, the index of that duct among
     /// the ducts to the outside, in design order.
     pub opening_order: Vec<usize>,
     pub notes: Vec<String>,
+}
+
+pub enum WaveguideBody {
+    /// Tree grown from the driver's chamber (no loops).
+    Tree(seatlock_acoustics::AcousticNode),
+    /// General chamber–duct graph, including loops.
+    Mesh(WaveguideMesh),
+}
+
+impl WaveguideNetwork {
+    pub fn solve(
+        &self,
+        freq_hz: f64,
+        lossy: bool,
+        walls: &[num_complex::Complex64],
+    ) -> seatlock_acoustics::WaveguideResult {
+        match &self.body {
+            WaveguideBody::Tree(root) => {
+                seatlock_acoustics::solve_with_walls(root, freq_hz, lossy, walls)
+            }
+            WaveguideBody::Mesh(mesh) => {
+                seatlock_acoustics::solve_mesh(mesh, freq_hz, lossy, walls, None)
+            }
+        }
+    }
+
+    /// Analytic mouths, or a full BEM mouth impedance matrix (mutual loads iterated).
+    pub fn solve_radiation(
+        &self,
+        freq_hz: f64,
+        z_rad: Option<&[Vec<num_complex::Complex64>]>,
+        lossy: bool,
+        walls: &[num_complex::Complex64],
+    ) -> seatlock_acoustics::WaveguideResult {
+        match (z_rad, &self.body) {
+            (Some(z), WaveguideBody::Tree(root)) => {
+                seatlock_acoustics::solve_with_radiation_matrix(root, freq_hz, z, lossy, walls)
+            }
+            (Some(z), WaveguideBody::Mesh(mesh)) => {
+                let n = z.len();
+                if n == 0 {
+                    return seatlock_acoustics::solve_mesh(mesh, freq_hz, lossy, walls, None);
+                }
+                let mut loads: Vec<_> = (0..n)
+                    .map(|i| z[i].get(i).copied().unwrap_or_default())
+                    .collect();
+                let mut solved =
+                    seatlock_acoustics::solve_mesh(mesh, freq_hz, lossy, walls, Some(&loads));
+                for _ in 0..8 {
+                    if solved.openings.len() != n {
+                        break;
+                    }
+                    let next = seatlock_acoustics::effective_radiation_loads(z, &solved.openings);
+                    let mut settled = true;
+                    for (old, new) in loads.iter().zip(next.iter()) {
+                        let scale = old.norm().max(new.norm()).max(1e-12);
+                        if (old - new).norm() / scale > 1e-6 {
+                            settled = false;
+                            break;
+                        }
+                    }
+                    loads = next;
+                    solved =
+                        seatlock_acoustics::solve_mesh(mesh, freq_hz, lossy, walls, Some(&loads));
+                    if settled {
+                        break;
+                    }
+                }
+                solved
+            }
+            (None, _) => self.solve(freq_hz, lossy, walls),
+        }
+    }
 }
 
 /// `names` and `volumes_m3` are the chambers (one called `main` when the design lists none),
@@ -727,11 +800,7 @@ pub fn waveguide_network(
                 }
                 Some(other) => {
                     if seen[other] {
-                        return Err(
-                            "its chambers and ducts form a loop, which the detailed model does \
-                             not solve yet."
-                                .into(),
-                        );
+                        return Err("loop".into());
                     }
                     (
                         chamber_node(other, volumes, edges, seen, used, order)?,
@@ -769,9 +838,59 @@ pub fn waveguide_network(
         }
         Ok(AcousticNode::Parallel(branches))
     }
-    let root = chamber_node(driver, volumes_m3, &edges, &mut seen, &mut used, &mut order)?;
     let mut notes = Vec::new();
-    if used.iter().any(|u| !u) {
+    let body = match chamber_node(driver, volumes_m3, &edges, &mut seen, &mut used, &mut order) {
+        Ok(root) => WaveguideBody::Tree(root),
+        Err(err) if err == "loop" => {
+            // Same ducts as Y-parameter branches on a chamber nodal matrix (README 5.4).
+            let mut mesh_edges = Vec::with_capacity(edges.len());
+            let mut mesh_order = Vec::new();
+            for edge in &edges {
+                let forward = true;
+                let (s_near, s_far) = if forward { (0.0, 1.0) } else { (1.0, 0.0) };
+                let (a_near, a_far) = (
+                    edge.section.area(s_near, 0.0),
+                    edge.section.area(s_far, 0.0),
+                );
+                let r_near = (a_near / std::f64::consts::PI).sqrt();
+                let r_far = (a_far / std::f64::consts::PI).sqrt();
+                let (from, to, added, mouth) = match (edge.a, edge.b) {
+                    (Some(a), Some(b)) => (a, Some(b), 0.849 * r_near + 0.849 * r_far, a_far),
+                    (Some(a), None) => (a, None, 0.849 * r_near, a_far),
+                    (None, Some(b)) => (b, None, 0.849 * r_far, a_near),
+                    (None, None) => continue,
+                };
+                if let Some(slot) = edge.outside_slot {
+                    mesh_order.push(slot);
+                }
+                mesh_edges.push(MeshDuct {
+                    from,
+                    to,
+                    length_m: edge.length,
+                    area_in_m2: if edge.a.is_some() { a_near } else { a_far },
+                    area_out_m2: if edge.a.is_some() { a_far } else { a_near },
+                    added_length_m: if edge.slices.is_some() { 0.0 } else { added },
+                    slices: edge.slices.clone(),
+                    outside_slot: edge.outside_slot,
+                    mouth_area_m2: mouth,
+                });
+            }
+            mesh_order.sort_unstable();
+            order = mesh_order;
+            notes.push(
+                "Its chambers and ducts form a loop: the detailed model solves them as a mesh \
+                 of duct transmission lines, not a tree."
+                    .into(),
+            );
+            WaveguideBody::Mesh(WaveguideMesh {
+                volumes_m3: volumes_m3.to_vec(),
+                edges: mesh_edges,
+                driver,
+            })
+        }
+        Err(err) => return Err(err),
+    };
+    if matches!(body, WaveguideBody::Tree(_)) && used.iter().any(|u| !u) {
         notes.push(
             "Some ducts do not connect to the driver's chamber, so the detailed model leaves \
              them out."
@@ -807,7 +926,7 @@ pub fn waveguide_network(
         "Chambers are single compliances, so standing waves inside them are not modeled.".into(),
     );
     Ok(WaveguideNetwork {
-        root,
+        body,
         opening_order: order,
         notes,
     })

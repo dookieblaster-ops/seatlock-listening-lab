@@ -5,6 +5,7 @@ mod cone;
 pub mod dml;
 pub mod laminate;
 pub mod network;
+pub use network::{lumped_network, lumped_network_with_walls, Duct, NetworkSample};
 pub mod passive;
 pub mod plate;
 mod point;
@@ -33,8 +34,8 @@ pub use vented::{
 };
 pub use waveguide::{
     closed_duct_impedance, effective_radiation_loads, helmholtz, ported_box, radiation_impedance,
-    solve, solve_lossy, solve_with_radiation_matrix, solve_with_walls, with_fixed_radiation_loads,
-    AcousticNode, WaveguideResult, WALL_LOSS,
+    solve, solve_lossy, solve_mesh, solve_with_radiation_matrix, solve_with_walls,
+    with_fixed_radiation_loads, AcousticNode, MeshDuct, WaveguideMesh, WaveguideResult, WALL_LOSS,
 };
 
 use num_complex::Complex64;

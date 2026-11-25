@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use num_complex::Complex64;
 use seatlock_acoustics::{
-    baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3, solve, solve_lossy,
-    solve_with_radiation_matrix, solve_with_walls, spl_db, vented_sample, PortSpec,
+    baffle_step_hz_for_outline, blend_measured_curve, cone_displacement_m3, spl_db, vented_sample,
+    PortSpec,
 };
 use seatlock_core::catalog;
 use seatlock_core::constants::{C0, P_REF, RHO0};
@@ -611,25 +611,14 @@ pub fn simulate_with_progress(
                 match wave {
                     Some(Ok(network)) => {
                         for (bin, freq) in freqs.iter().enumerate() {
-                            let solved = match bem_mouth_matrix(
-                                &network.opening_order,
-                                bem_mouth_z.as_ref(),
-                                bin,
-                            ) {
-                                Some(z_rad) => solve_with_radiation_matrix(
-                                    &network.root,
-                                    *freq,
-                                    &z_rad,
-                                    request.losses,
-                                    &wall_y[bin],
-                                ),
-                                None => solve_with_walls(
-                                    &network.root,
-                                    *freq,
-                                    request.losses,
-                                    &wall_y[bin],
-                                ),
-                            };
+                            let z_rad =
+                                bem_mouth_matrix(&network.opening_order, bem_mouth_z.as_ref(), bin);
+                            let solved = network.solve_radiation(
+                                *freq,
+                                z_rad.as_deref(),
+                                request.losses,
+                                &wall_y[bin],
+                            );
                             for (slot, p) in &solved.pressures {
                                 if let Some(cell) = pressures[bin].get_mut(*slot) {
                                     *cell = *p;
@@ -761,21 +750,10 @@ pub fn simulate_with_progress(
                     let mut impedance = Vec::with_capacity(freqs.len());
                     let mut samples = Vec::with_capacity(freqs.len());
                     for (bin, freq) in freqs.iter().enumerate() {
-                        let wave = match bem_mouth_matrix(
-                            &network.opening_order,
-                            bem_mouth_z.as_ref(),
-                            bin,
-                        ) {
-                            Some(z_rad) => solve_with_radiation_matrix(
-                                &network.root,
-                                *freq,
-                                &z_rad,
-                                request.losses,
-                                &[],
-                            ),
-                            None if request.losses => solve_lossy(&network.root, *freq),
-                            None => solve(&network.root, *freq),
-                        };
+                        let z_rad =
+                            bem_mouth_matrix(&network.opening_order, bem_mouth_z.as_ref(), bin);
+                        let wave =
+                            network.solve_radiation(*freq, z_rad.as_deref(), request.losses, &[]);
                         let slots = network
                             .opening_order
                             .iter()
