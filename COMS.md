@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after chamber fill
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after FIR
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/chamber-damping-fill-da03` (PR onto `main`). Level 3.
+- **Context:** branch `cursor/fir-blocks-da03` (PR onto `main`). Level 3. Chamber fill already on `main` (PR #36).
 
-**Done this session:** (1) Pulled `main` (exciters + wave views already in). (2) Soft-TPU still skipped (no filament DMA). (3) **Chamber damping fill:** `chambers[].fill` → `catalog/damping/` id; FDTD Rayleigh path (same as imported damping); cost by chamber box litres; page "Damping fill" on each air space; quick/detailed label filled chambers as empty air. Isover on sealed-test: tallest |Z_ab| 500 Hz–3 kHz ~1e7 → ~4e4. Closed stale PR #34.
+**Done this session:** (1) Merged chamber damping fill to `main`. (2) **FIR blocks and linear-phase crossovers:** kind `fir` (`taps`); crossover `family` `linear-phase`/`fir` orders 2/4/8 → 65/129/257-tap Hann sinc, complementary HP; `latency_samples` on trait; fidelity notes total FIR/delay latency. Not done: FIR WAV export, C7 auto correction, worklet FIR steps.
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): loops / loft / FIR / fill in quick+detailed / passive radiators / …; Fable-held if still available.
+1. Level 3 remainder (STATUS / README 12): loops / loft / fill in quick+detailed / passive radiators / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
-4. Optional: fix GitHub Actions billing; second backup remote / Pro protect-`main`.
+4. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Two chambers without a duct still partition (fill is per chamber air, not a free region).
+**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears.
 
-**Last check:** `cargo test -p seatlock-sim --release --test fill` 3; clippy `-D warnings` on seatlock-sim; fmt ok. Full `tools/cloud-check.sh` not re-run this turn. Actions still billing-blocked.
+**Last check:** `cargo test -p seatlock-dsp --release --test fir --test checks` 6; `cargo test -p seatlock-sim --release --test fir` 1; clippy `-D warnings` on seatlock-core/dsp/sim; fmt ok. Full `tools/cloud-check.sh` not re-run this turn.
 
-**Next step:** merge this PR when ready; then Level 3 remainder (loops / loft / FIR / …) without inventing.
+**Next step:** merge this PR when ready; then Level 3 remainder (loops / loft / fill in everyday models / …) without inventing.
+
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after chamber fill (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/chamber-damping-fill-da03`. Superseded by FIR handoff above.
+
+**Done this session:** Chamber damping fill. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after real exciters (superseded)
 

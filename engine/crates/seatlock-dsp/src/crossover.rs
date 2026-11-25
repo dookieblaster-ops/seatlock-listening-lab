@@ -43,6 +43,13 @@ impl Crossover {
                 sections.extend(again);
                 sections
             }
+            "linear-phase" | "fir" => {
+                return Err(
+                    "linear-phase crossovers are FIR blocks; use family linear-phase through \
+                     parse_crossover, which returns an FIR."
+                        .into(),
+                );
+            }
             other => return Err(format!("unknown crossover family {other}")),
         };
         Ok(Self { sections })
@@ -171,6 +178,9 @@ pub fn parse_crossover(fields: &Map<String, Value>) -> Result<Box<dyn DspBlock>,
         .get("sample_rate_hz")
         .and_then(Value::as_f64)
         .unwrap_or(48_000.0);
+    if family == "linear-phase" || family == "fir" {
+        return crate::fir::linear_phase_crossover_block(order, band == "high", freq, rate);
+    }
     Ok(Box::new(Crossover::new(
         family,
         order,
@@ -187,6 +197,10 @@ pub fn crossover_block(
     freq_hz: f64,
     sample_rate_hz: f64,
 ) -> Box<dyn DspBlock> {
+    if family == "linear-phase" || family == "fir" {
+        return crate::fir::linear_phase_crossover_block(order, highpass, freq_hz, sample_rate_hz)
+            .expect("linear-phase crossover");
+    }
     Box::new(Crossover::new(family, order, highpass, freq_hz, sample_rate_hz).expect("crossover"))
 }
 

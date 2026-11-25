@@ -628,6 +628,11 @@ pub trait DspBlock: Send + Sync {
     fn frequency_response(&self, freqs_hz: &[f64], sample_rate_hz: f64) -> Vec<Complex64>;
     fn process(&mut self, input: &[f64], output: &mut [f64]);
     fn reset(&mut self);
+    /// Group delay in samples the block adds (FIR linear-phase centre, whole-sample delay).
+    /// Zero for minimum-phase IIR blocks. Shown on the page when non-zero (README §7).
+    fn latency_samples(&self) -> usize {
+        0
+    }
 }
 
 type OuterCtor = fn(&Map<String, Value>) -> Result<Box<dyn OuterShape>, String>;

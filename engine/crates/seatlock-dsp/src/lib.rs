@@ -6,8 +6,10 @@ use serde_json::{Map, Value};
 use std::f64::consts::PI;
 
 mod crossover;
+mod fir;
 
 pub use crossover::{crossover_block, prefer_inverted_high};
+pub use fir::{fir_block, linear_phase_crossover_block, linear_phase_crossover_taps};
 
 pub fn register(registry: &mut Registry) {
     registry.register_dsp("biquad", parse_biquad);
@@ -16,6 +18,7 @@ pub fn register(registry: &mut Registry) {
     registry.register_dsp("polarity", parse_polarity);
     registry.register_dsp("crossover", crossover::parse_crossover);
     registry.register_dsp("limiter", parse_limiter);
+    registry.register_dsp("fir", fir::parse_fir);
 }
 
 #[derive(Clone)]
@@ -322,6 +325,10 @@ impl DspBlock for Delay {
     fn reset(&mut self) {
         self.buffer.fill(0.0);
         self.pos = 0;
+    }
+
+    fn latency_samples(&self) -> usize {
+        self.samples
     }
 }
 

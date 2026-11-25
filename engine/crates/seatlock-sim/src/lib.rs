@@ -1090,7 +1090,7 @@ pub fn simulate_with_progress(
     };
 
     let sample_rate = design.dsp.sample_rate_hz as f64;
-    let whole = chain_response(
+    let (whole, whole_latency) = chain_response(
         &design.dsp.whole_speaker,
         sample_rate,
         registry,
@@ -1098,6 +1098,7 @@ pub fn simulate_with_progress(
         &mut issues,
         &freqs,
     );
+    note_dsp_latency(&mut fidelity, whole_latency, sample_rate);
     let amp_limit = amplifier_voltage_limit(design);
 
     // The listener sits straight in front of the middle of the cabinet's front.
@@ -1311,7 +1312,7 @@ pub fn simulate_with_progress(
                 }
             }
         } else if let Some(chain) = chain {
-            let extra = chain_response(
+            let (extra, chain_latency) = chain_response(
                 &chain.blocks,
                 sample_rate,
                 registry,
@@ -1319,6 +1320,7 @@ pub fn simulate_with_progress(
                 &mut issues,
                 &freqs,
             );
+            note_dsp_latency(&mut fidelity, chain_latency, sample_rate);
             multiply_into(&mut blocks_h, &extra);
         }
         if let Some(chain) = chain {
@@ -2721,6 +2723,7 @@ fn point3(value: &Value) -> (f64, f64, f64) {
     (coord(0), coord(1), coord(2))
 }
 
+/// Complex chain response and total FIR/delay latency in samples (README §7).
 fn chain_response(
     parts: &[seatlock_core::design::KindPart],
     sample_rate: f64,
@@ -2728,11 +2731,19 @@ fn chain_response(
     path: &str,
     issues: &mut Vec<Issue>,
     freqs: &[f64],
-) -> Vec<Complex64> {
+) -> (Vec<Complex64>, usize) {
     let mut blocks = Vec::new();
+    let mut latency = 0usize;
     for (index, part) in parts.iter().enumerate() {
-        match registry.create_dsp(&part.kind, &part.fields) {
-            Ok(block) => blocks.push(block),
+        let mut fields = part.fields.clone();
+        fields
+            .entry("sample_rate_hz")
+            .or_insert_with(|| Value::from(sample_rate));
+        match registry.create_dsp(&part.kind, &fields) {
+            Ok(block) => {
+                latency = latency.saturating_add(block.latency_samples());
+                blocks.push(block);
+            }
             Err(err) => {
                 if registry.knows(seatlock_core::registry::Family::DspBlock, &part.kind) {
                     issues.push(Issue::error(
@@ -2744,7 +2755,20 @@ fn chain_response(
             }
         }
     }
-    product(&mut blocks, freqs, sample_rate)
+    (product(&mut blocks, freqs, sample_rate), latency)
+}
+
+fn note_dsp_latency(fidelity: &mut Fidelity, latency: usize, sample_rate: f64) {
+    if latency == 0 {
+        return;
+    }
+    let ms = 1000.0 * latency as f64 / sample_rate;
+    let note = format!(
+        "DSP latency {latency} samples ({ms:.2} ms at {sample_rate:.0} Hz) from FIR or delay blocks."
+    );
+    if !fidelity.ignored.contains(&note) {
+        fidelity.ignored.push(note);
+    }
 }
 
 fn product(blocks: &mut [Box<dyn DspBlock>], freqs: &[f64], sample_rate: f64) -> Vec<Complex64> {
@@ -3869,7 +3893,7 @@ fn fixed_block_shape(
     if parts.is_empty() {
         return vec![0.0; freqs.len()];
     }
-    let response = chain_response(
+    let (response, _) = chain_response(
         &parts,
         design.dsp.sample_rate_hz as f64,
         registry,

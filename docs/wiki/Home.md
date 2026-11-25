@@ -40,7 +40,7 @@ Catalog + designs on disk → loaded into DesignFile (seatlock-core)
 | [Acoustics](seatlock-acoustics.md) | `seatlock-acoustics` | Drivers, boxes, radiation, walls, room, passive |
 | [FDTD](seatlock-fdtd.md) | `seatlock-fdtd` | 3D time-domain air grid (inside and outside) |
 | [BEM](seatlock-bem.md) | `seatlock-bem` | Exterior boundary-element surface solve |
-| [DSP](seatlock-dsp.md) | `seatlock-dsp` | Filters, crossover, delay, limiter |
+| [DSP](seatlock-dsp.md) | `seatlock-dsp` | Filters, crossover, FIR, delay, limiter |
 | [Correction](seatlock-correct.md) | `seatlock-correct` | Targets and auto EQ under limits |
 | [Simulator](seatlock-sim.md) | `seatlock-sim` | Orchestrates one design into results, score, cost |
 | [Wasm bridge](seatlock-wasm.md) | `seatlock-wasm` | JSON C-ABI for Web Workers |
