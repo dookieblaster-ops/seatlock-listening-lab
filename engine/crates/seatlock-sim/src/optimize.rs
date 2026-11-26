@@ -1,7 +1,8 @@
 //! The optimizer (README section 11.3): the cheapest design that meets the target.
 //! Discrete choices (sealed or vented, crossover slope, and — for a single cone — catalog
-//! driver) are combos; each combo searches box volume, tuning, crossover frequency, and
-//! gains with Nelder-Mead, correcting and scoring every candidate.
+//! driver) are combos; each combo searches box volume, free proportions (box / sheet box),
+//! tuning, crossover frequency, and gains with Nelder-Mead, correcting and scoring every
+//! candidate.
 //!
 //! When the design has a passive R/L/C board (`dsp.passive`), the search keeps the cabinet
 //! and the netlist wiring fixed and varies only the part values toward the score (README
@@ -14,7 +15,7 @@ use serde_json::{json, Value};
 use seatlock_core::registry::Registry;
 use seatlock_core::{catalog, DesignFile, C0};
 
-use crate::compare::{rebuild_to, score, score_as_is, Body, Score};
+use crate::compare::{rebuild_to_proportions, score, score_as_is, Body, Score};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OptimizeRequest {
@@ -271,6 +272,26 @@ struct Space {
     start: Vec<f64>,
 }
 
+/// Current inner height/width and depth/width from the outer size (box / sheet box).
+fn current_proportions(design: &DesignFile) -> Option<(f64, f64)> {
+    let outer = &design.speaker.enclosure.outer;
+    if !matches!(outer.kind.as_str(), "box" | "sheet_box") {
+        return None;
+    }
+    let wall = outer
+        .fields
+        .get("wall_m")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let width = outer.fields.get("width_m").and_then(Value::as_f64)?;
+    let height = outer.fields.get("height_m").and_then(Value::as_f64)?;
+    let depth = outer.fields.get("depth_m").and_then(Value::as_f64)?;
+    let iw = (width - 2.0 * wall).max(0.01);
+    let ih = (height - 2.0 * wall).max(0.01);
+    let id = (depth - 2.0 * wall).max(0.01);
+    Some((ih / iw, id / iw))
+}
+
 fn space(design: &DesignFile, combo: &Combo, volume_now: f64) -> Space {
     let vas = published(design, "vas_m3").unwrap_or(volume_now.max(0.005));
     let fs = published(design, "fs_hz").unwrap_or(50.0);
@@ -283,6 +304,23 @@ fn space(design: &DesignFile, combo: &Combo, volume_now: f64) -> Space {
         log: true,
     }];
     let mut start = vec![volume_now.clamp(low, high)];
+    // Level 3: free proportions for printed and sheet boxes (tubes keep the pipe diameter).
+    if let Some((tall_now, deep_now)) = current_proportions(design) {
+        variables.push(Variable {
+            name: "height / width".into(),
+            low: 0.7,
+            high: 2.8,
+            log: true,
+        });
+        start.push(tall_now.clamp(0.7, 2.8));
+        variables.push(Variable {
+            name: "depth / width".into(),
+            low: 0.55,
+            high: 2.2,
+            log: true,
+        });
+        start.push(deep_now.clamp(0.55, 2.2));
+    }
     if combo.vented {
         variables.push(Variable {
             name: "port tuning (Hz)".into(),
@@ -362,6 +400,22 @@ fn candidate_design(
     let volume = values[cursor];
     named.push((variables[cursor].name.clone(), volume * 1000.0));
     cursor += 1;
+    let proportions = if variables
+        .get(cursor)
+        .is_some_and(|v| v.name == "height / width")
+        && variables
+            .get(cursor + 1)
+            .is_some_and(|v| v.name == "depth / width")
+    {
+        let tall = values[cursor];
+        let deep = values[cursor + 1];
+        named.push((variables[cursor].name.clone(), tall));
+        named.push((variables[cursor + 1].name.clone(), deep));
+        cursor += 2;
+        Some((tall, deep))
+    } else {
+        None
+    };
     // Ports to outside are replaced by the one this combo asks for.
     let old_port = current_port(base);
     design.speaker.enclosure.ducts.retain(|duct| {
@@ -422,7 +476,8 @@ fn candidate_design(
             }
         }
     }
-    let (rebuilt, _) = rebuild_to(&design, &Body::of(base), volume, registry)?;
+    let (rebuilt, _) =
+        rebuild_to_proportions(&design, &Body::of(base), volume, proportions, registry)?;
     // The port must fit inside the cabinet's depth.
     if combo.vented {
         let depth = rebuilt

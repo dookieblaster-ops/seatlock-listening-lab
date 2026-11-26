@@ -122,6 +122,92 @@ fn every_build_method_keeps_the_air_volume() {
 }
 
 #[test]
+fn the_level_3_optimizer_searches_free_cabinet_proportions() {
+    use seatlock_sim::compare::{rebuild_to, rebuild_to_proportions, Body};
+
+    let registry = builtin();
+    let design = example("sealed-test");
+    let (now, _) = score_as_is(&design, &registry);
+    let volume = now.interior_volume_m3.unwrap();
+    let body = Body::of(&design);
+    let locked = rebuild_to(&design, &body, volume, &registry).unwrap().0;
+    let free = rebuild_to_proportions(&design, &body, volume, Some((2.4, 0.7)), &registry)
+        .unwrap()
+        .0;
+    let ratio = |d: &seatlock_core::DesignFile| {
+        let f = &d.speaker.enclosure.outer.fields;
+        let w = f.get("width_m").and_then(|v| v.as_f64()).unwrap();
+        let h = f.get("height_m").and_then(|v| v.as_f64()).unwrap();
+        h / w
+    };
+    assert!(
+        (ratio(&free) - ratio(&locked)).abs() > 0.3,
+        "locked {} free {}",
+        ratio(&locked),
+        ratio(&free)
+    );
+    let free_vol = score_as_is(&free, &registry).0.interior_volume_m3.unwrap();
+    assert!(
+        (free_vol / volume - 1.0).abs() < 0.01,
+        "{free_vol} vs {volume}"
+    );
+
+    let sealed = combos(&design)
+        .into_iter()
+        .find(|c| !c.vented && c.driver_id.as_deref() == Some("test-woofer-a"))
+        .expect("sealed combo for the current driver");
+    let result = optimize_combo(
+        &design,
+        &OptimizeRequest {
+            seed: 11,
+            combo: sealed.index,
+            evaluations: 8,
+        },
+        &registry,
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert!(
+        result.best[0]
+            .variables
+            .iter()
+            .any(|(name, _)| name == "height / width"),
+        "expected free proportions in the search: {:?}",
+        result.best[0].variables
+    );
+    assert!(
+        result.best[0]
+            .variables
+            .iter()
+            .any(|(name, _)| name == "depth / width"),
+        "{:?}",
+        result.best[0].variables
+    );
+    // Tubes keep locked proportions (pipe diameter).
+    let tube = example("pvc-tube");
+    let tube_combo = combos(&tube).into_iter().next().unwrap();
+    let tube_result = optimize_combo(
+        &tube,
+        &OptimizeRequest {
+            seed: 2,
+            combo: tube_combo.index,
+            evaluations: 6,
+        },
+        &registry,
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert!(
+        tube_result.best[0]
+            .variables
+            .iter()
+            .all(|(name, _)| name != "height / width" && name != "depth / width"),
+        "{:?}",
+        tube_result.best[0].variables
+    );
+}
+
+#[test]
 fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let registry = builtin();
     let design = example("sealed-test");

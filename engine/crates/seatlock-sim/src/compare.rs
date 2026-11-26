@@ -258,6 +258,10 @@ pub fn rebuild(
     rebuild_to(design, body, volume, registry)
 }
 
+/// Inner height/width and depth/width for a free-proportion rebuild (README §11.3 Level 3).
+/// Axes match [`place`]: width, depth, height.
+pub type InnerProportions = (f64, f64);
+
 impl Body {
     /// The way the design's cabinet is built now. Shapes other than a box, a sheet box, or a
     /// tube are rebuilt as a printed box.
@@ -281,11 +285,23 @@ impl Body {
     }
 }
 
-/// Like [`rebuild`], to a given net air volume.
+/// Like [`rebuild`], to a given net air volume, keeping the old cabinet's proportions.
 pub fn rebuild_to(
     design: &DesignFile,
     body: &Body,
     target_volume: f64,
+    registry: &Registry,
+) -> Result<(DesignFile, Vec<String>), String> {
+    rebuild_to_proportions(design, body, target_volume, None, registry)
+}
+
+/// Like [`rebuild_to`], optionally with free inner proportions `(tall, deep)` =
+/// height/width and depth/width. Tubes ignore free proportions (pipe diameter is fixed).
+pub fn rebuild_to_proportions(
+    design: &DesignFile,
+    body: &Body,
+    target_volume: f64,
+    proportions: Option<InnerProportions>,
     registry: &Registry,
 ) -> Result<(DesignFile, Vec<String>), String> {
     let enclosure = &design.speaker.enclosure;
@@ -298,13 +314,20 @@ pub fn rebuild_to(
         .map_err(|err| err.to_string())?;
     let old_size = shape.outer_size_m()?;
     let mut notes = Vec::new();
-    // Inside proportions from the old cabinet's outside.
     let old_wall = number(&outer.fields, "wall_m").unwrap_or(0.0);
-    let mut inner = [
-        (old_size[0] - 2.0 * old_wall).max(0.01),
-        (old_size[1] - 2.0 * old_wall).max(0.01),
-        (old_size[2] - 2.0 * old_wall).max(0.01),
-    ];
+    let mut inner = match (proportions, body) {
+        (Some((tall, deep)), Body::Printed { .. } | Body::Sheet { .. })
+            if tall.is_finite() && deep.is_finite() && tall > 0.1 && deep > 0.1 =>
+        {
+            let w = (target_volume / (tall * deep)).cbrt().max(0.01);
+            [w, w * deep, w * tall]
+        }
+        _ => [
+            (old_size[0] - 2.0 * old_wall).max(0.01),
+            (old_size[1] - 2.0 * old_wall).max(0.01),
+            (old_size[2] - 2.0 * old_wall).max(0.01),
+        ],
+    };
     let mut candidate = design.clone();
     for _ in 0..4 {
         candidate = place(design, body, inner, old_size)?;
@@ -334,6 +357,8 @@ pub fn rebuild_to(
         notes.push(
             "A tube's diameter is set by the pipe; only its length matches the air volume.".into(),
         );
+    } else if proportions.is_some() {
+        notes.push("Cabinet proportions were free in the search (not locked to the start).".into());
     }
     Ok((candidate, notes))
 }

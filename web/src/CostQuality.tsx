@@ -215,7 +215,7 @@ export function CostQuality({
           title={
             hasPassive
               ? "Keeps the cabinet and board wiring fixed, and searches resistor, inductor, and capacitor values toward the quality target."
-              : "Searches box volume, port tuning, crossover, and levels — and for a one-driver cabinet, one nearby catalog driver — sealed and vented, and ranks the results: the cheapest that meets the target first."
+              : "Searches box volume, proportions, port tuning, crossover, and levels — and for a one-driver cabinet, one nearby catalog driver — sealed and vented, and ranks the results: the cheapest that meets the target first."
           }
           onClick={() => {
             if (!text) {
