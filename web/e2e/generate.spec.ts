@@ -33,7 +33,8 @@ test("the lab generates cabinets, ranks them, checks the best in 3D, and opens o
   await expect(page.getByTestId("generate-verified")).toContainText("3D check of the top cabinet");
   const rows = page.getByTestId("generate-table").locator("tbody tr");
   expect(await rows.count()).toBeGreaterThan(5);
-  await expect(rows.first()).toContainText("Dayton Audio");
+  // Top row is a sourced catalog driver (maker can change with the budgeted search).
+  await expect(rows.first()).toContainText(/Dayton Audio|Tang Band|Tectonic|CSS/);
   // Opening the top cabinet makes it the design: a real driver, and a print file on offer.
   await rows.first().getByRole("button", { name: "Open" }).click();
   await expect(page.getByTestId("formula-solid")).toBeVisible({ timeout: 20_000 });
