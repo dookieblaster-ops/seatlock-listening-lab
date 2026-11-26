@@ -135,7 +135,11 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let ids: std::collections::BTreeSet<_> =
         all.iter().filter_map(|c| c.driver_id.as_deref()).collect();
     assert!(ids.contains("test-woofer-a"), "{ids:?}");
-    assert_eq!(ids.len(), 2, "expected one catalog alternative, got {ids:?}");
+    assert_eq!(
+        ids.len(),
+        2,
+        "expected one catalog alternative, got {ids:?}"
+    );
     // Multi-way still keeps the user's pair (no driver expansion).
     let two_way = combos(&example("two-way-vented"));
     assert_eq!(two_way.len(), 4);
