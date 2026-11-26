@@ -94,7 +94,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
 0p. Helper stack #12–#19 merged; CHK-BEM-2 and CHK-BEM-3 on `main` 2026-11-16. High-ka rigid-sphere vs smooth series placed as a constant-element limit.
-0. **Next:** Level 3 remainder (fill in quick+detailed — blocked without sourced waveguide fill term — / PR in FDTD or leave labeled / …). Duct-mounted drivers (closed end + offset tap), passive radiators (lumped + waveguide), loft, waveguide loops, and FIR are in. Chamber fill in FDTD is in. Soft-TPU loss skipped (no filament DMA). Optional BEM lit-gap / Criton / backup.
+0. **Next:** Level 3 remainder (FIR mono WAV export → C7; imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …). Duct-mounted drivers, passive radiators (lumped + waveguide), loft, waveguide loops, FIR blocks, and chamber fill (FDTD Rayleigh + everyday Delany–Bazley Cap) are in. Soft-TPU loss skipped (no filament DMA). Optional BEM lit-gap / Criton / backup.
 1. Research plan details as above.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -109,6 +109,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 
 The full history is in `docs/status-history.md`. The latest state:
 
+- 2026-11-26, Cursor cloud: chamber fill Cap (Delany–Bazley) in quick + detailed networks; FDTD Rayleigh unchanged. PR #44 merged to `main`. Cloud-check 313/44.
 - 2026-11-26, Cursor cloud: PR Map/Cap/Rap on the waveguide tree/mesh (`AcousticNode::PassiveRadiator`); `pr-box` waveguide ≡ lumped within 0.1 dB. FDTD still wall-hole only. PR #42 offset tap merged to `main`.
 - 2026-11-26, Cursor cloud: duct-mount offset tap (`tap_fraction`). King/Augspurger: closed stub ‖ open section in waveguide; lumped merges stub air into the coupling volume. Examples `duct-mount-offset`; `duct_mount` 4 tests. CHK-E2E-2 golden moved earlier (evenness 6.0 / clean 99; regression only). PR #41 duct-mount closed-end merged to `main`.
 - 2026-11-26, Cursor cloud: CHK-E2E-2 page golden moved (regression only, README 13): `two-way-vented` after correct now reads evenness 6.0 dB and clean level 99 dB (was 5.9 / 98). Same numbers on `main` after PR #40 and on the duct-mount branch; native probe of the corrected design is unchanged at loft tip vs HEAD. Bass limit and cost unchanged.

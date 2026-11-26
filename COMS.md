@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after chamber-fill Cap
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after fill Cap merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/chamber-fill-waveguide-da03` (PR onto `main`). Level 3. #41–#43 on `main`.
+- **Context:** `main` after PR #44. Level 3.
 
-**Done this session:** (1) Merged #41–#43 (duct-mount, offset tap, PR-on-waveguide). (2) **Chamber fill in quick+detailed:** Delany–Bazley / Allard–Champoux complex bulk modulus from catalog `σ` on Cap (`fill.rs`); lumped + waveguide tree/mesh; FDTD stays Rayleigh; fidelity names both. Checked: empty Cap ≡ lossless; filled Cap `Re(Z_ab)>0`; FDTD standing-wave peak still drops with Isover.
+**Done this session:** Merged #41–#44 (duct-mount, offset, PR-waveguide, **chamber fill Cap** Delany–Bazley). Fill: everyday nets + FDTD Rayleigh; cloud-check 313/44.
 
 **Open, in order:**
-1. Merge this PR when Check is green.
-2. Level 3 remainder: imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / FIR WAV·C7 / C5·C6·C10 / …; Fable-held if still available.
+1. FIR mono WAV export (README §7); then C7 auto FIR correction; FIR in AudioWorklet still later.
+2. Imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB wave quantities without keeping Cap's +j passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears. Do not invent added PR mass without a sourced rule.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2; mono WAV is the generic FIR export.
 
-**Last check:** `tools/cloud-check.sh` passed (engine 313, browser 44 + 1 flaky import hole mark, stable 1.100.0).
+**Last check:** PR #44 Check green; ff-pushed to `main`.
 
-**Next step:** merge when green; then remainder queue (imported damping parts / PR-in-FDTD / FIR WAV·C7 / …).
+**Next step:** FIR mono WAV export on a branch from `main`.
+
+### 2026-11-26 — Cursor — Handoff: Level 3 remainder after chamber-fill Cap (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** PR #44. Superseded by fill Cap merge handoff above.
+
+**Done this session:** Fill Cap. Merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: Level 3 remainder after PR-in-waveguide (superseded)
 
