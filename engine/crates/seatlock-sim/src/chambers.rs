@@ -885,10 +885,12 @@ impl WaveguideNetwork {
 /// end when a driver mounts on that duct. `duct_taps` is the tap fraction from the closed end
 /// (King offset); the closed stub is a rigid-terminated branch in parallel with the open
 /// section.
+#[allow(clippy::too_many_arguments)]
 pub fn waveguide_network(
     design: &DesignFile,
     names: &[String],
     volumes_m3: &[f64],
+    fill_sigma: &[Option<f64>],
     driver: usize,
     moulded: &[(MouldedOpening, usize)],
     duct_from_override: &[(String, String)],
@@ -1085,9 +1087,11 @@ pub fn waveguide_network(
     let mut order = Vec::new();
     let mut seen = vec![false; names.len()];
     let mut used = vec![false; edges.len()];
+    #[allow(clippy::too_many_arguments)]
     fn chamber_node(
         at: usize,
         volumes: &[f64],
+        fills: &[Option<f64>],
         edges: &[Edge],
         stubs: &[RigidStub],
         seen: &mut Vec<bool>,
@@ -1098,6 +1102,7 @@ pub fn waveguide_network(
         let mut branches = vec![AcousticNode::Chamber {
             volume_m3: volumes[at],
             slot: at,
+            fill_sigma: fills.get(at).copied().flatten(),
         }];
         for stub in stubs.iter().filter(|s| s.at == at) {
             let a_near = stub.section.area(stub.s1, 0.0); // tap end toward the chamber
@@ -1154,7 +1159,7 @@ pub fn waveguide_network(
                         return Err("loop".into());
                     }
                     (
-                        chamber_node(other, volumes, edges, stubs, seen, used, order)?,
+                        chamber_node(other, volumes, fills, edges, stubs, seen, used, order)?,
                         0.849 * r_far,
                     )
                 }
@@ -1190,9 +1195,12 @@ pub fn waveguide_network(
         Ok(AcousticNode::Parallel(branches))
     }
     let mut notes = Vec::new();
+    let mut wave_fills: Vec<Option<f64>> = fill_sigma.to_vec();
+    wave_fills.resize(wave_volumes.len(), None);
     let body = match chamber_node(
         driver,
         &wave_volumes,
+        &wave_fills,
         &edges,
         &rigid_stubs,
         &mut seen,
@@ -1204,11 +1212,13 @@ pub fn waveguide_network(
             // Same ducts as Y-parameter branches on a chamber nodal matrix (README 5.4).
             // Rigid stubs become ducts into a near-zero volume chamber (closed terminus).
             let mut mesh_volumes = wave_volumes.clone();
+            let mut mesh_fills = wave_fills.clone();
             let mut mesh_edges = Vec::with_capacity(edges.len() + rigid_stubs.len());
             let mut mesh_order = Vec::new();
             for stub in &rigid_stubs {
                 let stub_node = mesh_volumes.len();
                 mesh_volumes.push(1e-12);
+                mesh_fills.push(None);
                 let a_near = stub.section.area(stub.s1, 0.0);
                 let a_far = stub.section.area(stub.s0, 0.0);
                 let r_near = (a_near / std::f64::consts::PI).sqrt();
@@ -1267,12 +1277,32 @@ pub fn waveguide_network(
             );
             WaveguideBody::Mesh(WaveguideMesh {
                 volumes_m3: mesh_volumes,
+                fill_sigma: mesh_fills,
                 edges: mesh_edges,
                 driver,
             })
         }
         Err(err) => return Err(err),
     };
+    if fill_sigma.iter().any(|s| s.is_some()) {
+        notes.push(
+            "A chamber has damping fill: the detailed model uses Delany–Bazley (Allard–Champoux) \
+             complex bulk modulus from the fill's flow resistivity; the full 3D model uses a \
+             Rayleigh update with the same resistivity, so the two will not match bin-for-bin."
+                .into(),
+        );
+        let band = fill_sigma.iter().flatten().any(|&sigma| {
+            seatlock_acoustics::delany_bazley_out_of_band(sigma, 20.0)
+                || seatlock_acoustics::delany_bazley_out_of_band(sigma, 20_000.0)
+        });
+        if band {
+            notes.push(
+                "Delany–Bazley's quoted band is 0.01 < f/σ < 1 (σ in SI); some frequencies in \
+                 the audio band sit outside that band for this fill."
+                    .into(),
+            );
+        }
+    }
     if matches!(body, WaveguideBody::Tree(_)) && used.iter().any(|u| !u) {
         notes.push(
             "Some ducts do not connect to the driver's chamber, so the detailed model leaves \

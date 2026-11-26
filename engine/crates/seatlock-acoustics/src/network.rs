@@ -3,7 +3,7 @@
 //! between two chambers or from a chamber to the outside.
 
 use num_complex::Complex64;
-use seatlock_core::constants::{C0, RHO0};
+use seatlock_core::constants::RHO0;
 use std::f64::consts::PI;
 
 #[derive(Clone, Copy, Debug)]
@@ -47,13 +47,15 @@ pub fn lumped_network(
     driver: usize,
     freq_hz: f64,
 ) -> NetworkSample {
-    lumped_network_with_walls(volumes_m3, ducts, driver, freq_hz, &[], &[])
+    lumped_network_with_walls(volumes_m3, ducts, driver, freq_hz, &[], &[], &[])
 }
 
 /// [`lumped_network`] with each chamber's outer walls a shunt and partitions as mutual
 /// admittances: `walls[i]` is the outward volume velocity of chamber `i`'s outer walls per
 /// pascal inside; each `partitions` entry `(a, b, Y)` is volume velocity from `a` into `b`
 /// per pascal of `(P_a - P_b)` (README 5.11). Missing wall entries are rigid.
+/// `fill_sigma[i]` is the chamber's fibrous flow resistivity (Pa·s/m²) when filled; Delany–
+/// Bazley complex bulk modulus then replaces `ρ₀ c₀²` in that chamber's compliance.
 pub fn lumped_network_with_walls(
     volumes_m3: &[f64],
     ducts: &[Duct],
@@ -61,13 +63,15 @@ pub fn lumped_network_with_walls(
     freq_hz: f64,
     walls: &[Complex64],
     partitions: &[(usize, usize, Complex64)],
+    fill_sigma: &[Option<f64>],
 ) -> NetworkSample {
     let n = volumes_m3.len();
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let zero = Complex64::new(0.0, 0.0);
     let mut matrix = vec![vec![zero; n]; n];
     for (i, volume) in volumes_m3.iter().enumerate() {
-        matrix[i][i] += Complex64::new(0.0, omega * volume / (RHO0 * C0 * C0));
+        let sigma = fill_sigma.get(i).copied().flatten();
+        matrix[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, sigma);
         matrix[i][i] += walls.get(i).copied().unwrap_or_default();
     }
     for &(a, b, y) in partitions {

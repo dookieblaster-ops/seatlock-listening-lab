@@ -619,8 +619,8 @@ pub fn cabinet_grid(
         let chamber_fill = chambers.iter().any(|c| c.fill_sigma.is_some());
         notes.push(if chamber_fill {
             "Damping fill in a chamber: one flow resistivity per material at every frequency \
-             (a Rayleigh model); the material's own mass and frame are left out. The quick and \
-             detailed models treat filled chambers as empty air."
+             (a Rayleigh model); the material's own mass and frame are left out. The everyday \
+             models use Delany–Bazley Cap from the same resistivity."
                 .into()
         } else {
             "Damping material: one flow resistivity per material at every frequency (a Rayleigh \

@@ -431,8 +431,16 @@ pub fn simulate_with_progress(
         .any(|chamber| chamber.get("fill").and_then(Value::as_str).is_some());
     if chamber_fill_named && !full_3d {
         fidelity.ignored.push(
-            "Damping fill in a chamber is modeled only by the full 3D model; this model treats \
-             filled chambers as empty air."
+            "Damping fill in a chamber: the everyday models use Delany–Bazley (Allard–Champoux) \
+             complex bulk modulus from the fill's flow resistivity; the full 3D model uses a \
+             Rayleigh update with the same resistivity."
+                .into(),
+        );
+    }
+    if chamber_fill_named && full_3d {
+        fidelity.ignored.push(
+            "Damping fill in a chamber: the full 3D model uses a Rayleigh update from the fill's \
+             flow resistivity (one figure at every frequency)."
                 .into(),
         );
     }
@@ -563,6 +571,7 @@ pub fn simulate_with_progress(
                 let mut impedance = Vec::with_capacity(freqs.len());
                 let mut samples = Vec::with_capacity(freqs.len());
                 let mut pressures = Vec::with_capacity(freqs.len());
+                let fills: Vec<Option<f64>> = net.chambers.iter().map(|c| c.fill_sigma).collect();
                 for (bin, freq) in freqs.iter().enumerate() {
                     let solved = seatlock_acoustics::network::lumped_network_with_walls(
                         &net.volumes_m3,
@@ -571,6 +580,7 @@ pub fn simulate_with_progress(
                         *freq,
                         &wall_y[bin],
                         &part_y[bin],
+                        &fills,
                     );
                     pressures.push(solved.pressures.clone());
                     let mut sample = seatlock_acoustics::VentedSample {
@@ -595,6 +605,7 @@ pub fn simulate_with_progress(
                         design,
                         &names,
                         &net.volumes_m3,
+                        &fills,
                         node,
                         &net.moulded,
                         &net.duct_from_override,
@@ -773,6 +784,7 @@ pub fn simulate_with_progress(
                     design,
                     &["main".to_string()],
                     &[volume],
+                    &[None],
                     0,
                     &[],
                     &[],

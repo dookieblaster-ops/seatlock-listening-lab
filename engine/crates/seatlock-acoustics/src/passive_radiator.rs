@@ -98,7 +98,10 @@ mod tests {
             sd_m2: 0.025,
         };
         let tree = AcousticNode::Parallel(vec![
-            AcousticNode::Compliance { volume_m3: volume },
+            AcousticNode::Compliance {
+                volume_m3: volume,
+                fill_sigma: None,
+            },
             AcousticNode::PassiveRadiator {
                 mech: pr,
                 radiation: None,

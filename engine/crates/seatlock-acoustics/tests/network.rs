@@ -83,7 +83,7 @@ fn a_partition_spring_couples_two_sealed_chambers() {
         let yb = j * w * compliance(vb);
         let y = j * w * cp;
         let expected = (yb + y) / ((ya + y) * (yb + y) - y * y);
-        let got = lumped_network_with_walls(&[va, vb], &[], 0, freq, &[], &[(0, 1, y)]).z_ab;
+        let got = lumped_network_with_walls(&[va, vb], &[], 0, freq, &[], &[(0, 1, y)], &[]).z_ab;
         assert!(
             (got - expected).norm() / expected.norm() < 1e-10,
             "{freq} Hz: {got} against {expected}"
@@ -97,6 +97,7 @@ fn a_partition_spring_couples_two_sealed_chambers() {
             freq,
             &[],
             &[(0, 1, Complex64::new(0.0, 0.0))],
+            &[],
         );
         assert!((alone.z_ab - 1.0 / ya).norm() / alone.z_ab.norm() < 1e-10);
         assert!((rigid.z_ab - alone.z_ab).norm() < 1e-12);

@@ -22,11 +22,18 @@ pub enum AcousticNode {
         mech: PassiveRadiatorMech,
         radiation: Option<Complex64>,
     },
-    /// A chamber small enough to be a shunt compliance.
-    Compliance { volume_m3: f64 },
+    /// A chamber small enough to be a shunt compliance. Optional fibrous fill (Delany–Bazley).
+    Compliance {
+        volume_m3: f64,
+        fill_sigma: Option<f64>,
+    },
     /// A chamber that reports its pressure under `slot`, and whose walls take the admittance
-    /// given for that slot to [`solve_with_walls`] (README 5.11).
-    Chamber { volume_m3: f64, slot: usize },
+    /// given for that slot to [`solve_with_walls`] (README 5.11). Optional fibrous fill.
+    Chamber {
+        volume_m3: f64,
+        slot: usize,
+        fill_sigma: Option<f64>,
+    },
     /// Uniform or tapered duct. A taper is sliced into pieces no longer than 10 mm.
     Duct {
         length_m: f64,
@@ -118,17 +125,26 @@ fn solve_at(
                 pressures: Vec::new(),
             }
         }
-        AcousticNode::Compliance { volume_m3 } => {
-            let admit = Complex64::new(0.0, omega * volume_m3 / (RHO0 * C0 * C0));
+        AcousticNode::Compliance {
+            volume_m3,
+            fill_sigma,
+        } => {
+            let freq = omega / (2.0 * PI);
+            let admit = crate::fill::chamber_admittance(*volume_m3, freq, *fill_sigma);
             WaveguideResult {
                 z_in: 1.0 / admit,
                 openings: Vec::new(),
                 pressures: Vec::new(),
             }
         }
-        AcousticNode::Chamber { volume_m3, slot } => {
+        AcousticNode::Chamber {
+            volume_m3,
+            slot,
+            fill_sigma,
+        } => {
             let wall = walls.get(*slot).copied().unwrap_or_default();
-            let admit = Complex64::new(0.0, omega * volume_m3 / (RHO0 * C0 * C0)) + wall;
+            let freq = omega / (2.0 * PI);
+            let admit = crate::fill::chamber_admittance(*volume_m3, freq, *fill_sigma) + wall;
             let z_in = 1.0 / admit;
             WaveguideResult {
                 z_in,
@@ -356,12 +372,21 @@ fn replace_radiation(node: &AcousticNode, loads: &[Complex64], index: &mut usize
         }
         AcousticNode::FixedRadiation { z } => AcousticNode::FixedRadiation { z: *z },
         AcousticNode::Rigid => AcousticNode::Rigid,
-        AcousticNode::Compliance { volume_m3 } => AcousticNode::Compliance {
+        AcousticNode::Compliance {
+            volume_m3,
+            fill_sigma,
+        } => AcousticNode::Compliance {
             volume_m3: *volume_m3,
+            fill_sigma: *fill_sigma,
         },
-        AcousticNode::Chamber { volume_m3, slot } => AcousticNode::Chamber {
+        AcousticNode::Chamber {
+            volume_m3,
+            slot,
+            fill_sigma,
+        } => AcousticNode::Chamber {
             volume_m3: *volume_m3,
             slot: *slot,
+            fill_sigma: *fill_sigma,
         },
         AcousticNode::Duct {
             length_m,
@@ -407,6 +432,8 @@ pub struct MeshDuct {
 #[derive(Clone, Debug)]
 pub struct WaveguideMesh {
     pub volumes_m3: Vec<f64>,
+    /// Flow resistivity per chamber when filled (`catalog/damping/`); Delany–Bazley Cap.
+    pub fill_sigma: Vec<Option<f64>>,
     pub edges: Vec<MeshDuct>,
     pub driver: usize,
 }
@@ -431,7 +458,8 @@ pub fn solve_mesh(
     let zero = Complex64::new(0.0, 0.0);
     let mut y = vec![vec![zero; n]; n];
     for (i, volume) in mesh.volumes_m3.iter().enumerate() {
-        y[i][i] += Complex64::new(0.0, omega * volume / (RHO0 * C0 * C0));
+        let sigma = mesh.fill_sigma.get(i).copied().flatten();
+        y[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, sigma);
         y[i][i] += walls.get(i).copied().unwrap_or_default();
     }
     // Outside ducts: (design slot, chamber, edge index). Sorted for opening_order pairing.
@@ -705,7 +733,10 @@ pub fn ported_box(
     let area = PI * radius_m * radius_m;
     solve(
         &AcousticNode::Parallel(vec![
-            AcousticNode::Compliance { volume_m3 },
+            AcousticNode::Compliance {
+                volume_m3,
+                fill_sigma: None,
+            },
             AcousticNode::Duct {
                 length_m: physical_length_m,
                 area_in_m2: area,
@@ -731,7 +762,10 @@ pub fn helmholtz(
     let area = PI * radius_m * radius_m;
     solve(
         &AcousticNode::Parallel(vec![
-            AcousticNode::Compliance { volume_m3 },
+            AcousticNode::Compliance {
+                volume_m3,
+                fill_sigma: None,
+            },
             AcousticNode::Duct {
                 length_m: physical_length_m,
                 area_in_m2: area,

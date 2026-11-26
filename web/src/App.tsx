@@ -1779,7 +1779,7 @@ function InsideEditor({
               />
             )),
           )}
-          <label title="Damping fill packing this air space (mineral wool, glass wool, polyester). The full 3D model hears it; the everyday models treat a filled chamber as empty air and say so.">
+          <label title="Damping fill packing this air space (mineral wool, glass wool, polyester). Everyday models use Delany–Bazley Cap from the fill's flow resistivity; the full 3D model uses a Rayleigh update with the same figure.">
             Damping fill
             <select
               data-testid={`chamber-fill-${index}`}

@@ -1,5 +1,6 @@
 //! Chamber damping fill (README 5.5 / 6.2): a catalog damping material packing a listed
-//! chamber's air is heard by the full 3D model and priced by volume.
+//! chamber's air is heard by the everyday networks (Delany–Bazley Cap) and the full 3D
+//! model (Rayleigh), and priced by volume.
 
 use seatlock_core::catalog;
 use seatlock_sim::{builtin, cost, simulate, CabinetParts, SimulateRequest};
@@ -24,55 +25,55 @@ fn sealed_with_whole_fill(fill: Option<&str>) -> seatlock_core::DesignFile {
 
 #[test]
 fn chamber_fill_calms_standing_waves_in_the_3d_model() {
-    let run = |fill: Option<&str>| {
-        let design = sealed_with_whole_fill(fill);
-        let request = SimulateRequest {
-            enclosure: "fdtd".into(),
-            fdtd_dx_m: Some(0.01),
-            frequencies_hz: Some(seatlock_core::grid::log_grid(100.0, 3000.0, 48.0)),
-            ..Default::default()
-        };
-        let r = simulate(&design, &request, &builtin());
-        assert!(
-            r.issues
-                .iter()
-                .all(|i| i.severity != seatlock_core::issue::Severity::Error),
-            "{:?}",
-            r.issues
-        );
-        if fill.is_some() {
+    let run =
+        |fill: Option<&str>| {
+            let design = sealed_with_whole_fill(fill);
+            let request = SimulateRequest {
+                enclosure: "fdtd".into(),
+                fdtd_dx_m: Some(0.01),
+                frequencies_hz: Some(seatlock_core::grid::log_grid(100.0, 3000.0, 48.0)),
+                ..Default::default()
+            };
+            let r = simulate(&design, &request, &builtin());
             assert!(
-                r.fidelity
-                    .ignored
+                r.issues
                     .iter()
-                    .any(|l| l.contains("Damping fill in a chamber")),
+                    .all(|i| i.severity != seatlock_core::issue::Severity::Error),
                 "{:?}",
-                r.fidelity.ignored
+                r.issues
             );
-        }
-        let quick = simulate(&design, &SimulateRequest::default(), &builtin());
-        if fill.is_some() {
-            assert!(
-                quick.fidelity.ignored.iter().any(|l| {
-                    l.contains("Damping fill in a chamber")
-                        && l.contains("only by the full 3D model")
-                }),
-                "{:?}",
-                quick.fidelity.ignored
-            );
-        }
-        let z = r.fdtd.expect("fdtd report").z_ab;
-        let mag: Vec<f64> =
-            z.re.iter()
-                .zip(&z.im)
-                .map(|(re, im)| (re * re + im * im).sqrt())
-                .collect();
-        (r.frequencies_hz.clone(), mag)
-    };
+            if fill.is_some() {
+                assert!(
+                    r.fidelity
+                        .ignored
+                        .iter()
+                        .any(|l| l.contains("Damping fill in a chamber")),
+                    "{:?}",
+                    r.fidelity.ignored
+                );
+            }
+            let quick = simulate(&design, &SimulateRequest::default(), &builtin());
+            if fill.is_some() {
+                assert!(
+                    quick.fidelity.ignored.iter().any(|l| {
+                        l.contains("Damping fill in a chamber") && l.contains("Delany")
+                    }),
+                    "{:?}",
+                    quick.fidelity.ignored
+                );
+            }
+            let z = r.fdtd.expect("fdtd report").z_ab;
+            let mag: Vec<f64> =
+                z.re.iter()
+                    .zip(&z.im)
+                    .map(|(re, im)| (re * re + im * im).sqrt())
+                    .collect();
+            (r.frequencies_hz.clone(), mag)
+        };
     let (f, bare) = run(None);
     let (_, damped) = run(Some("isover-akustic-ssp2"));
     // Tallest |Z_ab| peak in the cabinet's standing-wave band. Whole-chamber Rayleigh fill
-    // damps those modes; compare FDTD to FDTD (the quick model never sees the fill).
+    // damps those modes; compare FDTD to FDTD.
     let peak = |z: &[f64]| {
         f.iter()
             .zip(z)
@@ -87,6 +88,44 @@ fn chamber_fill_calms_standing_waves_in_the_3d_model() {
     assert!(
         peak_damped < 0.7 * peak_bare,
         "fill should lower the standing-wave |Z_ab| peak: bare {peak_bare}, damped {peak_damped}"
+    );
+}
+
+#[test]
+fn chamber_fill_makes_the_everyday_load_lossy() {
+    // Isover AFr11 σ = 11000 Pa·s/m². Delany–Bazley Cap must add Re(Z_ab) > 0.
+    let sigma = catalog::damping("isover-akustic-ssp2")
+        .unwrap()
+        .get("flow_resistivity_pa_s_m2")
+        .and_then(|v| v.as_f64())
+        .unwrap();
+    let filled = seatlock_acoustics::network::lumped_network_with_walls(
+        &[0.005],
+        &[],
+        0,
+        100.0,
+        &[],
+        &[],
+        &[Some(sigma)],
+    );
+    let empty = seatlock_acoustics::network::lumped_network_with_walls(
+        &[0.005],
+        &[],
+        0,
+        100.0,
+        &[],
+        &[],
+        &[None],
+    );
+    assert!(
+        filled.z_ab.re > 1e-4,
+        "Delany–Bazley fill should make Z_ab lossy: {}",
+        filled.z_ab
+    );
+    assert!(
+        empty.z_ab.re.abs() < 1e-12,
+        "empty Cap stays pure reactive: {}",
+        empty.z_ab
     );
 }
 

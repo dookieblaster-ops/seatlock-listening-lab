@@ -175,7 +175,10 @@ fn fixed_radiation_loads_match_the_analytic_leaf() {
     let k = 2.0 * PI * freq / C0;
     let z = radiation_impedance(area, false, k);
     let analytic = AcousticNode::Parallel(vec![
-        AcousticNode::Compliance { volume_m3: 0.02 },
+        AcousticNode::Compliance {
+            volume_m3: 0.02,
+            fill_sigma: None,
+        },
         AcousticNode::Duct {
             length_m: 0.12,
             area_in_m2: area,
@@ -308,7 +311,10 @@ fn chk_bem_9_mutual_mouth_impedance_is_reciprocal_and_joins_the_network() {
         load: Box::new(z_leaf),
     };
     let tree = AcousticNode::Parallel(vec![
-        AcousticNode::Compliance { volume_m3: 0.03 },
+        AcousticNode::Compliance {
+            volume_m3: 0.03,
+            fill_sigma: None,
+        },
         duct(AcousticNode::Radiation {
             area_m2: area,
             flush: false,

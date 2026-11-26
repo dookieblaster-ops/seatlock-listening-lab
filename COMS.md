@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after PR-in-waveguide
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after chamber-fill Cap
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/pr-waveguide-branch-da03` (PR onto `main`). Level 3. #41–#42 on `main`.
+- **Context:** branch `cursor/chamber-fill-waveguide-da03` (PR onto `main`). Level 3. #41–#43 on `main`.
 
-**Done this session:** (1) Merged #41 duct-mount + #42 offset tap. (2) **PR on waveguide:** `AcousticNode::PassiveRadiator` (Small Map/Cap/Rap); tree + mesh; `pr-box` waveguide ≡ lumped ≤0.1 dB. FDTD still wall-hole only.
+**Done this session:** (1) Merged #41–#43 (duct-mount, offset tap, PR-on-waveguide). (2) **Chamber fill in quick+detailed:** Delany–Bazley / Allard–Champoux complex bulk modulus from catalog `σ` on Cap (`fill.rs`); lumped + waveguide tree/mesh; FDTD stays Rayleigh; fidelity names both. Checked: empty Cap ≡ lossless; filled Cap `Re(Z_ab)>0`; FDTD standing-wave peak still drops with Isover.
 
 **Open, in order:**
 1. Merge this PR when Check is green.
-2. Level 3 remainder: fill in quick+detailed (blocked without sourced waveguide fill term) / PR in FDTD or leave labeled / added PR mass / …; Fable-held if still available.
+2. Level 3 remainder: imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / FIR WAV·C7 / C5·C6·C10 / …; Fable-held if still available.
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears. Do not invent added PR mass without a sourced rule.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB wave quantities without keeping Cap's +j passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears. Do not invent added PR mass without a sourced rule.
 
-**Last check:** `passive_radiator` 4 + acoustics waveguide PR identity; duct_mount 4; clippy `-D warnings` on acoustics/sim; fmt ok.
+**Last check:** `tools/cloud-check.sh` passed (engine 313, browser 44 + 1 flaky import hole mark, stable 1.100.0).
 
-**Next step:** merge when green; then fill-in research — do not invent a fill term.
+**Next step:** merge when green; then remainder queue (imported damping parts / PR-in-FDTD / FIR WAV·C7 / …).
+
+### 2026-11-26 — Cursor — Handoff: Level 3 remainder after PR-in-waveguide (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** PR #43 path. Superseded by chamber-fill Cap handoff above.
+
+**Done this session:** PR on waveguide. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: Level 3 remainder after duct-mount offset (superseded)
 
