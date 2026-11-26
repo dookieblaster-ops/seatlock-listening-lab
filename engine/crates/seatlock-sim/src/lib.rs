@@ -3730,6 +3730,47 @@ fn correction_plan_for(
     if result.radiators.is_empty() {
         return serde_json::json!({ "filters": [], "message": "There is no driver to correct." });
     }
+    // C5: coarse full-3D pass on sealed cabinets to find standing-wave peaks the everyday
+    // model leaves out (README §8). Skip when ducts / several chambers make a short run weak.
+    let resonance_cuts = {
+        let sealed = design.speaker.enclosure.ducts.is_empty()
+            && design.speaker.enclosure.chambers.len() <= 1;
+        if !sealed {
+            Vec::new()
+        } else {
+            let fdtd = simulate(
+                design,
+                &SimulateRequest {
+                    enclosure: "fdtd".into(),
+                    radiation: radiation.to_string(),
+                    space: space.to_string(),
+                    frequencies_hz: Some(freqs.clone()),
+                    fdtd_dx_m: Some(0.02),
+                    ..SimulateRequest::default()
+                },
+                registry,
+            );
+            let hi = fdtd
+                .fdtd
+                .as_ref()
+                .map(|r| r.valid_up_to_hz.min(3_000.0))
+                .unwrap_or(0.0);
+            if hi < 200.0 || fdtd.radiators.is_empty() {
+                Vec::new()
+            } else {
+                let peaks = seatlock_correct::find_cabinet_resonances(
+                    &freqs,
+                    &result.radiators[0].spl_db,
+                    &fdtd.radiators[0].spl_db,
+                    150.0,
+                    hi,
+                    1.5,
+                    1.0,
+                );
+                seatlock_correct::resonance_cuts(&peaks, 3)
+            }
+        }
+    };
     let alignment = box_alignment(design, result.interior_volume_m3.unwrap_or(0.01));
     let ports = design_ports(design);
     let tuning = if ports.is_empty() {
@@ -3872,6 +3913,16 @@ fn correction_plan_for(
             filters.insert(0, shelf_filter(corner, shelf_gain, &shelf_reason));
         }
         let mut message = outcome.message.clone();
+        if index == 0 && !resonance_cuts.is_empty() {
+            for cut in &resonance_cuts {
+                filters.push(filter_json(cut));
+            }
+            message = format!(
+                "Cabinet resonances (C5): {} standing-wave cut(s) from a coarse full 3D run. {}",
+                resonance_cuts.len(),
+                message
+            );
+        }
         let mut delay_s = 0.0;
         let mut gain_db: Option<f64> = None;
         if let Some((wall_behind, wall_refl)) = simple_room {

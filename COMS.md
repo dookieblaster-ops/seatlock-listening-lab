@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C10
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/c10-indirect-tuning-da03` (PR onto `main`). Level 3. #49 on `main`.
+- **Context:** branch `cursor/c5-cabinet-resonance-da03` (PR onto `main`). Level 3. #50 on `main`.
 
-**Done this session:** Merged #48–#49. **C10:** with a `simple` room, Apply correction sets highpass (λ/4 of wall path), lowpass (panel limit or 500 Hz cone), gain (~6 dB below front midband, clamped), delay 0 (reflection lag named) on non-front mounts.
+**Done this session:** Merged #48–#50. **C5:** sealed one-chamber Apply correction runs coarse FDTD (20 mm); peaking cuts on `fdtd−everyday` SPL peaks; names damping fill / Shape the inside.
 
 **Open, in order:**
 1. Merge this PR when Check is green.
-2. C5·C6 / Level 3 optimizer / …
+2. C6 level-aware bass / Level 3 optimizer / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD.
 
-**Last check:** `c10_sets_band_gain_and_zero_delay_on_the_rear_panel`; seatlock-correct `indirect` unit tests.
+**Last check:** `c5_can_cut_standing_waves_on_a_tall_sealed_box`; seatlock-correct `resonance` unit tests.
 
-**Next step:** merge when green; then remainder queue.
+**Next step:** merge when green; then C6 or optimizer.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C10 merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #50. Superseded by C5 above.
+
+**Done this session:** #50 merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after damping-chamber Caps (superseded)
 
