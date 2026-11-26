@@ -109,6 +109,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 
 The full history is in `docs/status-history.md`. The latest state:
 
+- 2026-11-26, Cursor cloud: CHK-E2E-2 page golden moved (regression only, README 13): `two-way-vented` after correct now reads evenness 6.0 dB and clean level 99 dB (was 5.9 / 98). Same numbers on `main` after PR #40 and on the duct-mount branch; native probe of the corrected design is unchanged at loft tip vs HEAD. Bass limit and cost unchanged.
 - 2026-11-24, Cursor cloud: 3D wave views. `cargo test -p seatlock-sim --release --test wavefield` 3 passed; clippy `-D warnings` on fdtd/sim/wasm; `tsc` + vitest 7 passed (incl. WaveView). Full `tools/cloud-check.sh` / browser e2e for the new buttons not re-run this turn.
 - 2026-11-24, Cursor cloud: BEM page e2e failed with walls on — vibrating wall tiles were cut as open BEM mouths and the disk was lost. `SourcePatch.open` now distinguishes mouths (`aperture`) from wall skin (`skin`); BEM only cuts open mouths. Page-like sealed-test + walls + bem passes (`bem_page_repro`). Generate e2e timeout on Actions was already failing the same way on `main`.
 - 2026-11-24, Cursor cloud: After BEM fix, Check still failed only on generate e2e (44 passed): stuck at "Proposing cabinets..." after first rows. `runJob` now rejects on worker error/timeout; Generate keeps draining the queue and caps lanes at 3; generate e2e retries=0.
