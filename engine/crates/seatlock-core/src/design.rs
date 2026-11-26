@@ -174,7 +174,7 @@ pub struct CorrectionSettings {
     pub max_filters: u32,
     /// When true, midband auto-EQ (C1) is one linear-phase FIR (C7) instead of peaking
     /// biquads; bass extension (C2) stays IIR. Latency is `(N−1)/2` samples.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub linear_phase: bool,
     #[serde(default, flatten)]
     #[cfg_attr(feature = "typescript", ts(skip))]
