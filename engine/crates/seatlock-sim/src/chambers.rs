@@ -349,11 +349,16 @@ pub struct AirNetwork {
     /// Ducts moulded into an imported model, each with the chamber it leads from; they follow
     /// the design's ducts to the outside in `ports`.
     pub moulded: Vec<(MouldedOpening, usize)>,
+    /// Duct id → chamber name for a driver mounted on that duct (README §6.2).
+    pub duct_from_override: Vec<(String, String)>,
     pub notes: Vec<String>,
 }
 
-/// `None` when the design lists no chambers; otherwise the network, or why it cannot be
-/// built.
+/// Default coupling volume when a driver mounts on a duct with no listed chamber (0.1 L).
+pub const DUCT_COUPLING_M3: f64 = 1.0e-4;
+
+/// `None` when the design lists no chambers and no duct-mounted driver; otherwise the
+/// network, or why it cannot be built.
 pub fn air_network(
     design: &DesignFile,
     shape: &dyn OuterShape,
@@ -361,22 +366,64 @@ pub fn air_network(
     loads_box: impl Fn(&seatlock_core::design::KindPart) -> bool,
 ) -> Option<Result<AirNetwork, String>> {
     let list = match for_simulation(design, shape) {
-        Ok(list) if list.is_empty() => return None,
+        Ok(list) if list.is_empty() => {
+            if duct_mounted_drivers(design).is_empty() {
+                return None;
+            }
+            Vec::new()
+        }
         Ok(list) => list,
         Err(err) => return Some(Err(err)),
     };
     Some(build(design, shape, list, displacement_of, loads_box))
 }
 
+/// Mounts whose `rear_into` names a duct id (not a chamber): the driver sits at that duct's
+/// closed end (README §6.2).
+pub fn duct_mounted_drivers(design: &DesignFile) -> Vec<(String, String, f64)> {
+    let chamber_ids: Vec<&str> = design
+        .speaker
+        .enclosure
+        .chambers
+        .iter()
+        .filter_map(|c| c.get("id").and_then(Value::as_str))
+        .collect();
+    let duct_ids: Vec<&str> = design
+        .speaker
+        .enclosure
+        .ducts
+        .iter()
+        .filter_map(|d| d.get("id").and_then(Value::as_str))
+        .collect();
+    let mut out = Vec::new();
+    for mount in &design.speaker.enclosure.mounts {
+        let target = mount.rear_into.as_str();
+        if chamber_ids.contains(&target) {
+            continue;
+        }
+        if !duct_ids.contains(&target) {
+            continue;
+        }
+        let coupling = mount
+            .extra
+            .get("coupling_volume_m3")
+            .and_then(Value::as_f64)
+            .filter(|v| *v > 0.0)
+            .unwrap_or(DUCT_COUPLING_M3);
+        out.push((mount.id.clone(), target.to_string(), coupling));
+    }
+    out
+}
+
 fn build(
     design: &DesignFile,
     shape: &dyn OuterShape,
-    chambers: Vec<Chamber>,
+    mut chambers: Vec<Chamber>,
     displacement_of: impl Fn(&seatlock_core::design::KindPart) -> f64,
     loads_box: impl Fn(&seatlock_core::design::KindPart) -> bool,
 ) -> Result<AirNetwork, String> {
     for (i, chamber) in chambers.iter().enumerate() {
-        if chamber.region.is_some() {
+        if chamber.region.is_some() || is_coupling_chamber(&chamber.id) {
             continue;
         }
         let inset = 1e-6;
@@ -406,6 +453,9 @@ fn build(
             }
         }
         for other in &chambers[i + 1..] {
+            if is_coupling_chamber(&other.id) {
+                continue;
+            }
             if (0..3)
                 .all(|k| chamber.min_m[k] < other.max_m[k] && other.min_m[k] < chamber.max_m[k])
             {
@@ -413,12 +463,49 @@ fn build(
             }
         }
     }
-    let index_of = |id: &str| chambers.iter().position(|chamber| chamber.id == id);
     let mut volumes: Vec<f64> = chambers.iter().map(Chamber::volume_m3).collect();
     let mut notes = Vec::new();
+    let mut duct_from_override: Vec<(String, String)> = Vec::new();
 
-    // Drivers: each takes its own air from the chamber behind it, and each that loads the
-    // cabinet must name that chamber.
+    // Drivers mounted on a duct: a small coupling volume at the duct's closed end (README 6.2).
+    let duct_mounts = duct_mounted_drivers(design);
+    let mut duct_claim: Vec<(String, usize)> = Vec::new();
+    for (mount_id, duct_id, coupling) in &duct_mounts {
+        if duct_claim.iter().any(|(d, _)| d == duct_id) {
+            return Err(format!(
+                "Two mounts claim duct {duct_id}; only one driver may sit on a duct in this build."
+            ));
+        }
+        let couple_id = coupling_chamber_id(duct_id);
+        if chambers.iter().any(|c| c.id == couple_id) {
+            return Err(format!(
+                "Chamber id {couple_id} is reserved for a duct mount."
+            ));
+        }
+        chambers.push(Chamber {
+            id: couple_id.clone(),
+            min_m: [0.0; 3],
+            max_m: [0.0; 3],
+            plastic_m3: 0.0,
+            fill: None,
+            fill_sigma: None,
+            region: None,
+        });
+        volumes.push(*coupling);
+        let node = chambers.len() - 1;
+        duct_claim.push((duct_id.clone(), node));
+        duct_from_override.push((duct_id.clone(), couple_id));
+        notes.push(format!(
+            "Mount {mount_id} sits on duct {duct_id}: the everyday models use a {:.2} L coupling \
+             volume at the duct's closed end (not the whole cabinet air).",
+            coupling * 1000.0
+        ));
+    }
+
+    let index_of = |id: &str| chambers.iter().position(|chamber| chamber.id == id);
+
+    // Drivers: each takes its own air from the chamber behind it, or from a duct-mount
+    // coupling volume.
     let mut driver = None;
     let mut driver_nodes = Vec::new();
     for part in &design.speaker.radiators {
@@ -437,7 +524,18 @@ fn build(
         else {
             continue;
         };
-        let node = if chambers.iter().any(|c| c.region.is_some()) {
+        let duct_node = duct_mounts
+            .iter()
+            .find(|(id, _, _)| id == &mount.id)
+            .and_then(|(_, duct_id, _)| {
+                duct_claim
+                    .iter()
+                    .find(|(d, _)| d == duct_id)
+                    .map(|(_, n)| *n)
+            });
+        let node = if let Some(n) = duct_node {
+            Some(n)
+        } else if chambers.iter().any(|c| c.region.is_some()) {
             shape.region_behind(&mount.surface).and_then(|region| {
                 chambers
                     .iter()
@@ -447,13 +545,13 @@ fn build(
             index_of(&mount.rear_into)
         };
         if let Some(node) = node {
-            volumes[node] -= displacement_of(part);
+            volumes[node] = (volumes[node] - displacement_of(part)).max(1e-9);
         }
         if !loads_box(part) {
             continue;
         }
         let node = node.ok_or(format!(
-            "Mount {} opens into {}, which is not one of the chambers.",
+            "Mount {} opens into {}, which is not one of the chambers or ducts.",
             mount.id, mount.rear_into
         ))?;
         if let Some(slot) = driver_nodes.last_mut() {
@@ -463,16 +561,18 @@ fn build(
             driver = Some(node);
         }
     }
-    let driver = driver.ok_or("No driver opens into a chamber.")?;
+    let driver = driver.ok_or("No driver opens into a chamber or duct.")?;
 
     // Ducts: edges of the network. Their tubes take air from the chambers they pass through.
     // A duct of kind `passive_radiator` is a Small Map/Cap/Rap branch to the outside (README 5).
+    // A duct claimed by a mount starts from that mount's coupling volume.
     let mut ducts = Vec::new();
     let mut ports = Vec::new();
     for raw in &design.speaker.enclosure.ducts {
         let id = raw.get("id").and_then(Value::as_str).unwrap_or("duct");
         let from = raw.get("from").and_then(Value::as_str).unwrap_or("");
         let to = raw.get("to").and_then(Value::as_str).unwrap_or("");
+        let claimed = duct_claim.iter().find(|(d, _)| d == id).map(|(_, n)| *n);
         let node = |name: &str| -> Result<Option<usize>, String> {
             if name == "outside" {
                 return Ok(None);
@@ -481,11 +581,23 @@ fn build(
                 "Duct {id} names {name}, which is not one of the chambers."
             ))
         };
-        let (a, b) = (node(from)?, node(to)?);
-        let (inside, other) = match (a, b) {
-            (Some(x), y) => (x, y),
-            (None, Some(y)) => (y, None),
-            (None, None) => return Err(format!("Duct {id} runs from outside to outside.")),
+        let (inside, other) = if let Some(n) = claimed {
+            let to_node = node(to)?;
+            if to_node.is_some() {
+                return Err(format!(
+                    "Duct {id}: a driver-mounted duct must open to the outside in this build."
+                ));
+            }
+            (n, None)
+        } else {
+            let (a, b) = (node(from)?, node(to)?);
+            match (a, b) {
+                (Some(x), y) => (x, y),
+                (None, Some(y)) => (y, None),
+                (None, None) => {
+                    return Err(format!("Duct {id} runs from outside to outside."));
+                }
+            }
         };
         if raw.get("kind").and_then(Value::as_str) == Some("passive_radiator") {
             if other.is_some() {
@@ -607,8 +719,17 @@ fn build(
         driver,
         driver_nodes,
         moulded,
+        duct_from_override,
         notes,
     })
+}
+
+fn coupling_chamber_id(duct_id: &str) -> String {
+    format!("_couple_{duct_id}")
+}
+
+fn is_coupling_chamber(id: &str) -> bool {
+    id.starts_with("_couple_")
 }
 
 /// The `waveguide` model of the air network (README 5.4): from the driver's chamber, each
@@ -698,13 +819,15 @@ impl WaveguideNetwork {
 }
 
 /// `names` and `volumes_m3` are the chambers (one called `main` when the design lists none),
-/// `driver` the chamber the driver pushes into.
+/// `driver` the chamber the driver pushes into. `duct_from_override` remaps a duct's chamber
+/// end when a driver mounts on that duct.
 pub fn waveguide_network(
     design: &DesignFile,
     names: &[String],
     volumes_m3: &[f64],
     driver: usize,
     moulded: &[(MouldedOpening, usize)],
+    duct_from_override: &[(String, String)],
 ) -> Result<WaveguideNetwork, String> {
     use seatlock_acoustics::AcousticNode;
     struct Edge {
@@ -732,8 +855,18 @@ pub fn waveguide_network(
     let mut outside_count = 0;
     for raw in &design.speaker.enclosure.ducts {
         let id = raw.get("id").and_then(Value::as_str).unwrap_or("duct");
-        let a = index_of(raw.get("from").and_then(Value::as_str).unwrap_or(""))?;
-        let b = index_of(raw.get("to").and_then(Value::as_str).unwrap_or(""))?;
+        let from_name = duct_from_override
+            .iter()
+            .find(|(d, _)| d == id)
+            .map(|(_, c)| c.as_str())
+            .unwrap_or_else(|| raw.get("from").and_then(Value::as_str).unwrap_or(""));
+        let to_name = if duct_from_override.iter().any(|(d, _)| d == id) {
+            "outside"
+        } else {
+            raw.get("to").and_then(Value::as_str).unwrap_or("")
+        };
+        let a = index_of(from_name)?;
+        let b = index_of(to_name)?;
         if a.is_none() && b.is_none() {
             return Err(format!("duct {id} runs from outside to outside."));
         }

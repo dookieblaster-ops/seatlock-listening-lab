@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after PR merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after duct-mounted drivers
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` @ passive-radiator merge (PR #40). Level 3.
+- **Context:** branch `cursor/duct-mounted-drivers-da03` (PR onto `main`). Level 3. PR #40 on `main`.
 
-**Done this session:** Merged **passive radiators** (PR #40, Check green) to `main`. Lumped Map/Cap/Rap; catalog DSA175-PR; example `pr-box`. Loft (#39) already on `main`.
+**Done this session:** (1) Merged passive radiators (#40). (2) **Drivers on ducts:** mount `rear_into` = duct id → coupling volume at closed end; example `duct-mount-line`; waveguide/lumped; FDTD note.
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): fill in quick+detailed (blocked without sourced waveguide fill term) / drivers on ducts / PR in waveguide·FDTD or leave labeled / …; Fable-held if still available.
+1. Level 3 remainder: fill in quick+detailed (blocked without sourced waveguide fill term) / duct-mount offset tap / PR in waveguide·FDTD or leave labeled / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
 4. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears. Do not invent added PR mass without a sourced rule.
 
-**Last check:** PR #40 Check success on `cursor/passive-radiator-da03`; merged to `main`.
+**Last check:** `cargo test -p seatlock-sim --release --test duct_mount` 2; clippy `-D warnings` on sim; fmt ok.
 
-**Next step:** Level 3 remainder — prefer **drivers mounted on ducts** (next unblocked item) or research a sourced fill term for quick/detailed; do not invent.
+**Next step:** merge this PR when ready; then fill-in research or offset tap — do not invent a fill term.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after PR merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after PR #40. Superseded by duct-mount handoff above.
+
+**Done this session:** Passive radiators merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after passive radiators (superseded)
 

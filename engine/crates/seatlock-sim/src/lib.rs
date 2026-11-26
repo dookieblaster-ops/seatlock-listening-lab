@@ -597,6 +597,7 @@ pub fn simulate_with_progress(
                         &net.volumes_m3,
                         node,
                         &net.moulded,
+                        &net.duct_from_override,
                     ))
                 } else {
                     None
@@ -780,6 +781,7 @@ pub fn simulate_with_progress(
                     &[volume],
                     0,
                     &[],
+                    &[],
                 ))
             } else {
                 None
@@ -845,6 +847,13 @@ pub fn simulate_with_progress(
         fidelity.ignored.push(
             "The full 3D model treats a passive radiator as a short open hole through the wall \
              (air mass only); Map, Cap, and Rap are not in that model."
+                .into(),
+        );
+    }
+    if full_3d && !chambers::duct_mounted_drivers(design).is_empty() {
+        fidelity.ignored.push(
+            "A driver mounted on a duct: the full 3D model still fills the whole cabinet air; \
+             the everyday models use only the coupling volume at the duct's closed end."
                 .into(),
         );
     }
