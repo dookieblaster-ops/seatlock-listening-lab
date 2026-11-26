@@ -45,11 +45,31 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/c5-cabinet-resonance-da03` (PR onto `main`). Level 3. #50 on `main`.
+- **Context:** `main` after #51. Level 3.
+
+**Done this session:** Merged #48–#51. **C5** on `main`: sealed one-chamber Apply correction runs coarse FDTD (20 mm); peaking cuts on `fdtd−everyday` SPL peaks; names damping fill / Shape the inside.
+
+**Open, in order:**
+1. C6 level-aware bass (look-ahead from cone travel `X/V`) / Level 3 optimizer / …
+2. Optional BEM high-ka lit-gap only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote / Pro protect-`main`.
+
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD.
+
+**Last check:** #51 Check green; merge `69607c5`.
+
+**Next step:** implement C6 (or Level 3 optimizer).
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/c5-cabinet-resonance-da03` (PR onto `main`). Level 3. #50 on `main`. Superseded by merge above.
 
 **Done this session:** Merged #48–#50. **C5:** sealed one-chamber Apply correction runs coarse FDTD (20 mm); peaking cuts on `fdtd−everyday` SPL peaks; names damping fill / Shape the inside.
 
@@ -64,7 +84,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 **Last check:** `c5_can_cut_standing_waves_on_a_tall_sealed_box`; seatlock-correct `resonance` unit tests.
 
-**Next step:** merge when green; then C6 or optimizer.
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C10 merge (superseded)
 
