@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after loft
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after passive radiators
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/loft-outer-da03` (PR onto `main`). Level 3. Loops on `main` (PR #38).
+- **Context:** branch `cursor/passive-radiator-da03` (PR onto `main`). Level 3. Loft on `main` (PR #39).
 
-**Done this session:** (1) Merged waveguide loops to `main`. (2) **`loft` outer shape:** rectangular sections along depth (`at` 0…1, width/height); centred in bounding box; wall inset; hull print tree; page fields; example `tapered-loft`.
+**Done this session:** **Passive radiators** on the quick network: duct `kind: "passive_radiator"` → Small Map/Cap/Rap; catalog `dayton-dsa175-pr`; example `pr-box`; cost line; waveguide/FDTD fidelity notes. Loft already on `main`.
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): fill in quick+detailed / passive radiators / …; Fable-held if still available.
+1. Level 3 remainder (STATUS / README 12): fill in quick+detailed / drivers on ducts / PR in waveguide·FDTD or labeled forever / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
 4. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears.
+**Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears. Do not invent added PR mass without a sourced rule.
 
-**Last check:** `cargo test -p seatlock-geom loft::` 2; `cargo test -p seatlock-sim --release --test loft` 1; clippy `-D warnings` on geom/sim; fmt ok.
+**Last check:** `cargo test -p seatlock-acoustics --release --test network` (incl. PR); `cargo test -p seatlock-sim --release --test passive_radiator` 3; clippy `-D warnings` on acoustics/sim/core; fmt ok.
 
-**Next step:** merge this PR when ready; then Level 3 remainder (fill in everyday models / passive radiators / …) without inventing.
+**Next step:** merge this PR when ready; then Level 3 remainder (fill in everyday models / ducts-on-drivers / …) without inventing.
+
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after loft (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/loft-outer-da03`. Superseded by passive-radiator handoff above.
+
+**Done this session:** Loft. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after waveguide loops (superseded)
 

@@ -373,6 +373,19 @@ vented:  M_ap   = RHO0 * L_eff / S_port            port air mass
 
 This model knows volumes and ports. It knows nothing about shape: no standing waves, no folds, no pipe resonances in the port.
 
+**Passive radiator** (as built, Level 3; Small / Thiele acoustic branch). A duct of `kind: "passive_radiator"` opening to `outside` is not an air mass. It is the diaphragm's moving mass, suspension compliance, and mechanical resistance transformed to the acoustic side:
+
+```
+Map = Mms / Sd²
+Cap = Cms · Sd²
+Rap = Rms / Sd²
+Z_pr = Rap + j*omega*Map + 1/(j*omega*Cap)
+Z_ab = 1 / (j*omega*C_ab + 1/Z_pr)     (one chamber; several PR or ports are parallel)
+H_pr = Z_ab / Z_pr
+```
+
+The volume velocity through the branch radiates as a piston of area `Sd`, in the same place in the source list as a port. The duct names a catalog id (`passive_radiator_id`) or gives the same published fields inline (`mms_kg`, `cms_m_per_n`, `rms_ns_per_m` or `qms`+`fs_hz`, `sd_m2`). Its `path_m` and round `section` place the cut-out through the wall; they do not set the acoustic mass. The everyday (`lumped`) network carries the branch; when the request asks for `waveguide`, the lab keeps the quick network and says so. The full 3D model still sees only the short open hole through the wall (air mass), and the label says Map/Cap/Rap are not in that model. Example `pr-box`: a DSA175-8 with a Dayton DSA175-PR on the back. Adding mass on the PR's threaded stud is not modeled yet.
+
 ### 5.4 Model `waveguide`
 
 The cabinet's air is a network of ducts and chambers (section 6.2). A duct segment of length `L` and area `S` relates pressure and volume velocity at its two ends:
@@ -898,6 +911,8 @@ A figure a source gives as a range is stored as the middle of the range, and one
 
 Exciters, from Level 3, are records like drivers, in `catalog/exciters/`. They hold what an exciter's data sheet prints: coil resistance and inductance, force factor, coil and magnet mass, suspension stiffness and loss, travel, power, and mounting footprint (`published`: `re_ohm`, `le_h`, `bl_tm`, `coil_mass_kg`, `magnet_mass_kg`, `suspension_n_per_m`, `suspension_ns_per_m`, `xmax_m`, `pe_w`). Panel materials, also from Level 3, in `catalog/panels/`, hold `youngs_pa`, `density_kg_m3`, `poisson`, and `loss_factor`, each with a source or a note of how it was measured, and a price per kilogram. Real panel materials are in (below). Real exciters in the catalog: Dayton Audio DAEX25FHE-4 and DAEX25VT-4 (sheet Re/Le/Bl/Mms/Fs/Pe; magnet mass derived from published product weight minus Mms; suspension from Mms and Fs; Qms and Xmax not published). The synthetic `test-exciter-a` remains for closed-form plate checks.
 
+Passive radiators, from Level 3, are records in `catalog/passive-radiators/`. They hold sheet Mms, Cms, Rms (or Qms and Fs), Sd, Xmax, and mounting sizes (`published`: `mms_kg`, `cms_m_per_n`, `rms_ns_per_m`, `sd_m2`, …). First entry: Dayton Audio DSA175-PR (Parts Express pedocs 295-548 and product page, read 2026-11-25; Cms taken as mm/N).
+
 `catalog/materials.json` holds density and price per kilogram for each print material. Typical densities are 1240 kg/m^3 for PLA and 1270 kg/m^3 for PETG. Confirm them against the filament's own data sheet. The price per kilogram comes from a seller's page. The owner prints with any filament, so the default material is the cheapest one sourced.
 
 `catalog/printers/` holds the owner's printer, a Bambu Lab X2D: its build volume and maximum flow, copied from the maker's spec sheet. Cabinets are split into parts that fit the main nozzle's build volume. The sheet's flow is a maximum measured on a thin-walled test print, so a print time computed from it is a lower bound, shown as "at least".
@@ -907,7 +922,7 @@ Exciters, from Level 3, are records like drivers, in `catalog/exciters/`. They h
 ### 9.2 Cost
 
 ```
-cost of one speaker = drivers and exciters + cabinet + panels + extras
+cost of one speaker = drivers, exciters, and passive radiators + cabinet + panels + extras
 cabinet             = printed parts + stock parts
 printed parts       = print_mass_kg * price_per_kg
 print_mass_kg       = solid_volume_m3 * density_kg_m3 * infill_fraction
@@ -1053,7 +1068,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 
 - A: undo and redo; design history.
 - B: exciters and panel materials, damping materials, wall fills, and foaming filaments; stale-price warnings; alternative vendors per part.
-- C: folded and tapered lines, coupled chambers (including loops in the detailed model, as built), drivers mounted on ducts, damping fill (as built for the full 3D model via a chamber's `fill` or imported damping parts; quick/detailed still treat filled chambers as empty air), several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed cabinets with one or several chambers, including braces that split wall spans and partitions between chambers; imported mesh cabinets' axis-aligned flat outer walls; sheet boxes whose sheet publishes stiffness and density; and tubes' end caps; section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
+- C: folded and tapered lines, coupled chambers (including loops in the detailed model, as built), drivers mounted on ducts, damping fill (as built for the full 3D model via a chamber's `fill` or imported damping parts; quick/detailed still treat filled chambers as empty air), several drivers sharing a chamber, passive radiators (as built on the quick network as Small Map/Cap/Rap; detailed and full 3D say so when they do not carry that branch); the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed cabinets with one or several chambers, including braces that split wall spans and partitions between chambers; imported mesh cabinets' axis-aligned flat outer walls; sheet boxes whose sheet publishes stiffness and density; and tubes' end caps; section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a boundary-element model of the air around (and then inside) the cabinet, joined to the driver network, giving every direction from one solve per frequency (section 2.6); a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
 - E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes (as built); mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown (as built: `fir` taps and crossover `family` `linear-phase` / `fir`; fidelity labels the total latency). FIR WAV export and C7 auto FIR correction are still open.

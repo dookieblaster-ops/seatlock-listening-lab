@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "name": "pr-box",
+  "speaker": {
+    "enclosure": {
+      "outer": {
+        "kind": "box",
+        "width_m": 0.28,
+        "height_m": 0.36,
+        "depth_m": 0.28,
+        "wall_m": 0.012,
+        "edge_radius_m": 0.0
+      },
+      "chambers": [],
+      "ducts": [
+        {
+          "id": "pr",
+          "kind": "passive_radiator",
+          "passive_radiator_id": "dayton-dsa175-pr",
+          "from": "main",
+          "to": "outside",
+          "path_m": [
+            [0.14, 0.268, 0.14],
+            [0.14, 0.28, 0.14]
+          ],
+          "section": {
+            "shape": "round",
+            "start_m": [0.144],
+            "end_m": [0.144]
+          }
+        }
+      ],
+      "mounts": [
+        {
+          "id": "woofer",
+          "surface": "front",
+          "at_m": [0.14, 0.2],
+          "rear_into": "main",
+          "recess_m": 0.0
+        }
+      ],
+      "solids": []
+    },
+    "radiators": [
+      {
+        "kind": "cone",
+        "driver_id": "dayton-dsa175-8",
+        "mount": "woofer"
+      }
+    ],
+    "listening": {
+      "distance_m": 1.0
+    }
+  },
+  "dsp": {
+    "sample_rate_hz": 48000,
+    "whole_speaker": [],
+    "per_radiator": [
+      {
+        "blocks": [
+          {
+            "kind": "biquad",
+            "type": "highpass",
+            "f_hz": 30.0,
+            "q": 0.707
+          }
+        ],
+        "delay_s": 0.0,
+        "gain_db": 0.0,
+        "invert": false,
+        "limiter": null
+      }
+    ],
+    "correction": {
+      "enabled": true,
+      "protected_band_hz": [3000.0, 5000.0],
+      "max_filters": 10
+    }
+  },
+  "electronics": {
+    "amplifiers": ["test-amp-a"],
+    "dsp_device": null
+  },
+  "build": {
+    "material": "pla",
+    "infill_fraction": 1.0,
+    "stereo_pair": true,
+    "extras_cost": 0.0
+  },
+  "target": "hifi-default"
+}

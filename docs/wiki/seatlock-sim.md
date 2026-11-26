@@ -25,7 +25,7 @@ Front door of the engine after Wasm unwraps JSON. `simulate` wires geometry, aco
 | `lib` | `simulate`, `builtin` registry, listen package |
 | `bem` | Wire `bem` radiation + mouth Z into waveguide |
 | `walls` | Build vibrating wall stacks from catalog materials |
-| `chambers` / `ports` | Multi-chamber, chamber `fill` (damping), and moulded openings |
+| `chambers` / `ports` | Multi-chamber, chamber `fill` (damping), moulded openings, passive-radiator ducts |
 | `preference` | CTA-2034 / Olive preference |
 | `cost` | Line-item build cost |
 | `optimize` / `generate` | Search and cabinet proposals |

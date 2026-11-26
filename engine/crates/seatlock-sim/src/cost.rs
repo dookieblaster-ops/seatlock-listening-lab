@@ -229,6 +229,39 @@ pub fn report(design: &DesignFile, parts: &CabinetParts) -> CostReport {
         }
     }
 
+    // Passive radiators on ducts (README §5): one catalog part each per speaker.
+    let mut pr_ids: Vec<String> = Vec::new();
+    for duct in &design.speaker.enclosure.ducts {
+        if duct.get("kind").and_then(Value::as_str) != Some("passive_radiator") {
+            continue;
+        }
+        if let Some(id) = duct.get("passive_radiator_id").and_then(Value::as_str) {
+            pr_ids.push(id.to_string());
+        }
+    }
+    let mut pr_seen = Vec::new();
+    for id in &pr_ids {
+        if pr_seen.contains(id) {
+            continue;
+        }
+        pr_seen.push(id.clone());
+        let count = pr_ids.iter().filter(|other| *other == id).count() as f64 * n;
+        match catalog::passive_radiator(id) {
+            Some(record) => {
+                let (amount, read_on, via) = price_of(&record);
+                lines.push(line(
+                    name_of(&record, id),
+                    count,
+                    "each",
+                    amount,
+                    read_on,
+                    via,
+                ));
+            }
+            None => problems.push(format!("Passive radiator {id} is not in the catalog.")),
+        }
+    }
+
     // Panel speakers: an exciter and a panel per radiator per speaker. A panel is priced per
     // kilogram of its material (README section 9.2); a record without a price says so.
     for radiator in &design.speaker.radiators {
