@@ -1,0 +1,39 @@
+{
+  "id": "dayton-dsa175-pr",
+  "status": "sourced",
+  "maker": "Dayton Audio",
+  "model": "DSA175-PR",
+  "tier": "budget",
+  "kind": "passive_radiator",
+  "note": "Designer Series 6.5 in aluminum-cone passive radiator. Parameters are for the passive alone with no added mass (sheet note). Cms on the pedocs sheet is labeled mm/M; the product page gives mm/N, which matches Fs = 1/(2π√(Mms·Cms)) at 26.8 Hz. Read 2026-11-25.",
+  "published": {
+    "fs_hz": 26.8,
+    "qms": 4.3,
+    "mms_kg": 0.0307,
+    "cms_m_per_n": 0.00115,
+    "rms_ns_per_m": 1.2,
+    "sd_m2": 0.01287,
+    "vas_m3": 0.0271,
+    "xmax_m": 0.008
+  },
+  "mounting": {
+    "cutout_diameter_m": 0.144018,
+    "outer_diameter_m": 0.175514,
+    "bolt_circle_m": 0.166116,
+    "bolt_count": 5,
+    "depth_m": 0.04699
+  },
+  "source": {
+    "url": "https://www.parts-express.com/pedocs/specs/295-548--dayton-audio-dsa75-pr-spec-sheet.pdf",
+    "title": "Dayton Audio DSA175-PR specification sheet (Parts Express pedocs 295-548)",
+    "read_on": "2026-11-25",
+    "note": "Mounting sizes and price from the Parts Express product page; Cms unit taken as mm/N per that page (pedocs labels mm/M)."
+  },
+  "price": {
+    "amount": 24.98,
+    "currency": "USD",
+    "vendor": "Parts Express",
+    "url": "https://www.parts-express.com/Dayton-Audio-DSA175-PR-6-1-2-Designer-Series-Aluminum-Cone-Passive-Radiator-295-548",
+    "read_on": "2026-11-25"
+  }
+}

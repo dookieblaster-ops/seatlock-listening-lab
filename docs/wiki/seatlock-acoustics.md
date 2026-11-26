@@ -11,7 +11,7 @@
 
 ## Overview
 
-Core acoustic models for everyday simulation: cone (and DML) radiators, sealed/vented/waveguide loads (tree or looped mesh), point and baffle radiation, simple room, vibrating walls, and passive R/L/C nets.
+Core acoustic models for everyday simulation: cone (and DML) radiators, sealed/vented/waveguide loads (tree or looped mesh), passive-radiator Map/Cap/Rap branches, point and baffle radiation, simple room, vibrating walls, and passive R/L/C nets.
 
 ## Responsibilities
 
@@ -25,7 +25,8 @@ Core acoustic models for everyday simulation: cone (and DML) radiators, sealed/v
 | `cone` | Thiele–Small terminal and mechanics |
 | `sealed` / `vented` | Quick enclosure loads |
 | `waveguide` | Detailed duct/chamber network (tree or nodal mesh for loops); radiation matrix join |
-| `network` | Multi-chamber lumped wiring |
+| `network` | Multi-chamber lumped wiring (ports and optional PR branches) |
+| `passive_radiator` | Small Map/Cap/Rap branch; `sealed_with_pr` |
 | `radiation` / `baffle` / `point` | Everyday radiation |
 | `room` | `simple` room estimate |
 | `wall` / `laminate` / `plate` | Wall and panel vibration |

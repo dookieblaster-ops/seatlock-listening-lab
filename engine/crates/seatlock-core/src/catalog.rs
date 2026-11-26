@@ -43,6 +43,11 @@ pub fn damping(id: &str) -> Option<Value> {
     json_with_id("catalog/damping/", id)
 }
 
+/// A passive radiator (drone cone): Mms, Cms, Rms, Sd (README §5).
+pub fn passive_radiator(id: &str) -> Option<Value> {
+    json_with_id("catalog/passive-radiators/", id)
+}
+
 /// The owner's printer: the record named by `id`, or the first one in `catalog/printers/`.
 pub fn printer(id: Option<&str>) -> Option<Value> {
     if let Some(id) = id {

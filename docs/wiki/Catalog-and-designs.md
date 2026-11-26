@@ -26,7 +26,8 @@ Drivers, materials, stock, fills, and electronics live as JSON with source URLs 
 | `catalog/materials.json` | Print filaments (incl. foaming) |
 | `catalog/panels/`, `fills/`, `damping/`, `stock/` | Panel, wall fill, damping (also chamber `fill`), sheet/pipe stock |
 | `catalog/electronics/`, `exciters/`, `printers/` | Amps, DSP, exciters (incl. sourced Dayton DAEX25FHE-4 / DAEX25VT-4), printer rates |
-| `designs/examples/` | Lab examples (`sealed-test`, `folded-line`, …) |
+| `catalog/passive-radiators/` | Passive radiators (Dayton DSA175-PR) |
+| `designs/examples/` | Lab examples (`sealed-test`, `folded-line`, `pr-box`, …) |
 | `designs/imports/` | Kit copies (LCM, C-Note, Criton, …) with licenses |
 | `targets/` | e.g. `hifi-default.json` with `preference_min` |
 

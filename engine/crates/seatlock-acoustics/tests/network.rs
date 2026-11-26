@@ -2,7 +2,7 @@
 
 use num_complex::Complex64;
 use seatlock_acoustics::network::{lumped_network, lumped_network_with_walls, Duct};
-use seatlock_acoustics::{vented_sample, PortSpec};
+use seatlock_acoustics::{sealed_with_pr, vented_sample, PassiveRadiatorMech, PortSpec};
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
 
@@ -29,6 +29,7 @@ fn one_chamber_with_ports_is_the_vented_box() {
             to: None,
             area_m2: p.area_m2,
             length_eff_m: p.length_eff_m,
+            passive: None,
         })
         .collect();
     for freq in [5.0, 20.0, 40.0, 63.0, 200.0, 1000.0] {
@@ -51,6 +52,7 @@ fn two_chambers_joined_by_a_duct_match_the_circuit() {
         to: Some(1),
         area_m2: area,
         length_eff_m: length,
+        passive: None,
     };
     for freq in [3.0, 30.0, 61.0, 150.0, 800.0] {
         let w = 2.0 * PI * freq;
@@ -114,12 +116,14 @@ fn a_bandpass_sends_everything_out_through_its_vent_at_low_frequency() {
             to: Some(1),
             area_m2: 7.0e-4,
             length_eff_m: 0.05,
+            passive: None,
         },
         Duct {
             from: 1,
             to: None,
             area_m2: 1.2e-3,
             length_eff_m: 0.15,
+            passive: None,
         },
     ];
     let low = lumped_network(&[0.008, 0.012], &ducts, 0, 0.5);
@@ -141,6 +145,7 @@ fn six_ports_each_keep_their_own_flow() {
             to: None,
             area_m2: p.area_m2,
             length_eff_m: p.length_eff_m,
+            passive: None,
         })
         .collect();
     let reference = vented_sample(0.02, &ports, 50.0, false);
@@ -150,5 +155,29 @@ fn six_ports_each_keep_their_own_flow() {
     for k in 0..6 {
         assert!((network.h_out[k] - reference.h_each[k]).norm() < 1e-12);
         assert!(reference.h_each[k].norm() > 0.0);
+    }
+}
+
+#[test]
+fn a_passive_radiator_branch_matches_the_sealed_with_pr_circuit() {
+    let pr = PassiveRadiatorMech {
+        mms_kg: 0.0307,
+        cms_m_n: 0.00115,
+        rms_ns_m: 1.2,
+        sd_m2: 0.01287,
+    };
+    let volume = 0.02;
+    let duct = Duct {
+        from: 0,
+        to: None,
+        area_m2: pr.sd_m2,
+        length_eff_m: 0.0,
+        passive: Some(pr),
+    };
+    for freq in [15.0, 26.8, 40.0, 80.0, 200.0] {
+        let (z_ref, h_ref) = sealed_with_pr(volume, pr, freq);
+        let solved = lumped_network(&[volume], &[duct], 0, freq);
+        assert!((solved.z_ab - z_ref).norm() / z_ref.norm() < 1e-12);
+        assert!((solved.h_out[0] - h_ref).norm() < 1e-12);
     }
 }

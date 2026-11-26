@@ -4,7 +4,10 @@
 //! and ducts its edges. With no chambers listed, the whole inside is one chamber, `main`.
 
 use seatlock_acoustics::network::Duct;
-use seatlock_acoustics::{end_correction_m, MeshDuct, PortSpec, WaveguideMesh};
+use seatlock_acoustics::{
+    end_correction_m, MeshDuct, PassiveRadiatorMech, PortSpec, WaveguideMesh,
+};
+use seatlock_core::catalog;
 use seatlock_core::registry::{AirRegions, MouldedOpening, OuterShape};
 use seatlock_core::DesignFile;
 use serde_json::Value;
@@ -412,7 +415,7 @@ fn build(
     }
     let index_of = |id: &str| chambers.iter().position(|chamber| chamber.id == id);
     let mut volumes: Vec<f64> = chambers.iter().map(Chamber::volume_m3).collect();
-    let notes = Vec::new();
+    let mut notes = Vec::new();
 
     // Drivers: each takes its own air from the chamber behind it, and each that loads the
     // cabinet must name that chamber.
@@ -463,6 +466,7 @@ fn build(
     let driver = driver.ok_or("No driver opens into a chamber.")?;
 
     // Ducts: edges of the network. Their tubes take air from the chambers they pass through.
+    // A duct of kind `passive_radiator` is a Small Map/Cap/Rap branch to the outside (README 5).
     let mut ducts = Vec::new();
     let mut ports = Vec::new();
     for raw in &design.speaker.enclosure.ducts {
@@ -483,6 +487,39 @@ fn build(
             (None, Some(y)) => (y, None),
             (None, None) => return Err(format!("Duct {id} runs from outside to outside.")),
         };
+        if raw.get("kind").and_then(Value::as_str) == Some("passive_radiator") {
+            if other.is_some() {
+                return Err(format!(
+                    "Duct {id}: a passive radiator must open to the outside."
+                ));
+            }
+            let pr = passive_radiator_of(raw).map_err(|e| format!("Duct {id}: {e}"))?;
+            let points = path(raw);
+            if points.len() < 2 {
+                return Err(format!(
+                    "Duct {id}: a passive radiator needs a path through the wall it leaves by."
+                ));
+            }
+            // The diaphragm sits in the wall: no tube air is subtracted from the chamber.
+            let duct = Duct {
+                from: inside,
+                to: None,
+                area_m2: pr.sd_m2,
+                length_eff_m: 0.0,
+                passive: Some(pr),
+            };
+            ports.push(PortSpec {
+                area_m2: duct.area_m2,
+                length_eff_m: 0.0,
+            });
+            notes.push(format!(
+                "Passive radiator {id}: Small Map/Cap/Rap from its moving mass, compliance, \
+                 and resistance (Sd {:.1} cm²).",
+                pr.sd_m2 * 1e4
+            ));
+            ducts.push(duct);
+            continue;
+        }
         let section = Section::of(raw).map_err(|e| format!("Duct {id}: {e}"))?;
         let points = path(raw);
         let length = path_length(&points);
@@ -519,6 +556,7 @@ fn build(
             to: other,
             area_m2: area,
             length_eff_m: length + ends,
+            passive: None,
         };
         if other.is_none() {
             // Same equivalent area as the duct: vented_sample / the 3D self-check need the
@@ -546,6 +584,7 @@ fn build(
             to: None,
             area_m2: length / opening.length_over_area(),
             length_eff_m: length + end_correction_m(r_in, true) + end_correction_m(r_out, false),
+            passive: None,
         };
         ports.push(PortSpec {
             area_m2: duct.area_m2,
@@ -929,5 +968,57 @@ pub fn waveguide_network(
         body,
         opening_order: order,
         notes,
+    })
+}
+
+/// Mechanical parameters of a passive-radiator duct from its catalog id or inline published
+/// fields (README §5).
+pub fn passive_radiator_of(raw: &Value) -> Result<PassiveRadiatorMech, String> {
+    let published = if let Some(id) = raw
+        .get("passive_radiator_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        catalog::passive_radiator(id)
+            .ok_or_else(|| format!("passive radiator {id} is not in the catalog."))?
+            .get("published")
+            .cloned()
+            .ok_or_else(|| format!("passive radiator {id} has no published parameters."))?
+    } else if let Some(p) = raw.get("published") {
+        p.clone()
+    } else {
+        return Err(
+            "name a catalog passive_radiator_id, or give published Mms, Cms, Rms, and Sd.".into(),
+        );
+    };
+    let num = |key: &str| -> Result<f64, String> {
+        published
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|v| *v > 0.0)
+            .ok_or_else(|| format!("published.{key} must be a positive number."))
+    };
+    let mms_kg = num("mms_kg")?;
+    let cms_m_n = num("cms_m_per_n")?;
+    let sd_m2 = num("sd_m2")?;
+    let rms_ns_m = published
+        .get("rms_ns_per_m")
+        .and_then(Value::as_f64)
+        .filter(|v| *v >= 0.0)
+        .or_else(|| {
+            let qms = published.get("qms").and_then(Value::as_f64)?;
+            let fs = published.get("fs_hz").and_then(Value::as_f64)?;
+            if qms > 0.0 && fs > 0.0 {
+                Some(2.0 * std::f64::consts::PI * fs * mms_kg / qms)
+            } else {
+                None
+            }
+        })
+        .ok_or("published.rms_ns_per_m (or qms and fs_hz) is required.")?;
+    Ok(PassiveRadiatorMech {
+        mms_kg,
+        cms_m_n,
+        rms_ns_m,
+        sd_m2,
     })
 }

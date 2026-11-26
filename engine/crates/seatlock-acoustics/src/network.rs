@@ -13,6 +13,22 @@ pub struct Duct {
     pub to: Option<usize>,
     pub area_m2: f64,
     pub length_eff_m: f64,
+    /// When set, this outside branch is a passive radiator (README §5): `length_eff_m` is
+    /// ignored and the PR acoustic impedance is used instead.
+    pub passive: Option<crate::passive_radiator::PassiveRadiatorMech>,
+}
+
+impl Duct {
+    /// A pure air-mass duct (no passive radiator).
+    pub fn mass(from: usize, to: Option<usize>, area_m2: f64, length_eff_m: f64) -> Self {
+        Self {
+            from,
+            to,
+            area_m2,
+            length_eff_m,
+            passive: None,
+        }
+    }
 }
 
 pub struct NetworkSample {
@@ -64,6 +80,9 @@ pub fn lumped_network_with_walls(
         matrix[b][a] -= y;
     }
     let impedance = |duct: &Duct| {
+        if let Some(pr) = duct.passive {
+            return pr.acoustic_impedance(freq_hz);
+        }
         Complex64::new(
             0.0,
             omega * RHO0 * duct.length_eff_m / duct.area_m2.max(1e-12),

@@ -556,6 +556,7 @@ pub fn simulate_with_progress(
                 (empty_walls, empty_parts)
             };
             let partitions_active = part_y.iter().any(|p| !p.is_empty());
+            let has_passive_radiator = net.ducts.iter().any(|d| d.passive.is_some());
             // The load each chamber a driver pushes into presents: the first driver's first,
             // then any other chamber a driver pushes into (README 5.2). Chambers that are not
             // joined by a duct do not affect each other, so each is exact on its own.
@@ -587,9 +588,9 @@ pub fn simulate_with_progress(
                     samples.push(sample);
                 }
                 let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
-                // Partition mutual admittance needs the nodal matrix; the waveguide tree
-                // cannot carry it, so keep the lumped solve when partitions vibrate.
-                let wave = if base == "waveguide" && !partitions_active {
+                // Partition mutual admittance and passive-radiator Map/Cap/Rap need the lumped
+                // nodal network; the waveguide tree has neither.
+                let wave = if base == "waveguide" && !partitions_active && !has_passive_radiator {
                     Some(chambers::waveguide_network(
                         design,
                         &names,
@@ -605,6 +606,13 @@ pub fn simulate_with_progress(
                         "Partition vibration is solved with the quick network (each duct one air \
                          mass), because the detailed tree cannot couple two chambers through a \
                          plate."
+                            .into(),
+                    );
+                }
+                if has_passive_radiator && base == "waveguide" && notes {
+                    fidelity.ignored.push(
+                        "A passive radiator is solved with the quick network (Small Map, Cap, \
+                         and Rap), because the detailed duct model has no PR branch."
                             .into(),
                     );
                 }
@@ -718,8 +726,39 @@ pub fn simulate_with_progress(
             }
             let volume = (gross - displacement).max(0.0);
             let ports = design_ports(design);
-            let (z_ab, vented) = if ports.is_empty() {
+            let opening_ducts = design_opening_ducts(design);
+            let has_passive_radiator = opening_ducts.iter().any(|d| d.passive.is_some());
+            let (z_ab, vented) = if opening_ducts.is_empty() {
                 (enclosure.z_ab(volume, &freqs), None)
+            } else if has_passive_radiator {
+                let mut impedance = Vec::with_capacity(freqs.len());
+                let mut samples = Vec::with_capacity(freqs.len());
+                for freq in &freqs {
+                    let solved = seatlock_acoustics::network::lumped_network(
+                        &[volume],
+                        &opening_ducts,
+                        0,
+                        *freq,
+                    );
+                    let mut sample = seatlock_acoustics::VentedSample {
+                        z_ab: solved.z_ab,
+                        h_sum: Complex64::new(0.0, 0.0),
+                        h_each: vec![Complex64::new(0.0, 0.0); solved.h_out.len()],
+                        port_count: solved.h_out.len(),
+                    };
+                    for (index, h) in solved.h_out.iter().enumerate() {
+                        sample.h_each[index] = *h;
+                        sample.h_sum += *h;
+                    }
+                    impedance.push(sample.z_ab);
+                    samples.push(sample);
+                }
+                fidelity.ignored.push(
+                    "Passive radiator: Small Map, Cap, and Rap on the quick network; the \
+                     detailed duct model and the full 3D model do not carry that branch."
+                        .into(),
+                );
+                (impedance, Some(samples))
             } else {
                 let mut impedance = Vec::with_capacity(freqs.len());
                 let mut samples = Vec::with_capacity(freqs.len());
@@ -734,7 +773,7 @@ pub fn simulate_with_progress(
                 );
                 (impedance, Some(samples))
             };
-            let wave = if base == "waveguide" && !ports.is_empty() {
+            let wave = if base == "waveguide" && !ports.is_empty() && !has_passive_radiator {
                 Some(chambers::waveguide_network(
                     design,
                     &["main".to_string()],
@@ -795,6 +834,20 @@ pub fn simulate_with_progress(
     let mut fdtd_report = None;
     // Frequencies whose `Z_ab` the full 3D model replaced (its grid's walls are rigid).
     let mut replaced_3d = vec![false; freqs.len()];
+    if full_3d
+        && design
+            .speaker
+            .enclosure
+            .ducts
+            .iter()
+            .any(|d| d.get("kind").and_then(Value::as_str) == Some("passive_radiator"))
+    {
+        fidelity.ignored.push(
+            "The full 3D model treats a passive radiator as a short open hole through the wall \
+             (air mass only); Map, Cap, and Rap are not in that model."
+                .into(),
+        );
+    }
     if full_3d {
         match full_3d_enclosure(
             design,
@@ -2475,10 +2528,27 @@ fn port_poses(design: &DesignFile, shape: &dyn OuterShape) -> Vec<PlacedSource> 
         if !leaves {
             continue;
         }
-        let diameter = duct
-            .pointer("/section/start_m/0")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
+        let diameter = if duct.get("kind").and_then(Value::as_str) == Some("passive_radiator") {
+            // Prefer published Sd; fall back to the section diameter used for the cut-out.
+            let sd = duct
+                .get("passive_radiator_id")
+                .and_then(Value::as_str)
+                .and_then(catalog::passive_radiator)
+                .and_then(|r| r.pointer("/published/sd_m2").and_then(Value::as_f64))
+                .or_else(|| duct.pointer("/published/sd_m2").and_then(Value::as_f64))
+                .unwrap_or(0.0);
+            if sd > 0.0 {
+                2.0 * (sd / std::f64::consts::PI).sqrt()
+            } else {
+                duct.pointer("/section/start_m/0")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0)
+            }
+        } else {
+            duct.pointer("/section/start_m/0")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0)
+        };
         if diameter <= 0.0 {
             continue;
         }
@@ -2647,12 +2717,37 @@ fn driver_loads_box(part: &seatlock_core::design::KindPart) -> bool {
 }
 
 fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
-    let mut ports = Vec::new();
+    design_opening_ducts(design)
+        .into_iter()
+        .map(|duct| PortSpec {
+            area_m2: duct.area_m2,
+            length_eff_m: duct.length_eff_m,
+        })
+        .collect()
+}
+
+/// Outside openings of a one-chamber cabinet: air-mass ports and passive radiators, in design
+/// order (README §5).
+fn design_opening_ducts(design: &DesignFile) -> Vec<seatlock_acoustics::network::Duct> {
+    let mut ducts = Vec::new();
     for duct in &design.speaker.enclosure.ducts {
         let from = duct.get("from").and_then(Value::as_str).unwrap_or("");
         let to = duct.get("to").and_then(Value::as_str).unwrap_or("");
         let leaves = (from == "main" && to == "outside") || (from == "outside" && to == "main");
         if !leaves {
+            continue;
+        }
+        if duct.get("kind").and_then(Value::as_str) == Some("passive_radiator") {
+            let Ok(pr) = chambers::passive_radiator_of(duct) else {
+                continue;
+            };
+            ducts.push(seatlock_acoustics::network::Duct {
+                from: 0,
+                to: None,
+                area_m2: pr.sd_m2,
+                length_eff_m: 0.0,
+                passive: Some(pr),
+            });
             continue;
         }
         // Round or slot, straight or tapered: the same section as the air network reads.
@@ -2677,7 +2772,9 @@ fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
         } else {
             section.area(0.0, 0.0)
         };
-        ports.push(PortSpec {
+        ducts.push(seatlock_acoustics::network::Duct {
+            from: 0,
+            to: None,
             area_m2: area,
             length_eff_m: length
                 + seatlock_acoustics::end_correction_m(section.end_radius(from == "outside"), true)
@@ -2685,9 +2782,10 @@ fn design_ports(design: &DesignFile) -> Vec<PortSpec> {
                     section.end_radius(from != "outside"),
                     false,
                 ),
+            passive: None,
         });
     }
-    ports
+    ducts
 }
 
 fn point3(value: &Value) -> (f64, f64, f64) {

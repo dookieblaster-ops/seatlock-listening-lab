@@ -6,6 +6,8 @@ pub mod dml;
 pub mod laminate;
 pub mod network;
 pub use network::{lumped_network, lumped_network_with_walls, Duct, NetworkSample};
+pub mod passive_radiator;
+pub use passive_radiator::{sealed_with_pr, PassiveRadiatorMech};
 pub mod passive;
 pub mod plate;
 mod point;
