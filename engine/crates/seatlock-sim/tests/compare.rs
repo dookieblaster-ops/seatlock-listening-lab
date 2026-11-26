@@ -3,7 +3,9 @@
 
 use seatlock_core::catalog;
 use seatlock_sim::builtin;
-use seatlock_sim::compare::{build_methods, cheap_against_reference, score, score_as_is, Target};
+use seatlock_sim::compare::{
+    build_methods, cheap_against_reference, score, score_as_is, Body, Target,
+};
 use seatlock_sim::optimize::{combos, optimize_combo, OptimizeRequest};
 
 fn example(name: &str) -> seatlock_core::DesignFile {
@@ -123,7 +125,7 @@ fn every_build_method_keeps_the_air_volume() {
 
 #[test]
 fn the_level_3_optimizer_searches_free_cabinet_proportions() {
-    use seatlock_sim::compare::{rebuild_to, rebuild_to_proportions, Body};
+    use seatlock_sim::compare::{rebuild_to, rebuild_to_proportions};
 
     let registry = builtin();
     let design = example("sealed-test");
@@ -154,8 +156,12 @@ fn the_level_3_optimizer_searches_free_cabinet_proportions() {
 
     let sealed = combos(&design)
         .into_iter()
-        .find(|c| !c.vented && c.driver_id.as_deref() == Some("test-woofer-a"))
-        .expect("sealed combo for the current driver");
+        .find(|c| {
+            !c.vented
+                && c.driver_id.as_deref() == Some("test-woofer-a")
+                && matches!(c.body, Some(Body::Printed { .. }))
+        })
+        .expect("sealed printed combo for the current driver");
     let result = optimize_combo(
         &design,
         &OptimizeRequest {
@@ -183,9 +189,20 @@ fn the_level_3_optimizer_searches_free_cabinet_proportions() {
         "{:?}",
         result.best[0].variables
     );
-    // Tubes keep locked proportions (pipe diameter).
+    // Tubes keep locked proportions (pipe diameter) and do not invent a printed alternate.
     let tube = example("pvc-tube");
-    let tube_combo = combos(&tube).into_iter().next().unwrap();
+    let tube_combos = combos(&tube);
+    assert!(
+        tube_combos
+            .iter()
+            .all(|c| matches!(c.body, Some(Body::Tube { .. }))),
+        "tubes stay as the current body only: {:?}",
+        tube_combos
+            .iter()
+            .map(|c| c.label.clone())
+            .collect::<Vec<_>>()
+    );
+    let tube_combo = tube_combos.into_iter().next().unwrap();
     let tube_result = optimize_combo(
         &tube,
         &OptimizeRequest {
@@ -212,9 +229,9 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let registry = builtin();
     let design = example("sealed-test");
     let all = combos(&design);
-    // Sealed + vented for the current driver and one nearby budget driver.
+    // Sealed + vented × current/alt driver × current/alt build (printed + thick sheet).
     assert!(
-        all.len() >= 2 && all.len() <= 4 && all.len().is_multiple_of(2),
+        all.len() >= 4 && all.len() <= 8 && all.len().is_multiple_of(2),
         "unexpected combo count {}",
         all.len()
     );
@@ -226,9 +243,13 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
         2,
         "expected one catalog alternative, got {ids:?}"
     );
-    // Multi-way still keeps the user's pair (no driver expansion).
+    // Multi-way still keeps the user's pair (no driver expansion); builds still expand.
     let two_way = combos(&example("two-way-vented"));
-    assert_eq!(two_way.len(), 4);
+    assert!(
+        two_way.len() >= 4 && two_way.len() <= 8,
+        "unexpected two-way combo count {}",
+        two_way.len()
+    );
     assert!(two_way.iter().all(|c| c.driver_id.is_none()));
     // A combo that names another driver actually installs it.
     let alt = all
@@ -238,8 +259,11 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
                 .as_deref()
                 .is_some_and(|id| id != "test-woofer-a")
                 && !c.vented
+                && c.body
+                    .as_ref()
+                    .is_some_and(|b| matches!(b, Body::Printed { .. }))
         })
-        .expect("a sealed combo with an alternate driver");
+        .expect("a sealed printed combo with an alternate driver");
     let result = optimize_combo(
         &design,
         &OptimizeRequest {
@@ -264,14 +288,68 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
 }
 
 #[test]
+fn the_level_3_optimizer_tries_another_build_and_free_proportions() {
+    let registry = builtin();
+    let design = example("sealed-test");
+    let all = combos(&design);
+    let sheet = all
+        .iter()
+        .find(|c| {
+            !c.vented
+                && c.driver_id.as_deref() == Some("test-woofer-a")
+                && matches!(c.body, Some(Body::Sheet { .. }))
+        })
+        .expect("a sealed sheet-stock combo for the current driver");
+    let result = optimize_combo(
+        &design,
+        &OptimizeRequest {
+            seed: 5,
+            combo: sheet.index,
+            evaluations: 6,
+        },
+        &registry,
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert!(
+        result
+            .notes
+            .iter()
+            .any(|n| n.contains("Build method set to")),
+        "{:?}",
+        result.notes
+    );
+    assert!(!result.best.is_empty(), "expected at least one candidate");
+    let best = &result.best[0];
+    assert_eq!(best.design.speaker.enclosure.outer.kind, "sheet_box");
+    assert!(
+        best.variables
+            .iter()
+            .any(|(name, _)| name == "height / width"),
+        "{:?}",
+        best.variables
+    );
+    assert!(
+        best.variables
+            .iter()
+            .any(|(name, _)| name == "depth / width"),
+        "{:?}",
+        best.variables
+    );
+}
+
+#[test]
 fn the_optimizer_repeats_from_its_seed_and_improves_on_the_start() {
     let registry = builtin();
     let design = example("two-way-vented");
     let all = combos(&design);
-    assert_eq!(all.len(), 4);
+    // Sealed/vented × LR4/LR2 × current build + one alternate stock/print.
+    assert_eq!(all.len(), 8);
     let vented = all
         .iter()
-        .find(|c| c.vented && c.crossover_order == Some(4))
+        .find(|c| {
+            c.vented && c.crossover_order == Some(4) && matches!(c.body, Some(Body::Printed { .. }))
+        })
         .unwrap();
     let request = OptimizeRequest {
         seed: 7,

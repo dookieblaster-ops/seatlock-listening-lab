@@ -1,8 +1,8 @@
 //! The optimizer (README section 11.3): the cheapest design that meets the target.
-//! Discrete choices (sealed or vented, crossover slope, and — for a single cone — catalog
-//! driver) are combos; each combo searches box volume, free proportions (box / sheet box),
-//! tuning, crossover frequency, and gains with Nelder-Mead, correcting and scoring every
-//! candidate.
+//! Discrete choices (sealed or vented, crossover slope, Level 3 catalog driver, and Level 3
+//! build method / stock) are combos; each combo searches box volume, free proportions
+//! (box / sheet box), tuning, crossover frequency, and gains with Nelder-Mead, correcting
+//! and scoring every candidate.
 //!
 //! When the design has a passive R/L/C board (`dsp.passive`), the search keeps the cabinet
 //! and the netlist wiring fixed and varies only the part values toward the score (README
@@ -44,6 +44,10 @@ pub struct Combo {
     /// (Level 3: driver choice). Multi-way and passive boards leave this unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driver_id: Option<String>,
+    /// When set, candidates are rebuilt as this body (Level 3: build method / stock).
+    /// Passive boards leave this unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<Body>,
 }
 
 /// One scored candidate, with the variables that made it.
@@ -92,49 +96,128 @@ pub fn combos(design: &DesignFile) -> Vec<Combo> {
             vented: false,
             crossover_order: None,
             driver_id: None,
+            body: None,
         }];
     }
-    let tube = design.speaker.enclosure.outer.kind == "tube";
+    let current_body = Body::of(design);
     let drivers = driver_choices(design);
+    let builds = build_choices(design);
     let mut out = Vec::new();
     for driver in &drivers {
-        for vented in [false, true] {
-            if vented && tube {
-                continue;
-            }
-            let orders: Vec<Option<u32>> = if multi_way(design) {
-                vec![Some(4), Some(2)]
-            } else {
-                vec![None]
-            };
-            for order in orders {
-                let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
-                if let Some(order) = order {
-                    label.push_str(&format!(", LR{order} crossover"));
+        for body in &builds {
+            for vented in [false, true] {
+                // Tubes take no port in the rebuild path.
+                if vented && matches!(body, Body::Tube { .. }) {
+                    continue;
                 }
-                if let Some((id, name)) = driver {
-                    if design
-                        .speaker
-                        .radiators
-                        .first()
-                        .and_then(|r| r.fields.get("driver_id"))
-                        .and_then(Value::as_str)
-                        != Some(id.as_str())
-                    {
-                        label.push_str(&format!(", {name}"));
+                let orders: Vec<Option<u32>> = if multi_way(design) {
+                    vec![Some(4), Some(2)]
+                } else {
+                    vec![None]
+                };
+                for order in orders {
+                    let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
+                    if let Some(order) = order {
+                        label.push_str(&format!(", LR{order} crossover"));
                     }
+                    if let Some((id, name)) = driver {
+                        if design
+                            .speaker
+                            .radiators
+                            .first()
+                            .and_then(|r| r.fields.get("driver_id"))
+                            .and_then(Value::as_str)
+                            != Some(id.as_str())
+                        {
+                            label.push_str(&format!(", {name}"));
+                        }
+                    }
+                    if body != &current_body {
+                        label.push_str(&format!(", {}", body.label()));
+                    }
+                    out.push(Combo {
+                        index: out.len(),
+                        label,
+                        vented,
+                        crossover_order: order,
+                        driver_id: driver.as_ref().map(|(id, _)| id.clone()),
+                        body: Some(body.clone()),
+                    });
                 }
-                out.push(Combo {
-                    index: out.len(),
-                    label,
-                    vented,
-                    crossover_order: order,
-                    driver_id: driver.as_ref().map(|(id, _)| id.clone()),
-                });
             }
         }
     }
     out
+}
+
+/// Discrete build / stock choices for Level 3: the design's current body plus one nearby
+/// sourced alternative (printed ↔ sheet with wall thickness ≥ 9 mm). Tubes stay as the
+/// current body only. Capped like driver choice so the page stays within Check's wall time.
+fn build_choices(design: &DesignFile) -> Vec<Body> {
+    let current = Body::of(design);
+    let mut out = vec![current.clone()];
+    let alternative = match &current {
+        Body::Printed { .. } => thickest_cheap_sheet(None),
+        Body::Sheet { .. } => Some(Body::Printed {
+            wall_m: design
+                .speaker
+                .enclosure
+                .outer
+                .fields
+                .get("wall_m")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.008),
+        }),
+        // Tubes keep the pipe diameter; do not invent a printed-box alternate here.
+        Body::Tube { .. } => None,
+    };
+    if let Some(body) = alternative {
+        if body != current {
+            out.push(body);
+        }
+    }
+    out
+}
+
+/// Sourced sheet stock thick enough for a whole box (≥ 9 mm), cheapest first. Foam board
+/// (~3 mm) is skipped — it suits baffles, not a cabinet (catalog note).
+fn thickest_cheap_sheet(exclude: Option<&str>) -> Option<Body> {
+    let mut candidates: Vec<(f64, f64, String)> = catalog::all("catalog/stock/")
+        .into_iter()
+        .filter_map(|record| {
+            if record.get("status").and_then(Value::as_str) != Some("sourced") {
+                return None;
+            }
+            if record.get("kind").and_then(Value::as_str) != Some("sheet") {
+                return None;
+            }
+            let id = record.get("id").and_then(Value::as_str)?;
+            if exclude == Some(id) {
+                return None;
+            }
+            let thickness = record
+                .get("thickness_m")
+                .and_then(Value::as_f64)
+                .or_else(|| {
+                    record
+                        .pointer("/sizes/0/thickness_m")
+                        .and_then(Value::as_f64)
+                })?;
+            if thickness < 0.009 {
+                return None;
+            }
+            let price = record
+                .pointer("/price/amount")
+                .and_then(Value::as_f64)
+                .unwrap_or(f64::MAX);
+            Some((price, -thickness, id.to_string()))
+        })
+        .collect();
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)));
+    candidates
+        .into_iter()
+        .next()
+        .map(|(_, _, stock_id)| Body::Sheet { stock_id })
 }
 
 /// Discrete driver choices for Level 3. Multi-way keeps the user's pair (`None` once).
@@ -305,21 +388,24 @@ fn space(design: &DesignFile, combo: &Combo, volume_now: f64) -> Space {
     }];
     let mut start = vec![volume_now.clamp(low, high)];
     // Level 3: free proportions for printed and sheet boxes (tubes keep the pipe diameter).
-    if let Some((tall_now, deep_now)) = current_proportions(design) {
-        variables.push(Variable {
-            name: "height / width".into(),
-            low: 0.7,
-            high: 2.8,
-            log: true,
-        });
-        start.push(tall_now.clamp(0.7, 2.8));
-        variables.push(Variable {
-            name: "depth / width".into(),
-            low: 0.55,
-            high: 2.2,
-            log: true,
-        });
-        start.push(deep_now.clamp(0.55, 2.2));
+    let body = combo.body.clone().unwrap_or_else(|| Body::of(design));
+    if matches!(body, Body::Printed { .. } | Body::Sheet { .. }) {
+        if let Some((tall_now, deep_now)) = current_proportions(design) {
+            variables.push(Variable {
+                name: "height / width".into(),
+                low: 0.7,
+                high: 2.8,
+                log: true,
+            });
+            start.push(tall_now.clamp(0.7, 2.8));
+            variables.push(Variable {
+                name: "depth / width".into(),
+                low: 0.55,
+                high: 2.2,
+                log: true,
+            });
+            start.push(deep_now.clamp(0.55, 2.2));
+        }
     }
     if combo.vented {
         variables.push(Variable {
@@ -432,14 +518,18 @@ fn candidate_design(
             .map(|(d, _)| d)
             .unwrap_or((0.35 * cone).clamp(0.025, 0.08));
         let length = port_length_m(diameter, tuning, volume).max(0.01);
-        let wall = base
-            .speaker
-            .enclosure
-            .outer
-            .fields
-            .get("wall_m")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.012);
+        let body = combo.body.clone().unwrap_or_else(|| Body::of(base));
+        let wall = match &body {
+            Body::Printed { wall_m } => *wall_m,
+            Body::Sheet { stock_id } => catalog::stock(stock_id)
+                .and_then(|r| r.get("thickness_m").and_then(Value::as_f64))
+                .or_else(|| {
+                    catalog::stock(stock_id)
+                        .and_then(|r| r.pointer("/sizes/0/thickness_m").and_then(Value::as_f64))
+                })
+                .unwrap_or(0.012),
+            Body::Tube { .. } => 0.012,
+        };
         let place = old_port
             .map(|(_, at)| at)
             .unwrap_or([wall + diameter / 2.0 + 0.01, wall + diameter / 2.0 + 0.01]);
@@ -476,8 +566,8 @@ fn candidate_design(
             }
         }
     }
-    let (rebuilt, _) =
-        rebuild_to_proportions(&design, &Body::of(base), volume, proportions, registry)?;
+    let body = combo.body.clone().unwrap_or_else(|| Body::of(base));
+    let (rebuilt, _) = rebuild_to_proportions(&design, &body, volume, proportions, registry)?;
     // The port must fit inside the cabinet's depth.
     if combo.vented {
         let depth = rebuilt
@@ -653,6 +743,7 @@ fn optimize_passive(
         vented: false,
         crossover_order: None,
         driver_id: None,
+        body: None,
     };
     let passive = design
         .dsp
@@ -916,6 +1007,12 @@ pub fn optimize_combo(
                     .retain(|block| block.fields.get("correction") != Some(&Value::Bool(true)));
             }
             notes.push(format!("Driver set to {id} (was {previous})."));
+        }
+    }
+    if let Some(body) = &combo.body {
+        let current = Body::of(&design);
+        if body != &current {
+            notes.push(format!("Build method set to {}.", body.label()));
         }
     }
     if design.speaker.radiators.iter().any(|part| {

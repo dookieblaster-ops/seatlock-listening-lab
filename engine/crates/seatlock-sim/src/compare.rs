@@ -192,7 +192,8 @@ fn face_size(surface: &str, size: [f64; 3]) -> Option<[f64; 2]> {
 }
 
 /// A new outer shape for the same layout: `box` (printed), `sheet_box`, or `tube`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Body {
     Printed { wall_m: f64 },
     Sheet { stock_id: String },
@@ -200,7 +201,7 @@ pub enum Body {
 }
 
 impl Body {
-    fn label(&self) -> String {
+    pub fn label(&self) -> String {
         match self {
             Body::Printed { .. } => "Printed box (PLA)".to_string(),
             Body::Sheet { stock_id } | Body::Tube { stock_id } => {
