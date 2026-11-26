@@ -7,9 +7,11 @@ use std::f64::consts::PI;
 
 mod crossover;
 mod fir;
+pub mod wav;
 
-pub use crossover::{crossover_block, prefer_inverted_high};
+pub use crossover::{crossover_biquad_coefficients, crossover_block, prefer_inverted_high};
 pub use fir::{fir_block, linear_phase_crossover_block, linear_phase_crossover_taps};
+pub use wav::mono_f32_wav;
 
 pub fn register(registry: &mut Registry) {
     registry.register_dsp("biquad", parse_biquad);

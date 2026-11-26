@@ -351,6 +351,72 @@ fn listen_package_has_an_impulse_and_filter_text() {
         .any(|sample| sample.as_f64().unwrap_or(0.0).abs() > 1e-8));
 }
 
+#[test]
+fn listen_package_exports_fir_as_mono_wav() {
+    let mut raw: serde_json::Value = serde_json::from_str(&read_example()).unwrap();
+    raw["dsp"]["per_radiator"][0]["blocks"] = serde_json::json!([{
+        "kind": "fir",
+        "taps": [0.0, 0.5, 1.0, 0.5, 0.0]
+    }]);
+    let design: seatlock_core::DesignFile = serde_json::from_value(raw).unwrap();
+    let value = seatlock_sim::listen_package(&design, &builtin(), 48_000.0, true, 0);
+    let firs = value["fir_wavs"].as_array().expect("fir_wavs");
+    assert_eq!(firs.len(), 1, "{firs:?}");
+    assert_eq!(firs[0]["taps"], 5);
+    let b64 = firs[0]["wav_base64"].as_str().unwrap();
+    let bytes = decode_base64(b64);
+    assert_eq!(&bytes[0..4], b"RIFF");
+    let (rate, taps) = seatlock_dsp::wav::read_mono_f32_wav(&bytes).unwrap();
+    assert_eq!(rate, 48_000);
+    assert_eq!(taps.len(), 5);
+    assert!((taps[2] - 1.0).abs() < 1e-5);
+    assert!(value["filter_text"]
+        .as_str()
+        .unwrap()
+        .contains("Export file:"));
+}
+
+#[test]
+fn listen_package_expands_iir_crossover_to_biquads() {
+    let text = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../designs/examples/two-way-vented.seatlock.json"
+    ))
+    .unwrap();
+    let design = serde_json::from_str::<seatlock_core::DesignFile>(&text).unwrap();
+    let value = seatlock_sim::listen_package(&design, &builtin(), 48_000.0, true, 0);
+    // LR4 low and high: each is two 2nd-order Butterworth → 2 biquads.
+    for (i, want_band) in [(0, "low"), (1, "high")] {
+        let coeffs = value["channels"][i]["coeffs"].as_array().unwrap();
+        assert_eq!(coeffs.len(), 2, "radiator {i} LR4 {want_band}: {coeffs:?}");
+    }
+    let note = value["filter_text"].as_str().unwrap();
+    assert!(note.contains("crossover linkwitz-riley"), "{note}");
+}
+
+fn decode_base64(b64: &str) -> Vec<u8> {
+    let table = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = Vec::new();
+    let mut buf = 0u32;
+    let mut bits = 0u32;
+    for c in b64.bytes() {
+        if c == b'=' {
+            break;
+        }
+        let Some(v) = table.iter().position(|&t| t == c) else {
+            continue;
+        };
+        buf = (buf << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    out
+}
+
 fn read_example() -> String {
     std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),

@@ -1326,6 +1326,22 @@ export default function App() {
                   anchor.download = "filters.txt";
                   anchor.click();
                   URL.revokeObjectURL(url);
+                  for (const fir of pack.fir_wavs ?? []) {
+                    const binary = Uint8Array.from(atob(fir.wav_base64), (c) => c.charCodeAt(0));
+                    const wavUrl = URL.createObjectURL(
+                      new Blob([binary], { type: "audio/wav" }),
+                    );
+                    const wavAnchor = document.createElement("a");
+                    wavAnchor.href = wavUrl;
+                    wavAnchor.download = fir.filename;
+                    wavAnchor.click();
+                    URL.revokeObjectURL(wavUrl);
+                  }
+                  if ((pack.fir_wavs?.length ?? 0) > 0) {
+                    setCorrectionNote(
+                      `Exported filters.txt and ${pack.fir_wavs!.length} FIR mono WAV file(s).`,
+                    );
+                  }
                 })();
               }}
             >

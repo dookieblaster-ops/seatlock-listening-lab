@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after fill Cap merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after FIR WAV export
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after PR #44. Level 3.
+- **Context:** branch `cursor/fir-wav-export-da03` (PR onto `main`). Level 3. #44 on `main`.
 
-**Done this session:** Merged #41–#44 (duct-mount, offset, PR-waveguide, **chamber fill Cap** Delany–Bazley). Fill: everyday nets + FDTD Rayleigh; cloud-check 313/44.
+**Done this session:** (1) Merged #44 fill Cap. (2) **FIR mono WAV export:** IEEE float WAV for `fir` + linear-phase XO; IIR XO expands to biquad stages in `filters.txt` / Play channels; page downloads WAVs with Export filters.
 
 **Open, in order:**
-1. FIR mono WAV export (README §7); then C7 auto FIR correction; FIR in AudioWorklet still later.
-2. Imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+1. Merge this PR when Check is green.
+2. C7 auto FIR correction; FIR in AudioWorklet; imported damping parts / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2; mono WAV is the generic FIR export.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2.
 
-**Last check:** PR #44 Check green; ff-pushed to `main`.
+**Last check:** `cargo test --workspace --release` ok; clippy `-D warnings` on dsp/sim; `tsc --noEmit` ok. Full cloud-check / browser via PR Actions.
 
-**Next step:** FIR mono WAV export on a branch from `main`.
+**Next step:** merge when green; then C7 or remainder queue.
+
+### 2026-11-26 — Cursor — Handoff: Level 3 remainder after fill Cap merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #44. Superseded by FIR WAV handoff above.
+
+**Done this session:** Fill Cap merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: Level 3 remainder after chamber-fill Cap (superseded)
 

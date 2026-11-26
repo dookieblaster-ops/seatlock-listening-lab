@@ -156,11 +156,20 @@ export function useEngine() {
   return { version, ready, error, designCheck, simulate, geometry, correct, listen, driverRecord, catalogList };
 }
 
+export type FirWavExport = {
+  radiator: number;
+  filename: string;
+  sample_rate_hz: number;
+  taps: number;
+  wav_base64: string;
+};
+
 export type ListenPackage = {
   sample_rate_hz: number;
   channels: Array<{ coeffs: number[][]; gain: number; delay_samples: number }>;
   impulses: number[][];
   filter_text: string;
+  fir_wavs?: FirWavExport[];
   spl_1k_db: number;
   correction_on: boolean;
   error?: string;

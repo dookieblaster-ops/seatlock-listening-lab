@@ -204,6 +204,24 @@ pub fn crossover_block(
     Box::new(Crossover::new(family, order, highpass, freq_hz, sample_rate_hz).expect("crossover"))
 }
 
+/// Biquad coefficients for an IIR crossover (Butterworth / Linkwitz–Riley) at `sample_rate_hz`.
+/// Each row is `(b0, b1, b2, a1, a2)`. Linear-phase / FIR families return an error — use
+/// [`crate::fir::linear_phase_crossover_taps`] instead.
+pub fn crossover_biquad_coefficients(
+    family: &str,
+    order: usize,
+    highpass: bool,
+    freq_hz: f64,
+    sample_rate_hz: f64,
+) -> Result<Vec<[f64; 5]>, String> {
+    let xo = Crossover::new(family, order, highpass, freq_hz, sample_rate_hz)?;
+    Ok(xo
+        .sections
+        .iter()
+        .map(|s| [s.b0, s.b1, s.b2, s.a1, s.a2])
+        .collect())
+}
+
 /// True when inverting the higher branch makes the sum flatter around `f_hz`.
 pub fn prefer_inverted_high(
     low: &[Complex64],

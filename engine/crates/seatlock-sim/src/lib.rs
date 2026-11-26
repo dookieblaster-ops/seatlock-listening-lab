@@ -4014,7 +4014,8 @@ fn fixed_block_shape(
     db
 }
 
-/// Coefficients, plain-language filter text, and optional impulse responses for listen mode.
+/// Coefficients, plain-language filter text, optional FIR WAVs, and optional impulse
+/// responses for listen mode.
 ///
 /// `impulse_len` is the FFT length. Pass 0 to skip the impulse (filter export only).
 pub fn listen_package(
@@ -4032,6 +4033,7 @@ pub fn listen_package(
     let passive = design.dsp.passive.is_some();
     let mut channels = Vec::new();
     let mut lines = Vec::new();
+    let mut fir_wavs = Vec::new();
     if passive {
         lines.push(
             "Passive crossover: the R/L/C network is part of each radiator's listen impulse \
@@ -4046,15 +4048,19 @@ pub fn listen_package(
         let mut stages = Vec::new();
         let mut gain = 1.0;
         let mut delay = 0usize;
+        let fir_before = fir_wavs.len();
         lines.push(format!("Radiator {}", index + 1));
         append_parts(
             &design.dsp.whole_speaker,
             sample_rate_hz,
             correction_on,
+            index,
+            "whole",
             &mut stages,
             &mut gain,
             &mut delay,
             &mut lines,
+            &mut fir_wavs,
         );
         if let Some(chain) = design.dsp.per_radiator.get(index) {
             // Graphs leave per-radiator digital blocks out when a passive network is set
@@ -4064,10 +4070,13 @@ pub fn listen_package(
                     &chain.blocks,
                     sample_rate_hz,
                     correction_on,
+                    index,
+                    "radiator",
                     &mut stages,
                     &mut gain,
                     &mut delay,
                     &mut lines,
+                    &mut fir_wavs,
                 );
             } else if !chain.blocks.is_empty() {
                 lines.push(
@@ -4090,7 +4099,11 @@ pub fn listen_package(
                 lines.push("Polarity inverted.".to_string());
             }
         }
-        if stages.is_empty() && (gain - 1.0).abs() < 1e-9 && delay == 0 {
+        if stages.is_empty()
+            && fir_wavs.len() == fir_before
+            && (gain - 1.0).abs() < 1e-9
+            && delay == 0
+        {
             if passive {
                 lines.push(
                     "No digital filters on this radiator. The passive network is in the listen \
@@ -4146,21 +4159,26 @@ pub fn listen_package(
         "channels": channels,
         "impulses": impulses,
         "filter_text": lines.join("\n"),
+        "fir_wavs": fir_wavs,
         "spl_1k_db": spl_1k,
         "correction_on": correction_on,
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_parts(
     parts: &[KindPart],
     sample_rate_hz: f64,
     correction_on: bool,
+    radiator: usize,
+    scope: &str,
     stages: &mut Vec<[f64; 5]>,
     gain: &mut f64,
     delay: &mut usize,
     lines: &mut Vec<String>,
+    fir_wavs: &mut Vec<Value>,
 ) {
-    for part in parts {
+    for (block_i, part) in parts.iter().enumerate() {
         let is_correction = part
             .fields
             .get("correction")
@@ -4231,6 +4249,111 @@ fn append_parts(
                     Err(err) => lines.push(format!("A {kind} filter was left out: {err}")),
                 }
             }
+            "crossover" => {
+                let family = part
+                    .fields
+                    .get("family")
+                    .and_then(Value::as_str)
+                    .unwrap_or("linkwitz-riley");
+                let order = part
+                    .fields
+                    .get("order")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(4) as usize;
+                let freq = part
+                    .fields
+                    .get("f_hz")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(1_000.0);
+                let band = part
+                    .fields
+                    .get("band")
+                    .and_then(Value::as_str)
+                    .unwrap_or("low");
+                let highpass = band == "high";
+                if family == "linear-phase" || family == "fir" {
+                    match seatlock_dsp::linear_phase_crossover_taps(
+                        order,
+                        highpass,
+                        freq,
+                        sample_rate_hz,
+                    ) {
+                        Ok(taps) => {
+                            let name = format!(
+                                "radiator{}-{}-{}-xo{}.wav",
+                                radiator + 1,
+                                scope,
+                                band,
+                                block_i + 1
+                            );
+                            push_fir_wav(
+                                fir_wavs,
+                                lines,
+                                radiator,
+                                &name,
+                                sample_rate_hz,
+                                &taps,
+                                &format!(
+                                    "FIR linear-phase crossover {band} at {freq:.1} Hz, order \
+                                     {order} ({n} taps).",
+                                    n = taps.len()
+                                ),
+                            );
+                        }
+                        Err(err) => lines.push(format!(
+                            "A linear-phase crossover was left out of the FIR export: {err}"
+                        )),
+                    }
+                } else {
+                    match seatlock_dsp::crossover_biquad_coefficients(
+                        family,
+                        order,
+                        highpass,
+                        freq,
+                        sample_rate_hz,
+                    ) {
+                        Ok(rows) => {
+                            lines.push(format!(
+                                "crossover {family} order {order} {band} at {freq:.1} Hz \
+                                 ({} biquads).",
+                                rows.len()
+                            ));
+                            for row in rows {
+                                stages.push(row);
+                                lines.push(format!(
+                                    "{:.8} {:.8} {:.8} {:.8} {:.8}",
+                                    row[0], row[1], row[2], row[3], row[4]
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            lines.push(format!("A crossover was left out of playback: {err}"))
+                        }
+                    }
+                }
+            }
+            "fir" => {
+                let taps = part
+                    .fields
+                    .get("taps")
+                    .and_then(Value::as_array)
+                    .map(|arr| arr.iter().filter_map(Value::as_f64).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                if taps.is_empty() {
+                    lines.push("An FIR block with no taps was left out.".into());
+                } else {
+                    let name = format!("radiator{}-{}-fir{}.wav", radiator + 1, scope, block_i + 1);
+                    push_fir_wav(
+                        fir_wavs,
+                        lines,
+                        radiator,
+                        &name,
+                        sample_rate_hz,
+                        &taps,
+                        &format!("FIR block ({} taps).", taps.len()),
+                    );
+                }
+            }
             "gain" => {
                 let gain_db = part
                     .fields
@@ -4269,6 +4392,58 @@ fn append_parts(
             other => lines.push(format!("A {other} block was left out of playback.")),
         }
     }
+}
+
+fn push_fir_wav(
+    fir_wavs: &mut Vec<Value>,
+    lines: &mut Vec<String>,
+    radiator: usize,
+    filename: &str,
+    sample_rate_hz: f64,
+    taps: &[f64],
+    label: &str,
+) {
+    let rate = sample_rate_hz.round().max(1.0) as u32;
+    let wav = seatlock_dsp::mono_f32_wav(rate, taps);
+    let b64 = base64_encode(&wav);
+    lines.push(format!("{label} Export file: {filename}."));
+    // Play still leaves FIR out of the worklet (STATUS); export is for hardware.
+    lines.push(
+        "FIR is exported as a mono IEEE float WAV; Play still applies IIR stages only \
+         (FIR convolution in the worklet is later)."
+            .into(),
+    );
+    fir_wavs.push(serde_json::json!({
+        "radiator": radiator,
+        "filename": filename,
+        "sample_rate_hz": rate,
+        "taps": taps.len(),
+        "wav_base64": b64,
+    }));
+}
+
+fn base64_encode(bytes: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let a = chunk[0] as u32;
+        let b = chunk.get(1).copied().unwrap_or(0) as u32;
+        let c = chunk.get(2).copied().unwrap_or(0) as u32;
+        let triple = (a << 16) | (b << 8) | c;
+        out.push(TABLE[((triple >> 18) & 63) as usize] as char);
+        out.push(TABLE[((triple >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(TABLE[((triple >> 6) & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if chunk.len() > 2 {
+            out.push(TABLE[(triple & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+    }
+    out
 }
 
 fn impulse_responses(
