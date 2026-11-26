@@ -49,6 +49,23 @@ pub fn chamber_admittance(volume_m3: f64, freq_hz: f64, fill_sigma: Option<f64>)
     Complex64::new(0.0, omega) * volume_m3 / k
 }
 
+/// Parallel Caps: empty air volume plus one Delany–Bazley Cap per filled part
+/// `(volume_m3, σ)`. Used for imported damping blocks that only pack part of the air
+/// (README §5.4 / §6.2); placement is ignored — only volumes and σ enter the everyday model.
+pub fn chamber_admittance_with_parts(
+    air_volume_m3: f64,
+    filled_parts: &[(f64, f64)],
+    freq_hz: f64,
+) -> Complex64 {
+    let mut y = chamber_admittance(air_volume_m3, freq_hz, None);
+    for &(volume, sigma) in filled_parts {
+        if volume > 0.0 && sigma > 0.0 {
+            y += chamber_admittance(volume, freq_hz, Some(sigma));
+        }
+    }
+    y
+}
+
 /// True when `f/σ` is outside the Delany–Bazley quoted band (σ in SI, f in Hz).
 pub fn delany_bazley_out_of_band(sigma_pa_s_m2: f64, freq_hz: f64) -> bool {
     let sigma = sigma_pa_s_m2.max(1e-12);
@@ -90,5 +107,23 @@ mod tests {
         assert!(!delany_bazley_out_of_band(10_000.0, 100.0)); // f/σ = 0.01
         assert!(delany_bazley_out_of_band(10_000.0, 50.0)); // 0.005
         assert!(delany_bazley_out_of_band(100.0, 200.0)); // 2.0
+    }
+
+    #[test]
+    fn partial_fill_parts_add_in_parallel() {
+        let air = 0.015;
+        let filled = 0.005;
+        let sigma = 11_000.0;
+        let freq = 100.0;
+        let y = chamber_admittance_with_parts(air, &[(filled, sigma)], freq);
+        let expect =
+            chamber_admittance(air, freq, None) + chamber_admittance(filled, freq, Some(sigma));
+        assert!(
+            (y - expect).norm() < 1e-12 * expect.norm(),
+            "{y} vs {expect}"
+        );
+        assert!(y.re > 0.0, "partial fill should add loss: {y}");
+        let all_air = chamber_admittance(air + filled, freq, None);
+        assert!(y.re > all_air.re, "loss vs empty air of same total volume");
     }
 }

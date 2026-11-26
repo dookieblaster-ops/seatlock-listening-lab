@@ -120,6 +120,13 @@ pub trait OuterShape: Send + Sync {
         None
     }
 
+    /// Imported damping blocks with a known flow resistivity: `(volume_m3, σ in Pa·s/m²)`.
+    /// Everyday networks put each as a parallel Delany–Bazley Cap beside the empty air
+    /// (placement ignored). Empty when the shape has no such parts.
+    fn damping_fills_m3(&self) -> Vec<(f64, f64)> {
+        Vec::new()
+    }
+
     fn contains_solid(&self, _point_m: [f64; 3]) -> Result<bool, String> {
         not_finished()
     }

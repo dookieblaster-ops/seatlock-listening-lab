@@ -23,16 +23,20 @@ pub enum AcousticNode {
         radiation: Option<Complex64>,
     },
     /// A chamber small enough to be a shunt compliance. Optional fibrous fill (Delany–Bazley).
+    /// `extra_fills` are parallel Caps `(volume_m3, σ)` for imported damping parts.
     Compliance {
         volume_m3: f64,
         fill_sigma: Option<f64>,
+        extra_fills: Vec<(f64, f64)>,
     },
     /// A chamber that reports its pressure under `slot`, and whose walls take the admittance
     /// given for that slot to [`solve_with_walls`] (README 5.11). Optional fibrous fill.
+    /// `extra_fills` are parallel Caps `(volume_m3, σ)` for imported damping parts.
     Chamber {
         volume_m3: f64,
         slot: usize,
         fill_sigma: Option<f64>,
+        extra_fills: Vec<(f64, f64)>,
     },
     /// Uniform or tapered duct. A taper is sliced into pieces no longer than 10 mm.
     Duct {
@@ -66,6 +70,19 @@ pub fn solve(node: &AcousticNode, freq_hz: f64) -> WaveguideResult {
 /// README section 5.4: a smooth round duct of radius `a` loses `alpha = WALL_LOSS * sqrt(f) / a`
 /// nepers per meter to the air's friction and heat flow at its wall.
 pub const WALL_LOSS: f64 = 2.99e-5;
+
+fn chamber_node_admit(
+    volume_m3: f64,
+    fill_sigma: Option<f64>,
+    extra_fills: &[(f64, f64)],
+    freq_hz: f64,
+) -> Complex64 {
+    if fill_sigma.is_some() {
+        crate::fill::chamber_admittance(volume_m3, freq_hz, fill_sigma)
+    } else {
+        crate::fill::chamber_admittance_with_parts(volume_m3, extra_fills, freq_hz)
+    }
+}
 
 /// [`solve`] with every duct's wall loss: `k` becomes `k - j*alpha`, `alpha` taken for the
 /// round duct of each slice's area.
@@ -128,9 +145,10 @@ fn solve_at(
         AcousticNode::Compliance {
             volume_m3,
             fill_sigma,
+            extra_fills,
         } => {
             let freq = omega / (2.0 * PI);
-            let admit = crate::fill::chamber_admittance(*volume_m3, freq, *fill_sigma);
+            let admit = chamber_node_admit(*volume_m3, *fill_sigma, extra_fills, freq);
             WaveguideResult {
                 z_in: 1.0 / admit,
                 openings: Vec::new(),
@@ -141,10 +159,11 @@ fn solve_at(
             volume_m3,
             slot,
             fill_sigma,
+            extra_fills,
         } => {
             let wall = walls.get(*slot).copied().unwrap_or_default();
             let freq = omega / (2.0 * PI);
-            let admit = crate::fill::chamber_admittance(*volume_m3, freq, *fill_sigma) + wall;
+            let admit = chamber_node_admit(*volume_m3, *fill_sigma, extra_fills, freq) + wall;
             let z_in = 1.0 / admit;
             WaveguideResult {
                 z_in,
@@ -375,18 +394,22 @@ fn replace_radiation(node: &AcousticNode, loads: &[Complex64], index: &mut usize
         AcousticNode::Compliance {
             volume_m3,
             fill_sigma,
+            extra_fills,
         } => AcousticNode::Compliance {
             volume_m3: *volume_m3,
             fill_sigma: *fill_sigma,
+            extra_fills: extra_fills.clone(),
         },
         AcousticNode::Chamber {
             volume_m3,
             slot,
             fill_sigma,
+            extra_fills,
         } => AcousticNode::Chamber {
             volume_m3: *volume_m3,
             slot: *slot,
             fill_sigma: *fill_sigma,
+            extra_fills: extra_fills.clone(),
         },
         AcousticNode::Duct {
             length_m,
@@ -434,6 +457,8 @@ pub struct WaveguideMesh {
     pub volumes_m3: Vec<f64>,
     /// Flow resistivity per chamber when filled (`catalog/damping/`); Delany–Bazley Cap.
     pub fill_sigma: Vec<Option<f64>>,
+    /// Parallel Caps per chamber for imported damping parts `(volume_m3, σ)`.
+    pub fill_parts: Vec<Vec<(f64, f64)>>,
     pub edges: Vec<MeshDuct>,
     pub driver: usize,
 }
@@ -459,7 +484,8 @@ pub fn solve_mesh(
     let mut y = vec![vec![zero; n]; n];
     for (i, volume) in mesh.volumes_m3.iter().enumerate() {
         let sigma = mesh.fill_sigma.get(i).copied().flatten();
-        y[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, sigma);
+        let parts = mesh.fill_parts.get(i).map(|p| p.as_slice()).unwrap_or(&[]);
+        y[i][i] += chamber_node_admit(*volume, sigma, parts, freq_hz);
         y[i][i] += walls.get(i).copied().unwrap_or_default();
     }
     // Outside ducts: (design slot, chamber, edge index). Sorted for opening_order pairing.
@@ -736,6 +762,7 @@ pub fn ported_box(
             AcousticNode::Compliance {
                 volume_m3,
                 fill_sigma: None,
+                extra_fills: Vec::new(),
             },
             AcousticNode::Duct {
                 length_m: physical_length_m,
@@ -765,6 +792,7 @@ pub fn helmholtz(
             AcousticNode::Compliance {
                 volume_m3,
                 fill_sigma: None,
+                extra_fills: Vec::new(),
             },
             AcousticNode::Duct {
                 length_m: physical_length_m,

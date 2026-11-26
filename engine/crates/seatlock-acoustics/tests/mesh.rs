@@ -14,6 +14,7 @@ fn mesh_matches_tree_on_a_ported_box() {
             volume_m3: volume,
             slot: 0,
             fill_sigma: None,
+            extra_fills: Vec::new(),
         },
         AcousticNode::Duct {
             length_m: length,
@@ -28,6 +29,7 @@ fn mesh_matches_tree_on_a_ported_box() {
     ]);
     let mesh = WaveguideMesh {
         volumes_m3: vec![volume],
+        fill_parts: vec![],
         fill_sigma: vec![None],
         edges: vec![MeshDuct {
             from: 0,
@@ -74,6 +76,7 @@ fn a_loop_of_two_identical_ducts_matches_one_duct_of_double_area() {
     let added = 2.0 * 0.849 * (area / PI).sqrt();
     let looped = WaveguideMesh {
         volumes_m3: vec![v, v],
+        fill_parts: vec![],
         fill_sigma: vec![None, None],
         edges: vec![
             MeshDuct {
@@ -106,6 +109,7 @@ fn a_loop_of_two_identical_ducts_matches_one_duct_of_double_area() {
     // Two ducts of area A vs one of 2A with the same added length so L/S matches.
     let wide_matched = WaveguideMesh {
         volumes_m3: vec![v, v],
+        fill_parts: vec![],
         fill_sigma: vec![None, None],
         edges: vec![MeshDuct {
             from: 0,
@@ -147,6 +151,7 @@ fn mesh_matches_tree_on_two_chambers_joined_by_one_duct() {
             volume_m3: v0,
             slot: 0,
             fill_sigma: None,
+            extra_fills: Vec::new(),
         },
         AcousticNode::Duct {
             length_m: length,
@@ -157,11 +162,13 @@ fn mesh_matches_tree_on_two_chambers_joined_by_one_duct() {
                 volume_m3: v1,
                 slot: 1,
                 fill_sigma: None,
+                extra_fills: Vec::new(),
             }),
         },
     ]);
     let mesh = WaveguideMesh {
         volumes_m3: vec![v0, v1],
+        fill_parts: vec![],
         fill_sigma: vec![None, None],
         edges: vec![MeshDuct {
             from: 0,
