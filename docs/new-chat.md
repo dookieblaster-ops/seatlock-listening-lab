@@ -31,11 +31,11 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. Level 3 optimizer: build method / stock materials (cap discrete combo count) after free-proportions PR merges
+1. Level 3 optimizer: internal elements after build-method PR merges (or optional BEM/Criton/backup)
 2. Optional high-ka lit-gap only if it blocks; Criton leftovers only if a source appears
 3. Optional: second backup remote URL / protect `main` (GitHub Pro on this private repo — skip is fine)
 
-Already in on `main` (or open PR): L3 optimizer driver choice (#53) + free proportions (box/sheet); duct-mounted drivers; passive radiators; loft; waveguide loops; FIR; 3D wave views; Dayton exciters; chamber `fill`; printed PLA η = 0.075; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
+Already in on `main` (or open PR): L3 optimizer driver choice (#53) + free proportions (#54) + build method (printed↔sheet); duct-mounted drivers; passive radiators; loft; waveguide loops; FIR; 3D wave views; Dayton exciters; chamber `fill`; printed PLA η = 0.075; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
 
 ## What “done” looks like for a lead turn
 

@@ -1,8 +1,8 @@
 //! The optimizer (README section 11.3): the cheapest design that meets the target.
-//! Discrete choices (sealed or vented, crossover slope, and — for a single cone — catalog
-//! driver) are combos; each combo searches box volume, free proportions (box / sheet box),
-//! tuning, crossover frequency, and gains with Nelder-Mead, correcting and scoring every
-//! candidate.
+//! Discrete choices (sealed or vented, crossover slope, catalog driver for a single cone,
+//! and — capped — build method / stock) are combos; each combo searches box volume, free
+//! proportions (box / sheet box), tuning, crossover frequency, and gains with Nelder-Mead,
+//! correcting and scoring every candidate.
 //!
 //! When the design has a passive R/L/C board (`dsp.passive`), the search keeps the cabinet
 //! and the netlist wiring fixed and varies only the part values toward the score (README
@@ -44,6 +44,12 @@ pub struct Combo {
     /// (Level 3: driver choice). Multi-way and passive boards leave this unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub driver_id: Option<String>,
+    /// Level 3 build method: `"printed"`, `"sheet"`, or `"tube"`. With [`Self::stock_id`]
+    /// for sheet/tube. Unset means keep the design's current body.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stock_id: Option<String>,
 }
 
 /// One scored candidate, with the variables that made it.
@@ -92,49 +98,164 @@ pub fn combos(design: &DesignFile) -> Vec<Combo> {
             vented: false,
             crossover_order: None,
             driver_id: None,
+            body_kind: None,
+            stock_id: None,
         }];
     }
     let tube = design.speaker.enclosure.outer.kind == "tube";
     let drivers = driver_choices(design);
+    let bodies = body_choices(design);
     let mut out = Vec::new();
-    for driver in &drivers {
-        for vented in [false, true] {
-            if vented && tube {
-                continue;
-            }
-            let orders: Vec<Option<u32>> = if multi_way(design) {
-                vec![Some(4), Some(2)]
-            } else {
-                vec![None]
-            };
-            for order in orders {
-                let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
-                if let Some(order) = order {
-                    label.push_str(&format!(", LR{order} crossover"));
+    for (body_i, body) in bodies.iter().enumerate() {
+        // Cap workers: nearby drivers only with the design's current body.
+        let drivers_here: Vec<_> = if body_i == 0 {
+            drivers.clone()
+        } else {
+            drivers.iter().take(1).cloned().collect()
+        };
+        for driver in &drivers_here {
+            for vented in [false, true] {
+                let body_is_tube = body
+                    .as_ref()
+                    .map(|(kind, _)| kind.as_str() == "tube")
+                    .unwrap_or(tube);
+                if vented && body_is_tube {
+                    continue;
                 }
-                if let Some((id, name)) = driver {
-                    if design
-                        .speaker
-                        .radiators
-                        .first()
-                        .and_then(|r| r.fields.get("driver_id"))
-                        .and_then(Value::as_str)
-                        != Some(id.as_str())
-                    {
-                        label.push_str(&format!(", {name}"));
+                let orders: Vec<Option<u32>> = if multi_way(design) {
+                    vec![Some(4), Some(2)]
+                } else {
+                    vec![None]
+                };
+                for order in orders {
+                    let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
+                    if let Some(order) = order {
+                        label.push_str(&format!(", LR{order} crossover"));
                     }
+                    if let Some((id, name)) = driver {
+                        if design
+                            .speaker
+                            .radiators
+                            .first()
+                            .and_then(|r| r.fields.get("driver_id"))
+                            .and_then(Value::as_str)
+                            != Some(id.as_str())
+                        {
+                            label.push_str(&format!(", {name}"));
+                        }
+                    }
+                    if let Some((kind, stock)) = body {
+                        let body_label = match (kind.as_str(), stock.as_deref()) {
+                            ("printed", _) => "printed box".to_string(),
+                            ("sheet", Some(id)) => format!("sheet {id}"),
+                            ("tube", Some(id)) => format!("tube {id}"),
+                            _ => kind.clone(),
+                        };
+                        // Skip the label when this is the design's own body.
+                        let current = Body::of(design);
+                        let same = match (&current, kind.as_str(), stock.as_deref()) {
+                            (Body::Printed { .. }, "printed", _) => true,
+                            (Body::Sheet { stock_id }, "sheet", Some(id)) => stock_id == id,
+                            (Body::Tube { stock_id }, "tube", Some(id)) => stock_id == id,
+                            _ => false,
+                        };
+                        if !same {
+                            label.push_str(&format!(", {body_label}"));
+                        }
+                    }
+                    out.push(Combo {
+                        index: out.len(),
+                        label,
+                        vented,
+                        crossover_order: order,
+                        driver_id: driver.as_ref().map(|(id, _)| id.clone()),
+                        body_kind: body.as_ref().map(|(k, _)| k.clone()),
+                        stock_id: body.as_ref().and_then(|(_, s)| s.clone()),
+                    });
                 }
-                out.push(Combo {
-                    index: out.len(),
-                    label,
-                    vented,
-                    crossover_order: order,
-                    driver_id: driver.as_ref().map(|(id, _)| id.clone()),
-                });
             }
         }
     }
     out
+}
+
+/// Discrete build methods for Level 3. Current body first; for box/sheet_box, one alternate
+/// (printed ↔ budget sheet with thickness). Multi-way and tubes stay on the current body.
+fn body_choices(design: &DesignFile) -> Vec<Option<(String, Option<String>)>> {
+    if multi_way(design) {
+        return vec![None];
+    }
+    let kind = design.speaker.enclosure.outer.kind.as_str();
+    if !matches!(kind, "box" | "sheet_box") {
+        return vec![None];
+    }
+    let current = match Body::of(design) {
+        Body::Printed { .. } => ("printed".to_string(), None),
+        Body::Sheet { stock_id } => ("sheet".to_string(), Some(stock_id)),
+        Body::Tube { stock_id } => ("tube".to_string(), Some(stock_id)),
+    };
+    let mut out = vec![Some(current.clone())];
+    let alt = match current.0.as_str() {
+        "printed" => catalog::all("catalog/stock/")
+            .into_iter()
+            .filter_map(|record| {
+                let text = |key: &str| record.get(key).and_then(Value::as_str);
+                if text("status") != Some("sourced") || text("kind") != Some("sheet") {
+                    return None;
+                }
+                // Prefer budget sheet stock; fall back to any sourced sheet with thickness.
+                let tier = text("tier").unwrap_or("");
+                let id = text("id")?;
+                let thickness = record
+                    .pointer("/thickness_m")
+                    .and_then(Value::as_f64)
+                    .or_else(|| {
+                        record
+                            .pointer("/sizes/0/thickness_m")
+                            .and_then(Value::as_f64)
+                    })
+                    .filter(|t| *t > 0.0)?;
+                Some((tier == "budget", thickness, id.to_string()))
+            })
+            .max_by(|a, b| {
+                // Budget first, then thicker (stiffer wall) as a mild preference.
+                a.0.cmp(&b.0)
+                    .then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                    .then_with(|| a.2.cmp(&b.2))
+            })
+            .map(|(_, _, id)| ("sheet".to_string(), Some(id))),
+        "sheet" => Some(("printed".to_string(), None)),
+        _ => None,
+    };
+    if let Some(alt) = alt {
+        if alt != current {
+            out.push(Some(alt));
+        }
+    }
+    out
+}
+
+fn combo_body(combo: &Combo, design: &DesignFile) -> Body {
+    match (combo.body_kind.as_deref(), combo.stock_id.as_deref()) {
+        (Some("printed"), _) => Body::Printed {
+            wall_m: design
+                .speaker
+                .enclosure
+                .outer
+                .fields
+                .get("wall_m")
+                .and_then(Value::as_f64)
+                .filter(|_| design.speaker.enclosure.outer.kind == "box")
+                .unwrap_or(0.008),
+        },
+        (Some("sheet"), Some(id)) => Body::Sheet {
+            stock_id: id.to_string(),
+        },
+        (Some("tube"), Some(id)) => Body::Tube {
+            stock_id: id.to_string(),
+        },
+        _ => Body::of(design),
+    }
 }
 
 /// Discrete driver choices for Level 3. Multi-way keeps the user's pair (`None` once).
@@ -476,8 +597,8 @@ fn candidate_design(
             }
         }
     }
-    let (rebuilt, _) =
-        rebuild_to_proportions(&design, &Body::of(base), volume, proportions, registry)?;
+    let body = combo_body(combo, base);
+    let (rebuilt, _) = rebuild_to_proportions(&design, &body, volume, proportions, registry)?;
     // The port must fit inside the cabinet's depth.
     if combo.vented {
         let depth = rebuilt
@@ -653,6 +774,8 @@ fn optimize_passive(
         vented: false,
         crossover_order: None,
         driver_id: None,
+        body_kind: None,
+        stock_id: None,
     };
     let passive = design
         .dsp
@@ -940,6 +1063,38 @@ pub fn optimize_combo(
     }
     let (now, _) = score(&design, registry);
     let volume_now = now.interior_volume_m3.unwrap_or(0.01);
+    // Apply a discrete build-method swap before the continuous search.
+    if combo.body_kind.is_some() {
+        let body = combo_body(&combo, &design);
+        let current = Body::of(&design);
+        let different = match (&body, &current) {
+            (Body::Printed { .. }, Body::Printed { .. }) => false,
+            (Body::Sheet { stock_id: a }, Body::Sheet { stock_id: b }) => a != b,
+            (Body::Tube { stock_id: a }, Body::Tube { stock_id: b }) => a != b,
+            _ => true,
+        };
+        if different {
+            let (rebuilt, body_notes) =
+                crate::compare::rebuild_to(&design, &body, volume_now, registry)?;
+            design = rebuilt;
+            notes.extend(body_notes);
+            notes.push(format!(
+                "Build method set to {}.",
+                combo.body_kind.as_deref().unwrap_or("?").to_string()
+                    + &combo
+                        .stock_id
+                        .as_ref()
+                        .map(|id| format!(" ({id})"))
+                        .unwrap_or_default()
+            ));
+            // Correction filters were for the previous body.
+            for chain in design.dsp.per_radiator.iter_mut() {
+                chain
+                    .blocks
+                    .retain(|block| block.fields.get("correction") != Some(&Value::Bool(true)));
+            }
+        }
+    }
     let Space { variables, start } = space(&design, &combo, volume_now);
     let mut random =
         SplitMix(request.seed ^ (request.combo as u64 + 1).wrapping_mul(0x5851_F42D_4C95_7F2D));

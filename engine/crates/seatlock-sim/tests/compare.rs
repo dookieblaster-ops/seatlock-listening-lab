@@ -122,6 +122,63 @@ fn every_build_method_keeps_the_air_volume() {
 }
 
 #[test]
+fn the_level_3_optimizer_lists_build_method_alternates() {
+    let registry = builtin();
+    let design = example("sealed-test");
+    let all = combos(&design);
+    let bodies: std::collections::BTreeSet<_> =
+        all.iter().filter_map(|c| c.body_kind.as_deref()).collect();
+    assert!(bodies.contains("printed"), "{bodies:?}");
+    assert!(bodies.contains("sheet"), "{bodies:?}");
+    let sheet = all
+        .iter()
+        .find(|c| c.body_kind.as_deref() == Some("sheet") && !c.vented)
+        .expect("a sealed sheet-stock combo");
+    assert_eq!(sheet.stock_id.as_deref(), Some("komatex-foam-board"));
+    // Nearby drivers only pair with the current body.
+    let sheet_drivers: std::collections::BTreeSet<_> = all
+        .iter()
+        .filter(|c| c.body_kind.as_deref() == Some("sheet"))
+        .filter_map(|c| c.driver_id.as_deref())
+        .collect();
+    assert_eq!(sheet_drivers, ["test-woofer-a"].into());
+    let result = optimize_combo(
+        &design,
+        &OptimizeRequest {
+            seed: 5,
+            combo: sheet.index,
+            evaluations: 4,
+        },
+        &registry,
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert!(
+        result.notes.iter().any(|n| n.contains("Build method set")),
+        "{:?}",
+        result.notes
+    );
+    assert_eq!(
+        result.best[0].design.speaker.enclosure.outer.kind,
+        "sheet_box"
+    );
+    assert_eq!(
+        result.best[0]
+            .design
+            .speaker
+            .enclosure
+            .outer
+            .fields
+            .get("stock_id")
+            .and_then(|v| v.as_str()),
+        Some("komatex-foam-board")
+    );
+    // Multi-way keeps the user's build method.
+    let two_way = combos(&example("two-way-vented"));
+    assert!(two_way.iter().all(|c| c.body_kind.is_none()));
+}
+
+#[test]
 fn the_level_3_optimizer_searches_free_cabinet_proportions() {
     use seatlock_sim::compare::{rebuild_to, rebuild_to_proportions, Body};
 
@@ -212,9 +269,10 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let registry = builtin();
     let design = example("sealed-test");
     let all = combos(&design);
-    // Sealed + vented for the current driver and one nearby budget driver.
+    // Sealed + vented for the current driver and one nearby budget driver, plus a capped
+    // build-method alternate on the current driver only (≤6 for a printed single-cone).
     assert!(
-        all.len() >= 2 && all.len() <= 4 && all.len().is_multiple_of(2),
+        all.len() >= 2 && all.len() <= 6 && all.len().is_multiple_of(2),
         "unexpected combo count {}",
         all.len()
     );

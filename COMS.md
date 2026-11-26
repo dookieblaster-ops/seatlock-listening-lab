@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after free proportions
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after build method
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/l3-optimizer-proportions-9ae2` (PR onto `main`). Level 3. #53 on `main`.
+- **Context:** branch `cursor/l3-optimizer-build-9ae2` (PR onto `main`). Level 3. #53–#54 on `main`.
 
-**Done this session:** Reviewed and merged #53 (driver choice) after Check green. **Free proportions:** for `box` / `sheet_box`, Nelder–Mead searches height/width and depth/width of the inner air (`rebuild_to_proportions`); tubes keep the pipe diameter. No new combo workers (continuous only).
+**Done this session:** Merged #53–#54. **Build method / stock:** single-cone box/sheet_box tries current body + one alternate (printed ↔ sourced sheet with thickness; budget preferred — komatex for sealed-test). Nearby drivers only on the current body (≤6 combos). Multi-way/tubes unchanged. Free proportions and driver choice already on `main`.
 
 **Open, in order:**
 1. Merge this PR when Check is green.
-2. Level 3 optimizer: build method / stock materials (cap combo count — driver×vented×body multiplies workers) / internal elements.
+2. Level 3 optimizer: internal elements (braces / partitions / fill — only with sourced models; do not invent).
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap discrete combo count — page concurrency is already 2.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap discrete combo count — page concurrency is already 2; cost-quality e2e is sensitive to combo×eval product.
 
-**Last check:** `the_level_3_optimizer_searches_free_cabinet_proportions`; driver-choice + seed-repeat; clippy `-D warnings` on seatlock-sim.
+**Last check:** `the_level_3_optimizer_lists_build_method_alternates`; proportions + driver + seed-repeat; clippy `-D warnings` on seatlock-sim.
 
-**Next step:** merge when green; then build method / stock materials (carefully capped).
+**Next step:** merge when green; then internal elements or optional BEM/Criton/backup.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after free proportions (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #54. Level 3. Superseded by build method above.
+
+**Done this session:** #54 merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after optimizer driver choice (superseded)
 
@@ -791,6 +801,8 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 ## Resolved
 
 - 2026-11-26: PR #53 Level 3 optimizer driver choice reviewed and merged to `main` (Check green).
+- 2026-11-26: PR #54 Level 3 optimizer free proportions merged to `main` (Check green).
+- 2026-11-26: Level 3 optimizer build method / stock (printed↔sheet alternate, capped).
 - 2026-11-26: Level 3 optimizer free proportions for box/sheet_box (height/width, depth/width); tubes locked.
 - 2026-11-25: Chamber damping fill in FDTD (`chambers[].fill` → catalog/damping); cost + page; quick/detailed still air-only with a label.
 - 2026-11-25: Real Dayton DAEX25FHE-4 and DAEX25VT-4 exciters sourced; `rear-panel` uses FHE-4.
