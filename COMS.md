@@ -45,25 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6 merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after optimizer driver choice
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after #52. Level 3.
+- **Context:** branch `cursor/l3-optimizer-drivers-da03` (PR onto `main`). Level 3. #52 on `main`.
 
-**Done this session:** Merged #48–#52. **C6** on `main`: look-ahead `dynamic_bass` from free-air cone travel `X/V`. Generate e2e accepts any sourced maker.
+**Done this session:** Merged #48–#52. **Level 3 optimizer driver choice:** single-cone designs expand sealed/vented combos across the current driver plus up to three nearby sourced budget drivers (by Sd; mounting sizes required; never `test-*` as alternatives). Multi-way keeps the user's pair.
 
 **Open, in order:**
-1. Level 3 optimizer (README §11.3 / §12 I: catalog drivers, build method, stock materials, proportions / internal elements; finalists still verified with `fdtd`).
-2. Optional BEM high-ka lit-gap only if it blocks.
-3. Criton leftovers only if a source appears.
-4. Optional: second backup remote / Pro protect-`main`.
+1. Merge this PR when Check is green.
+2. Level 3 optimizer: build method / stock materials / free proportions / …
+3. Optional BEM high-ka lit-gap only if it blocks.
+4. Criton leftovers only if a source appears.
+5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap combo count — page runs every combo in parallel.
 
-**Last check:** #52 Check green; merge `9d3a169`.
+**Last check:** `the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone`; `the_optimizer_repeats_from_its_seed_and_improves_on_the_start`; clippy `-D warnings` on seatlock-sim.
 
-**Next step:** Level 3 optimizer — start with catalog driver choice as discrete combos (keep Level 2 geometry/DSP search).
+**Next step:** merge when green; then build method / stock / proportions.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6 merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #52. Level 3. Superseded by optimizer driver choice above.
+
+**Done this session:** Merged #48–#52. **C6** on `main`.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6 (superseded)
 

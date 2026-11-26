@@ -122,6 +122,58 @@ fn every_build_method_keeps_the_air_volume() {
 }
 
 #[test]
+fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
+    let registry = builtin();
+    let design = example("sealed-test");
+    let all = combos(&design);
+    // Sealed + vented for the current driver and up to three nearby budget drivers.
+    assert!(
+        all.len() >= 2 && all.len() <= 8 && all.len().is_multiple_of(2),
+        "unexpected combo count {}",
+        all.len()
+    );
+    let ids: std::collections::BTreeSet<_> =
+        all.iter().filter_map(|c| c.driver_id.as_deref()).collect();
+    assert!(ids.contains("test-woofer-a"), "{ids:?}");
+    assert!(ids.len() >= 2, "expected catalog alternatives, got {ids:?}");
+    // Multi-way still keeps the user's pair (no driver expansion).
+    let two_way = combos(&example("two-way-vented"));
+    assert_eq!(two_way.len(), 4);
+    assert!(two_way.iter().all(|c| c.driver_id.is_none()));
+    // A combo that names another driver actually installs it.
+    let alt = all
+        .iter()
+        .find(|c| {
+            c.driver_id
+                .as_deref()
+                .is_some_and(|id| id != "test-woofer-a")
+                && !c.vented
+        })
+        .expect("a sealed combo with an alternate driver");
+    let result = optimize_combo(
+        &design,
+        &OptimizeRequest {
+            seed: 3,
+            combo: alt.index,
+            evaluations: 4,
+        },
+        &registry,
+        &mut |_, _| true,
+    )
+    .unwrap();
+    assert!(
+        result.notes.iter().any(|n| n.contains("Driver set to")),
+        "{:?}",
+        result.notes
+    );
+    let installed = result.best[0].design.speaker.radiators[0]
+        .fields
+        .get("driver_id")
+        .and_then(serde_json::Value::as_str);
+    assert_eq!(installed, alt.driver_id.as_deref());
+}
+
+#[test]
 fn the_optimizer_repeats_from_its_seed_and_improves_on_the_start() {
     let registry = builtin();
     let design = example("two-way-vented");

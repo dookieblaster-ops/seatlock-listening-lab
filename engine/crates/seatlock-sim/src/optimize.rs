@@ -1,7 +1,7 @@
-//! The optimizer (README section 11.3): the cheapest design that meets the target, for the
-//! drivers the user chose. Discrete choices (sealed or vented, crossover slope) are combos;
-//! each combo searches box volume, tuning, crossover frequency, and gains with Nelder-Mead,
-//! correcting and scoring every candidate.
+//! The optimizer (README section 11.3): the cheapest design that meets the target.
+//! Discrete choices (sealed or vented, crossover slope, and — for a single cone — catalog
+//! driver) are combos; each combo searches box volume, tuning, crossover frequency, and
+//! gains with Nelder-Mead, correcting and scoring every candidate.
 //!
 //! When the design has a passive R/L/C board (`dsp.passive`), the search keeps the cabinet
 //! and the netlist wiring fixed and varies only the part values toward the score (README
@@ -39,6 +39,10 @@ pub struct Combo {
     pub vented: bool,
     /// Linkwitz-Riley order of the crossovers, for designs with more than one radiator.
     pub crossover_order: Option<u32>,
+    /// When set, the first cone radiator is swapped to this catalog id before the search
+    /// (Level 3: driver choice). Multi-way and passive boards leave this unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver_id: Option<String>,
 }
 
 /// One scored candidate, with the variables that made it.
@@ -86,31 +90,115 @@ pub fn combos(design: &DesignFile) -> Vec<Combo> {
             label: "Passive board values".into(),
             vented: false,
             crossover_order: None,
+            driver_id: None,
         }];
     }
     let tube = design.speaker.enclosure.outer.kind == "tube";
+    let drivers = driver_choices(design);
     let mut out = Vec::new();
-    for vented in [false, true] {
-        if vented && tube {
-            continue;
-        }
-        let orders: Vec<Option<u32>> = if multi_way(design) {
-            vec![Some(4), Some(2)]
-        } else {
-            vec![None]
-        };
-        for order in orders {
-            let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
-            if let Some(order) = order {
-                label.push_str(&format!(", LR{order} crossover"));
+    for driver in &drivers {
+        for vented in [false, true] {
+            if vented && tube {
+                continue;
             }
-            out.push(Combo {
-                index: out.len(),
-                label,
-                vented,
-                crossover_order: order,
-            });
+            let orders: Vec<Option<u32>> = if multi_way(design) {
+                vec![Some(4), Some(2)]
+            } else {
+                vec![None]
+            };
+            for order in orders {
+                let mut label = if vented { "Vented" } else { "Sealed" }.to_string();
+                if let Some(order) = order {
+                    label.push_str(&format!(", LR{order} crossover"));
+                }
+                if let Some((id, name)) = driver {
+                    if design
+                        .speaker
+                        .radiators
+                        .first()
+                        .and_then(|r| r.fields.get("driver_id"))
+                        .and_then(Value::as_str)
+                        != Some(id.as_str())
+                    {
+                        label.push_str(&format!(", {name}"));
+                    }
+                }
+                out.push(Combo {
+                    index: out.len(),
+                    label,
+                    vented,
+                    crossover_order: order,
+                    driver_id: driver.as_ref().map(|(id, _)| id.clone()),
+                });
+            }
         }
+    }
+    out
+}
+
+/// Discrete driver choices for Level 3. Multi-way keeps the user's pair (`None` once).
+/// A single cone tries the current driver plus nearby sourced budget drivers with mounting
+/// sizes (capped), never `test-*`.
+fn driver_choices(design: &DesignFile) -> Vec<Option<(String, String)>> {
+    if multi_way(design) {
+        return vec![None];
+    }
+    let Some(part) = design.speaker.radiators.first() else {
+        return vec![None];
+    };
+    if part.kind != "cone" {
+        return vec![None];
+    }
+    let Some(current_id) = part.fields.get("driver_id").and_then(Value::as_str) else {
+        return vec![None];
+    };
+    let current_name = catalog::driver(current_id)
+        .map(|record| {
+            let maker = record.get("maker").and_then(Value::as_str).unwrap_or("");
+            let model = record
+                .get("model")
+                .and_then(Value::as_str)
+                .unwrap_or(current_id);
+            format!("{maker} {model}").trim().to_string()
+        })
+        .unwrap_or_else(|| current_id.to_string());
+    let current_sd = catalog::driver(current_id)
+        .and_then(|r| r.pointer("/published/sd_m2").and_then(Value::as_f64))
+        .unwrap_or(0.01);
+    let mut alts: Vec<(f64, String, String)> = catalog::all("catalog/drivers/")
+        .into_iter()
+        .filter_map(|record| {
+            let text = |key: &str| record.get(key).and_then(Value::as_str);
+            if text("status") != Some("sourced") || text("tier") != Some("budget") {
+                return None;
+            }
+            let kind = text("kind")?;
+            if !matches!(kind, "woofer" | "fullrange" | "midrange") {
+                return None;
+            }
+            let id = text("id")?;
+            if id == current_id || id.starts_with("test-") {
+                return None;
+            }
+            record
+                .pointer("/mounting/cutout_diameter_m")
+                .and_then(Value::as_f64)
+                .filter(|v| *v > 0.0)?;
+            record
+                .pointer("/mounting/outer_diameter_m")
+                .and_then(Value::as_f64)
+                .filter(|v| *v > 0.0)?;
+            let sd = record.pointer("/published/sd_m2").and_then(Value::as_f64)?;
+            let name = format!("{} {}", text("maker")?, text("model")?);
+            let distance = (sd / current_sd).ln().abs();
+            Some((distance, id.to_string(), name))
+        })
+        .collect();
+    alts.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    // Current first, then up to three nearest by cone area (keeps the page's combo count small).
+    let mut out = vec![Some((current_id.to_string(), current_name))];
+    for (_, id, name) in alts.into_iter().take(3) {
+        out.push(Some((id, name)));
     }
     out
 }
@@ -508,6 +596,7 @@ fn optimize_passive(
         label: "Passive board values".into(),
         vented: false,
         crossover_order: None,
+        driver_id: None,
     };
     let passive = design
         .dsp
@@ -751,6 +840,28 @@ pub fn optimize_combo(
         .cloned()
         .ok_or_else(|| format!("there is no combo {}.", request.combo))?;
     let mut notes = Vec::new();
+    let mut design = design.clone();
+    if let Some(id) = &combo.driver_id {
+        let Some(radiator) = design.speaker.radiators.first_mut() else {
+            return Err("there is no radiator to change.".into());
+        };
+        let previous = radiator
+            .fields
+            .get("driver_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if previous != *id {
+            radiator.fields.insert("driver_id".into(), json!(id));
+            // Correction was for the previous driver; this combo starts clean.
+            for chain in design.dsp.per_radiator.iter_mut() {
+                chain
+                    .blocks
+                    .retain(|block| block.fields.get("correction") != Some(&Value::Bool(true)));
+            }
+            notes.push(format!("Driver set to {id} (was {previous})."));
+        }
+    }
     if design.speaker.radiators.iter().any(|part| {
         part.fields
             .get("driver_id")
@@ -771,9 +882,9 @@ pub fn optimize_combo(
                 .into(),
         );
     }
-    let (now, _) = score(design, registry);
+    let (now, _) = score(&design, registry);
     let volume_now = now.interior_volume_m3.unwrap_or(0.01);
-    let Space { variables, start } = space(design, &combo, volume_now);
+    let Space { variables, start } = space(&design, &combo, volume_now);
     let mut random =
         SplitMix(request.seed ^ (request.combo as u64 + 1).wrapping_mul(0x5851_F42D_4C95_7F2D));
 
@@ -791,7 +902,7 @@ pub fn optimize_combo(
                     failures: &mut Vec<String>|
      -> f64 {
         *count += 1;
-        match candidate_design(design, &combo, &variables, x, registry) {
+        match candidate_design(&design, &combo, &variables, x, registry) {
             Ok((candidate, named)) => {
                 let (score, corrected) = score(&candidate, registry);
                 let value = objective(&score);
