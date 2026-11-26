@@ -49,21 +49,24 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after build/stock merge. Level 3.
+- **Context:** `main` @ `719b47b` after build/stock. Level 3. Open PR #56 overlaps.
 
-**Done this session:** Reviewed PR #55 (build/stock). Ported onto `main` (free proportions already landed; PR conflicted). **Build/stock:** each sealed/vented combo also tries current build + one alternate (printed ↔ sourced sheet ≥ 9 mm; tubes stay current only; foam board skipped). Free proportions keep `height/width` + `depth/width`. Driver choice unchanged. Page concurrency 2.
+**Done this session:** Reviewed PR #55 (build/stock). Ported onto `main` (free proportions already landed; PR conflicted). **Build/stock on `main`:** each sealed/vented combo also tries current build + one alternate (printed ↔ sourced sheet ≥ 9 mm; tubes stay current only; foam board skipped). Free proportions keep `height/width` + `depth/width`. Driver choice unchanged. Page concurrency 2. Closed #55.
+
+**Also open:** PR #56 (`cursor/l3-optimizer-build-9ae2`) — another build/stock slice (budget sheet incl. foam board; alt drivers stay on current body → ≤6 combos). Overlaps what is already on `main`. **First job:** review #56 against README / `main` — take any combo-cap or CostQuality tweak worth keeping, otherwise close as superseded. Do not merge foam-board as a whole-box stock alt (catalog note).
 
 **Open, in order:**
-1. Level 3 remainder: internal elements / deeper generator / …
-2. Optional BEM high-ka lit-gap only if it blocks.
-3. Criton leftovers only if a source appears.
-4. Optional: second backup remote / Pro protect-`main`.
+1. Review / close or cherry-pick from PR #56 (combo cap vs `main`).
+2. Level 3 remainder: internal elements / deeper generator / …
+3. Optional BEM high-ka lit-gap only if it blocks.
+4. Criton leftovers only if a source appears.
+5. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap combo count — page concurrency 2; foam-board (~3 mm) is not an optimizer stock alt.
 
-**Last check:** `the_level_3_optimizer_tries_another_build_and_free_proportions`; proportions + driver-choice + seed-repeat; clippy `-D warnings` on seatlock-sim.
+**Last check:** `the_level_3_optimizer_tries_another_build_and_free_proportions`; proportions + driver-choice + seed-repeat; clippy `-D warnings` on seatlock-sim. Actions Check on `main` @ `719b47b` was still running at handoff.
 
-**Next step:** Level 3 remainder — internal elements (or next open physics item if that blocks).
+**Next step:** review PR #56 first; then internal elements.
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after free proportions (superseded)
 
