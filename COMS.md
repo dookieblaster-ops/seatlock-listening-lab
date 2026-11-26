@@ -45,26 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6 merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/c6-dynamic-bass-da03` (PR onto `main`). Level 3. #51 on `main`.
+- **Context:** `main` after #52. Level 3.
 
-**Done this session:** Merged #48–#51. **C6:** Apply correction adds `dynamic_bass` per cone with `xmax_m` — free-air `X/V` bilinear IIR, 5 ms look-ahead, gain holds predicted peak travel at xmax. Linear graphs = pure delay (latency named). Play leaves C6 out of the worklet (named). Enclosure load omitted (conservative for sealed deep bass).
+**Done this session:** Merged #48–#52. **C6** on `main`: look-ahead `dynamic_bass` from free-air cone travel `X/V`. Generate e2e accepts any sourced maker.
 
 **Open, in order:**
-1. Merge this PR when Check is green.
-2. Level 3 optimizer / …
-3. Optional BEM high-ka lit-gap only if it blocks.
-4. Criton leftovers only if a source appears.
-5. Optional: second backup remote / Pro protect-`main`.
+1. Level 3 optimizer (README §11.3 / §12 I: catalog drivers, build method, stock materials, proportions / internal elements; finalists still verified with `fdtd`).
+2. Optional BEM high-ka lit-gap only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts.
 
-**Last check:** `cargo test -p seatlock-dsp --test dynamic_bass`; `cargo test -p seatlock-sim --test c6`; page_grid / baffle_scores; clippy `-D warnings` on dsp/correct/sim.
+**Last check:** #52 Check green; merge `9d3a169`.
 
-**Next step:** merge when green; then Level 3 optimizer (or next remainder item).
+**Next step:** Level 3 optimizer — start with catalog driver choice as discrete combos (keep Level 2 geometry/DSP search).
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6 (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/c6-dynamic-bass-da03` (PR onto `main`). Level 3. #51 on `main`. Superseded by merge above.
+
+**Done this session:** **C6** implemented. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 merge (superseded)
 
