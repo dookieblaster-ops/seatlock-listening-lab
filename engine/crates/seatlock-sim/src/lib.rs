@@ -427,9 +427,10 @@ pub fn simulate_with_progress(
         } else {
             fidelity.ignored.push(
                 "Imported damping parts: the everyday models use a Delany–Bazley Cap for each \
-                 part's volume and flow resistivity in parallel with the empty air (placement \
-                 ignored); the full 3D model uses a Rayleigh update with the same resistivity \
-                 on those cells."
+                 part's volume and flow resistivity in parallel with the empty air of the \
+                 chamber that holds the part (or the whole cabinet when there is one chamber); \
+                 the full 3D model uses a Rayleigh update with the same resistivity on those \
+                 cells."
                     .into(),
             );
             let band = imported_damping_fills.iter().any(|&(_, sigma)| {
@@ -595,7 +596,7 @@ pub fn simulate_with_progress(
                 let mut pressures = Vec::with_capacity(freqs.len());
                 let fills: Vec<Option<f64>> = net.chambers.iter().map(|c| c.fill_sigma).collect();
                 for (bin, freq) in freqs.iter().enumerate() {
-                    let solved = seatlock_acoustics::network::lumped_network_with_walls(
+                    let solved = seatlock_acoustics::network::lumped_network_with_walls_and_parts(
                         &net.volumes_m3,
                         &net.ducts,
                         node,
@@ -603,6 +604,7 @@ pub fn simulate_with_progress(
                         &wall_y[bin],
                         &part_y[bin],
                         &fills,
+                        &net.fill_parts,
                     );
                     pressures.push(solved.pressures.clone());
                     let mut sample = seatlock_acoustics::VentedSample {
@@ -623,11 +625,12 @@ pub fn simulate_with_progress(
                 // tree has no partition plates. Passive radiators are Small Map/Cap/Rap leaves
                 // on the waveguide tree (and mesh).
                 let wave = if base == "waveguide" && !partitions_active {
-                    Some(chambers::waveguide_network(
+                    Some(chambers::waveguide_network_with_parts(
                         design,
                         &names,
                         &net.volumes_m3,
                         &fills,
+                        &net.fill_parts,
                         node,
                         &net.moulded,
                         &net.duct_from_override,

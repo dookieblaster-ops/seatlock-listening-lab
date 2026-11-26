@@ -26,7 +26,7 @@ Core acoustic models for everyday simulation: cone (and DML) radiators, sealed/v
 | `sealed` / `vented` | Quick enclosure loads |
 | `waveguide` | Detailed duct/chamber network (tree or nodal mesh for loops); radiation matrix join |
 | `network` | Multi-chamber lumped wiring (ports, optional PR branches, optional fill Cap) |
-| `fill` | Delany–Bazley / Allard–Champoux complex bulk modulus from flow resistivity; `chamber_admittance_with_parts` for parallel Caps (imported damping volumes) |
+| `fill` | Delany–Bazley / Allard–Champoux complex bulk modulus from flow resistivity; `chamber_admittance_with_parts` for parallel Caps (imported damping volumes assigned per chamber) |
 | `passive_radiator` | Small Map/Cap/Rap branch; `sealed_with_pr` |
 | `radiation` / `baffle` / `point` | Everyday radiation |
 | `room` | `simple` room estimate |

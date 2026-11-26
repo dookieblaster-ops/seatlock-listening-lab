@@ -225,6 +225,15 @@ fn each_part_is_priced_by_its_own_material_and_damping_is_bought_by_volume() {
     );
 }
 
+fn near_z(r: &seatlock_sim::SimulateResult, want: f64) -> f64 {
+    r.frequencies_hz
+        .iter()
+        .zip(&r.radiators[0].impedance_ohm)
+        .min_by(|(a, _), (b, _)| (*a - want).abs().total_cmp(&(*b - want).abs()))
+        .map(|(_, z)| *z)
+        .unwrap()
+}
+
 #[test]
 fn imported_damping_adds_lossy_cap_in_the_everyday_models() {
     let mut design = imported_sealed_test();
@@ -268,19 +277,77 @@ fn imported_damping_adds_lossy_cap_in_the_everyday_models() {
     let bare = simulate(&bare_design, &request, &builtin());
     // Lossy Cap moves |Z_ab| vs empty air of the same shell (Re(Z) from driver still dominates;
     // compare midband impedance magnitude).
-    let near = |r: &seatlock_sim::SimulateResult, want: f64| {
-        r.frequencies_hz
-            .iter()
-            .zip(&r.radiators[0].impedance_ohm)
-            .min_by(|(a, _), (b, _)| (*a - want).abs().total_cmp(&(*b - want).abs()))
-            .map(|(_, z)| *z)
-            .unwrap()
-    };
-    let z_filled = near(&filled, 100.0);
-    let z_bare = near(&bare, 100.0);
+    let z_filled = near_z(&filled, 100.0);
+    let z_bare = near_z(&bare, 100.0);
     assert!(
         (z_filled - z_bare).abs() > 0.05,
         "expected everyday damping Cap to move Z at 100 Hz: filled {z_filled} bare {z_bare}"
+    );
+}
+
+/// Listed chambers on a mesh (no marked holes): Cap on the chamber that holds the part.
+#[test]
+fn imported_damping_caps_follow_listed_chambers() {
+    // Inside air is ~[0.008,0.152]×[0.008,0.172]×[0.008,0.242]; inset so corners stay air.
+    let chambers = json!([
+        { "id": "front", "min_m": [0.012, 0.012, 0.012], "max_m": [0.148, 0.085, 0.238] },
+        { "id": "rear", "min_m": [0.012, 0.095, 0.012], "max_m": [0.148, 0.168, 0.238] }
+    ]);
+    let ducts = json!([{
+        "id": "coupler", "from": "front", "to": "rear",
+        "path_m": [[0.08, 0.08, 0.12], [0.08, 0.10, 0.12]],
+        "section": { "shape": "round", "start_m": [0.04], "end_m": [0.04] }
+    }]);
+    let with_chambers = |mut design: Value| {
+        design["speaker"]["enclosure"]["chambers"] = chambers.clone();
+        design["speaker"]["enclosure"]["ducts"] = ducts.clone();
+        design["speaker"]["enclosure"]["mounts"][0]["rear_into"] = json!("front");
+        design
+    };
+    let mut filled_v = with_chambers(imported_sealed_test());
+    // Wool fills only the rear chamber.
+    let mut wool = part(
+        "wool",
+        "damping",
+        &[box_mesh([0.02, 0.10, 0.02], [0.14, 0.16, 0.22], true)],
+    );
+    wool["flow_resistivity_pa_s_m2"] = json!(11_000.0);
+    filled_v["speaker"]["enclosure"]["outer"]["parts"]
+        .as_array_mut()
+        .unwrap()
+        .push(wool);
+    let filled: seatlock_core::DesignFile = serde_json::from_value(filled_v).unwrap();
+    let bare: seatlock_core::DesignFile =
+        serde_json::from_value(with_chambers(imported_sealed_test())).unwrap();
+    let request = SimulateRequest {
+        enclosure: "lumped".into(),
+        radiation: "point".into(),
+        ..Default::default()
+    };
+    let filled_r = simulate(&filled, &request, &builtin());
+    let bare_r = simulate(&bare, &request, &builtin());
+    assert!(
+        filled_r
+            .issues
+            .iter()
+            .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        filled_r.issues
+    );
+    assert!(
+        filled_r
+            .fidelity
+            .ignored
+            .iter()
+            .any(|l| l.contains("Imported damping parts") && l.contains("chamber")),
+        "{:?}",
+        filled_r.fidelity.ignored
+    );
+    let z_filled = near_z(&filled_r, 100.0);
+    let z_bare = near_z(&bare_r, 100.0);
+    assert!(
+        (z_filled - z_bare).abs() > 0.05,
+        "expected Cap on rear chamber to move Z at 100 Hz: filled {z_filled} bare {z_bare}"
     );
 }
 

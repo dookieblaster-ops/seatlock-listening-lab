@@ -961,13 +961,21 @@ impl OuterShape for MeshShape {
             .reduce(f64::max)
     }
 
-    fn damping_fills_m3(&self) -> Vec<(f64, f64)> {
+    fn damping_fills_placed_m3(&self) -> Vec<([f64; 3], f64, f64)> {
         self.parts
             .iter()
-            .filter(|part| part.damping && part.volume_m3 > 0.0)
+            .filter(|part| part.damping && part.volume_m3 > 0.0 && !part.vertices.is_empty())
             .filter_map(|part| {
                 let sigma = part.resistivity.filter(|s| *s > 0.0)?;
-                Some((part.volume_m3, sigma))
+                let n = part.vertices.len() as f64;
+                let mut c = [0.0; 3];
+                for v in &part.vertices {
+                    c[0] += v[0];
+                    c[1] += v[1];
+                    c[2] += v[2];
+                }
+                c = [c[0] / n, c[1] / n, c[2] / n];
+                Some((c, part.volume_m3, sigma))
             })
             .collect()
     }
