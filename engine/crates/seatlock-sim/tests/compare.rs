@@ -247,9 +247,7 @@ fn the_optimizer_repeats_from_its_seed_and_improves_on_the_start() {
     let vented = all
         .iter()
         .find(|c| {
-            c.vented
-                && c.crossover_order == Some(4)
-                && matches!(c.body, Some(Body::Printed { .. }))
+            c.vented && c.crossover_order == Some(4) && matches!(c.body, Some(Body::Printed { .. }))
         })
         .unwrap();
     let request = OptimizeRequest {
