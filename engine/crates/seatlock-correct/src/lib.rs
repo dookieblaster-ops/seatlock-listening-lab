@@ -13,9 +13,19 @@ pub struct CorrectionFilter {
     pub reason: String,
 }
 
+/// One FIR correction block (C7): linear-phase taps plus latency in samples.
+#[derive(Clone, Debug)]
+pub struct CorrectionFir {
+    pub taps: Vec<f64>,
+    pub latency_samples: usize,
+    pub reason: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct CorrectionOutcome {
     pub filters: Vec<CorrectionFilter>,
+    /// When set, midband peaking (C1) was replaced by this linear-phase FIR (C7).
+    pub fir: Option<CorrectionFir>,
     pub message: String,
 }
 
@@ -159,7 +169,180 @@ pub fn correct(
     }
     let mut filters = bass;
     filters.extend(fit);
-    CorrectionOutcome { filters, message }
+    CorrectionOutcome {
+        filters,
+        fir: None,
+        message,
+    }
+}
+
+/// Same as [`correct`], then replaces midband peaking filters with one linear-phase FIR
+/// that matches their magnitude (C7). Bass extension / protective high-pass stay as IIR.
+#[allow(clippy::too_many_arguments)]
+pub fn correct_linear_phase(
+    freqs: &[f64],
+    response_db: &[f64],
+    max_spl_db: &[f64],
+    design_level_db: f64,
+    protected_hz: [f64; 2],
+    max_filters: usize,
+    sample_rate_hz: f64,
+    box_fc_hz: f64,
+    box_qtc: f64,
+    vented: bool,
+    tuning_hz: f64,
+    fixed_db: &[f64],
+) -> CorrectionOutcome {
+    let mut outcome = correct(
+        freqs,
+        response_db,
+        max_spl_db,
+        design_level_db,
+        protected_hz,
+        max_filters,
+        sample_rate_hz,
+        box_fc_hz,
+        box_qtc,
+        vented,
+        tuning_hz,
+        fixed_db,
+    );
+    let mid: Vec<CorrectionFilter> = outcome
+        .filters
+        .iter()
+        .filter(|f| {
+            // C2 bass uses linkwitz / highpass; C1 peaking and shelves stay for FIR.
+            f.filter_type == "peaking"
+                || f.filter_type == "lowshelf"
+                || f.filter_type == "highshelf"
+        })
+        .cloned()
+        .collect();
+    if mid.is_empty() {
+        outcome.message = format!(
+            "{} Linear-phase correction had no midband filters to turn into an FIR.",
+            outcome.message
+        );
+        return outcome;
+    }
+    let gain_db: Vec<f64> = freqs
+        .iter()
+        .map(|freq| {
+            mid.iter()
+                .map(|f| filter_db(f, *freq, sample_rate_hz))
+                .sum()
+        })
+        .collect();
+    match linear_phase_fir_from_gain_db(freqs, &gain_db, sample_rate_hz, 257) {
+        Ok(fir) => {
+            let latency = fir.latency_samples;
+            outcome.filters.retain(|f| {
+                f.filter_type != "peaking"
+                    && f.filter_type != "lowshelf"
+                    && f.filter_type != "highshelf"
+            });
+            outcome.fir = Some(fir);
+            outcome.message = format!(
+                "{} Midband correction is one linear-phase FIR (257 taps, latency {latency} \
+                 samples / {:.1} ms at {sample_rate_hz:.0} Hz).",
+                outcome.message,
+                latency as f64 / sample_rate_hz * 1000.0
+            );
+        }
+        Err(err) => {
+            outcome.message = format!(
+                "{} Linear-phase FIR was not built ({err}); peaking filters were kept.",
+                outcome.message
+            );
+        }
+    }
+    outcome
+}
+
+/// Frequency-sampled linear-phase FIR whose magnitude matches `gain_db` on `freqs`.
+pub fn linear_phase_fir_from_gain_db(
+    freqs: &[f64],
+    gain_db: &[f64],
+    sample_rate_hz: f64,
+    tap_count: usize,
+) -> Result<CorrectionFir, String> {
+    if tap_count < 3 || tap_count.is_multiple_of(2) {
+        return Err("FIR length must be odd and at least 3.".into());
+    }
+    if freqs.len() != gain_db.len() || freqs.is_empty() {
+        return Err("gain curve length mismatch.".into());
+    }
+    let n = tap_count;
+    let delay = (n - 1) / 2;
+    let nyquist = sample_rate_hz * 0.5;
+    // Desired real amplitude on FFT bins 0..N/2 (even symmetry).
+    let mut amp = vec![1.0; n / 2 + 1];
+    for (k, a) in amp.iter_mut().enumerate() {
+        let f = k as f64 * sample_rate_hz / n as f64;
+        if f > nyquist {
+            *a = 0.0;
+            continue;
+        }
+        let db = interp_db(freqs, gain_db, f);
+        *a = 10_f64.powf(db / 20.0);
+        if !a.is_finite() || *a < 0.0 {
+            *a = 0.0;
+        }
+    }
+    // IFFT of linear-phase spectrum: h[n] = (1/N) * (A0 + 2 Σ A_k cos(2π k (n−D)/N) + A_{N/2} cos(π(n−D)))
+    let mut taps = vec![0.0; n];
+    for (i, tap) in taps.iter_mut().enumerate() {
+        let m = i as f64 - delay as f64;
+        let mut sum = amp[0];
+        for (k, a_k) in amp.iter().enumerate().take(n / 2).skip(1) {
+            let phase = 2.0 * std::f64::consts::PI * k as f64 * m / n as f64;
+            sum += 2.0 * a_k * phase.cos();
+        }
+        // Odd N: include the Nyquist bin.
+        if !n.is_multiple_of(2) {
+            let phase = std::f64::consts::PI * m;
+            sum += amp[n / 2] * phase.cos();
+        }
+        *tap = sum / n as f64;
+    }
+    // Hann window to reduce ringing.
+    for (i, tap) in taps.iter_mut().enumerate() {
+        let w = 0.5 * (1.0 - (2.0 * std::f64::consts::PI * i as f64 / (n - 1) as f64).cos());
+        *tap *= w;
+    }
+    // Restore DC gain after windowing.
+    let dc: f64 = taps.iter().sum();
+    let want_dc = amp[0];
+    if dc.abs() > 1e-18 && want_dc.is_finite() {
+        let scale = want_dc / dc;
+        for tap in &mut taps {
+            *tap *= scale;
+        }
+    }
+    if taps.iter().any(|t| !t.is_finite()) {
+        return Err("FIR taps were not finite.".into());
+    }
+    Ok(CorrectionFir {
+        taps,
+        latency_samples: delay,
+        reason: "Linear-phase correction matching the midband auto-EQ magnitude (C7).".into(),
+    })
+}
+
+fn interp_db(freqs: &[f64], gain_db: &[f64], f: f64) -> f64 {
+    if f <= freqs[0] {
+        return gain_db[0];
+    }
+    if f >= *freqs.last().unwrap() {
+        return *gain_db.last().unwrap();
+    }
+    let i = freqs.partition_point(|x| *x < f).saturating_sub(1);
+    let j = (i + 1).min(freqs.len() - 1);
+    if i == j {
+        return gain_db[i];
+    }
+    let t = (f.ln() - freqs[i].ln()) / (freqs[j].ln() - freqs[i].ln()).max(1e-18);
+    gain_db[i] + t * (gain_db[j] - gain_db[i])
 }
 
 #[allow(clippy::too_many_arguments)]

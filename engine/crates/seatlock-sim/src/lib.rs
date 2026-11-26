@@ -3718,21 +3718,41 @@ fn correction_plan_for(
         } else {
             (curve.spl_db.clone(), curve.max_spl_db.clone())
         };
-        let outcome = seatlock_correct::correct(
-            &freqs,
-            &spl,
-            &max_spl,
-            level,
-            protected,
-            design.dsp.correction.max_filters as usize,
-            design.dsp.sample_rate_hz as f64,
-            alignment.0,
-            alignment.1,
-            !ports.is_empty(),
-            tuning,
-            &fixed,
-        );
+        let outcome = if design.dsp.correction.linear_phase {
+            seatlock_correct::correct_linear_phase(
+                &freqs,
+                &spl,
+                &max_spl,
+                level,
+                protected,
+                design.dsp.correction.max_filters as usize,
+                design.dsp.sample_rate_hz as f64,
+                alignment.0,
+                alignment.1,
+                !ports.is_empty(),
+                tuning,
+                &fixed,
+            )
+        } else {
+            seatlock_correct::correct(
+                &freqs,
+                &spl,
+                &max_spl,
+                level,
+                protected,
+                design.dsp.correction.max_filters as usize,
+                design.dsp.sample_rate_hz as f64,
+                alignment.0,
+                alignment.1,
+                !ports.is_empty(),
+                tuning,
+                &fixed,
+            )
+        };
         let mut filters: Vec<Value> = outcome.filters.iter().map(filter_json).collect();
+        if let Some(fir) = &outcome.fir {
+            filters.push(fir_json(fir));
+        }
         if shelf_gain > 0.0 {
             filters.insert(0, shelf_filter(corner, shelf_gain, &shelf_reason));
         }
@@ -3960,6 +3980,16 @@ fn filter_json(filter: &seatlock_correct::CorrectionFilter) -> Value {
         "from_q": filter.from_q,
         "reason": filter.reason,
         "correction": true
+    })
+}
+
+fn fir_json(fir: &seatlock_correct::CorrectionFir) -> Value {
+    serde_json::json!({
+        "kind": "fir",
+        "taps": fir.taps,
+        "reason": fir.reason,
+        "correction": true,
+        "latency_samples": fir.latency_samples,
     })
 }
 

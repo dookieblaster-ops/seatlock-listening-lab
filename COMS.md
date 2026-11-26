@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after FIR WAV merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 FIR correction
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after PR #45. Level 3.
+- **Context:** branch `cursor/fir-correction-c7-da03` (PR onto `main`). Level 3. #45 on `main`.
 
-**Done this session:** Merged #44 fill Cap + **#45 FIR mono WAV export** (IEEE float; IIR XO → biquad stages in Play/`filters.txt`).
+**Done this session:** Merged #44–#45. **C7:** `correction.linear_phase` → midband C1 as 257-tap linear-phase FIR; C2 stays IIR; page checkbox; latency named. FIR still not convolved in the AudioWorklet.
 
 **Open, in order:**
-1. C7 auto FIR correction (README §8); FIR convolution in AudioWorklet still later.
-2. Imported damping parts in everyday nets / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+1. Merge this PR when Check is green.
+2. FIR in AudioWorklet; imported damping parts / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. C7 must keep the correction rules of §8 (no inventing boosts; protected band; keep only if it helps).
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. C7 must keep §8 rules (C1 already applied before FIR fold).
 
-**Last check:** PR #45 Check green; ff-pushed to `main`.
+**Last check:** seatlock-correct 7 tests; clippy `-D warnings` on correct/sim; PR Actions for full check.
 
-**Next step:** C7 auto FIR correction on a branch from `main`.
+**Next step:** merge when green; then FIR worklet or remainder queue.
+
+### 2026-11-26 — Cursor — Handoff: Level 3 remainder after FIR WAV merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #45. Superseded by C7 handoff above.
+
+**Done this session:** FIR WAV merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: Level 3 remainder after FIR WAV export (superseded)
 

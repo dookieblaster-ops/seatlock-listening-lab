@@ -54,7 +54,12 @@ type Design = {
     }>;
     /** Passive R/L/C board from one amp to the drivers (README section 7). */
     passive?: PassiveNetwork | null;
-    correction: { enabled: boolean; protected_band_hz: number[]; max_filters: number };
+    correction: {
+      enabled: boolean;
+      protected_band_hz: number[];
+      max_filters: number;
+      linear_phase?: boolean;
+    };
   };
   electronics: { amplifiers: string[]; dsp_device: string | null };
   build: { material: string; infill_fraction: number; stereo_pair: boolean; extras_cost: number };
@@ -647,6 +652,21 @@ export default function App() {
               void publish(next, designName);
             }} />
             Correction enabled
+          </label>
+          <label
+            className="check"
+            title="Midband auto-EQ becomes one linear-phase FIR (257 taps); bass extension stays IIR. Latency is reported."
+          >
+            <input
+              type="checkbox"
+              checked={design.dsp.correction.linear_phase === true}
+              onChange={(event) => {
+                const next = structuredClone(design);
+                next.dsp.correction.linear_phase = event.target.checked;
+                void publish(next, designName);
+              }}
+            />
+            Linear-phase correction (FIR)
           </label>
           <div className="grid">
             <NumberField label="Protected band start (Hz)" value={design.dsp.correction.protected_band_hz[0]} onChange={(value) => {

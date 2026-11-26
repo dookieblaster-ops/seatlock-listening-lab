@@ -154,3 +154,62 @@ fn filter_db_is_used() {
     };
     assert!(filter_db(&filter, 10.0, 48_000.0) < -10.0);
 }
+
+#[test]
+fn c7_linear_phase_fir_matches_a_peaking_cut_magnitude() {
+    let freqs = log_grid(20.0, 20_000.0, 48.0);
+    let peak = biquad_block("peaking", 1_000.0, 2.0, 5.0, 48_000.0);
+    let gain: Vec<f64> = freqs
+        .iter()
+        .map(|f| -response_db(peak.as_ref(), *f, 48_000.0))
+        .collect();
+    let fir =
+        seatlock_correct::linear_phase_fir_from_gain_db(&freqs, &gain, 48_000.0, 257).unwrap();
+    assert_eq!(fir.taps.len(), 257);
+    assert_eq!(fir.latency_samples, 128);
+    let block = seatlock_dsp::fir_block(fir.taps.clone()).unwrap();
+    let mut err = 0.0;
+    let mut n = 0.0;
+    for (freq, want) in freqs.iter().zip(&gain) {
+        if *freq < 100.0 || *freq > 10_000.0 {
+            continue;
+        }
+        let got = response_db(block.as_ref(), *freq, 48_000.0);
+        err += (got - want).powi(2);
+        n += 1.0;
+    }
+    let rms = (err / n).sqrt();
+    assert!(rms < 1.5, "FIR vs peaking magnitude RMS {rms} dB");
+}
+
+#[test]
+fn correct_linear_phase_keeps_bass_iir_and_adds_fir() {
+    // Flat midband with a clear +5 dB peak at 1 kHz (same shape as CHK-EQ-1).
+    let (freqs, response) = peak_response();
+    let max_spl = vec![120.0; freqs.len()];
+    let outcome = seatlock_correct::correct_linear_phase(
+        &freqs,
+        &response,
+        &max_spl,
+        95.0,
+        [3000.0, 5000.0],
+        4,
+        48_000.0,
+        50.0,
+        0.7,
+        false,
+        0.0,
+        &[],
+    );
+    assert!(outcome.fir.is_some(), "expected FIR: {}", outcome.message);
+    assert!(
+        outcome.filters.iter().all(|f| f.filter_type != "peaking"),
+        "peaking should be folded into FIR: {:?}",
+        outcome.filters
+    );
+    assert!(
+        outcome.message.contains("linear-phase FIR"),
+        "{}",
+        outcome.message
+    );
+}
