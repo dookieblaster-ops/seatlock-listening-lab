@@ -1316,6 +1316,12 @@ export default function App() {
                     }
                     const kept = chain.blocks.filter((block) => block.correction !== true);
                     chain.blocks = [...kept, ...entry.filters];
+                    if (typeof entry.delay_s === "number") {
+                      chain.delay_s = entry.delay_s;
+                    }
+                    if (typeof entry.gain_db === "number") {
+                      chain.gain_db = entry.gain_db;
+                    }
                   });
                   next.dsp.correction.enabled = true;
                   setCorrectionNote(plan.message);

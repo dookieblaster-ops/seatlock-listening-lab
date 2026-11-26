@@ -2714,6 +2714,26 @@ fn measured_curve(part: &KindPart) -> Vec<(f64, f64)> {
         .unwrap_or_default()
 }
 
+/// True when the radiator's mount faces the listening position (front surface).
+fn radiator_faces_listener(design: &DesignFile, index: usize) -> bool {
+    let Some(radiator) = design.speaker.radiators.get(index) else {
+        return true;
+    };
+    let mount_id = radiator
+        .fields
+        .get("mount")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    design
+        .speaker
+        .enclosure
+        .mounts
+        .iter()
+        .find(|mount| mount.id == mount_id)
+        .map(|mount| mount.surface == "front")
+        .unwrap_or(true)
+}
+
 pub fn geometric_delay_s(design: &DesignFile, index: usize) -> f64 {
     let width = design
         .speaker
@@ -3755,6 +3775,43 @@ fn correction_plan_for(
     } else {
         shelf_note
     };
+    let simple_room = design.speaker.room.as_ref().and_then(|room| {
+        if room.kind != "simple" {
+            return None;
+        }
+        Some((
+            room.fields
+                .get("wall_behind_m")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.5),
+            room.fields
+                .get("wall_reflection")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.9),
+        ))
+    });
+    let cabinet_depth = design
+        .speaker
+        .enclosure
+        .outer
+        .fields
+        .get("depth_m")
+        .or_else(|| design.speaker.enclosure.outer.fields.get("depth_bottom_m"))
+        .and_then(Value::as_f64)
+        .unwrap_or(0.2);
+    let front_mid = result
+        .radiators
+        .iter()
+        .enumerate()
+        .find(|(i, _)| radiator_faces_listener(design, *i))
+        .map(|(_, c)| seatlock_correct::midband_mean_db(&freqs, &c.spl_db))
+        .unwrap_or_else(|| {
+            result
+                .radiators
+                .first()
+                .map(|c| seatlock_correct::midband_mean_db(&freqs, &c.spl_db))
+                .unwrap_or(0.0)
+        });
     let mut plans = Vec::new();
     for (index, curve) in result.radiators.iter().enumerate() {
         let fixed = fixed_block_shape(design, registry, &freqs, index);
@@ -3811,13 +3868,83 @@ fn correction_plan_for(
         if let Some(fir) = &outcome.fir {
             filters.push(fir_json(fir));
         }
-        if shelf_gain > 0.0 {
+        if shelf_gain > 0.0 && radiator_faces_listener(design, index) {
             filters.insert(0, shelf_filter(corner, shelf_gain, &shelf_reason));
         }
-        plans.push(serde_json::json!({
-            "message": outcome.message,
+        let mut message = outcome.message.clone();
+        let mut delay_s = 0.0;
+        let mut gain_db: Option<f64> = None;
+        if let Some((wall_behind, wall_refl)) = simple_room {
+            if !radiator_faces_listener(design, index) {
+                let is_panel = design
+                    .speaker
+                    .radiators
+                    .get(index)
+                    .is_some_and(|r| r.kind == "dml_panel");
+                let panel_limit = curve.fidelity.ignored.iter().find_map(|line| {
+                    // "The panel's N resonances up to F Hz are modeled"
+                    let after = line.split("up to ").nth(1)?;
+                    let num: String = after
+                        .chars()
+                        .take_while(|c| c.is_ascii_digit() || *c == '.')
+                        .collect();
+                    num.parse().ok()
+                });
+                let this_mid = seatlock_correct::midband_mean_db(&freqs, &curve.spl_db);
+                let tuning = seatlock_correct::indirect_tuning(
+                    wall_behind,
+                    wall_refl,
+                    cabinet_depth,
+                    front_mid,
+                    this_mid,
+                    is_panel,
+                    panel_limit,
+                );
+                filters.insert(
+                    0,
+                    serde_json::json!({
+                        "kind": "biquad",
+                        "type": "highpass",
+                        "f_hz": tuning.highpass_hz,
+                        "q": 0.707,
+                        "gain_db": 0.0,
+                        "from_hz": tuning.highpass_hz,
+                        "from_q": 0.707,
+                        "reason": "Indirect radiator highpass (C10): λ/4 of the wall reflection path.",
+                        "correction": true
+                    }),
+                );
+                if let Some(lp) = tuning.lowpass_hz {
+                    filters.push(serde_json::json!({
+                        "kind": "biquad",
+                        "type": "lowpass",
+                        "f_hz": lp,
+                        "q": 0.707,
+                        "gain_db": 0.0,
+                        "from_hz": lp,
+                        "from_q": 0.707,
+                        "reason": if is_panel {
+                            "Indirect panel lowpass (C10): keeps drive inside the panel's modeled band."
+                        } else {
+                            "Indirect cone lowpass (C10): rear cone fills bass via the wall."
+                        },
+                        "correction": true
+                    }));
+                }
+                delay_s = tuning.delay_s;
+                gain_db = Some(tuning.gain_db);
+                message = format!("{} {}", tuning.message, message);
+            }
+        }
+        let mut plan = serde_json::json!({
+            "message": message,
             "filters": filters,
-        }));
+            "delay_s": delay_s,
+        });
+        if let Some(g) = gain_db {
+            plan["gain_db"] = serde_json::json!(g);
+        }
+        plans.push(plan);
     }
     let first = plans.first().cloned().unwrap_or(serde_json::json!({}));
     let message = format!("{} {shelf_reason}", first["message"].as_str().unwrap_or(""));
