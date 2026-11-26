@@ -45,26 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/fir-worklet-da03` (PR onto `main`). Level 3. #46 on `main`.
+- **Context:** `main` after #47. Level 3.
 
-**Done this session:** Merged #46. **Play FIR:** `channels[].firs` in listen package; `seatlock-rt` convolves ≤4×512 taps (scratch + `add_fir`); worklet + `coefficientMessage` encode FIRs; e2e tone FIR test.
+**Done this session:** Merged #46 (C7) and #47 (Play FIR in AudioWorklet: `channels[].firs`, `seatlock-rt` 4×512, worklet message).
 
 **Open, in order:**
-1. Merge this PR when Check is green.
-2. Imported damping parts in everyday nets / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
-3. Optional BEM high-ka lit-gap only if it blocks.
-4. Criton leftovers only if a source appears.
-5. Optional: second backup remote / Pro protect-`main`.
+1. Imported damping parts in everyday nets / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+2. Optional BEM high-ka lit-gap only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. RT FIR must not allocate in `process`; keep 4×512 budget. Oversized FIRs are exported as WAV but left out of Play with a note.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2.
 
-**Last check:** seatlock-rt 2 tests; listen_package FIR channel firs; clippy on rt/sim.
+**Last check:** GitHub Check green on #47 (`6d62dad`).
 
-**Next step:** merge when green; then remainder queue.
+**Next step:** remainder queue (imported damping / PR-FDTD label / C5·C6·C10).
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/fir-worklet-da03`. Superseded by merge above.
+
+**Done this session:** Play FIR implemented; superseded by merge handoff.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 FIR correction (superseded)
 
