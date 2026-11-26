@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | **Kind** | article |
-| **Summary** | Digital filter blocks: biquads, crossovers, FIR, delay, gain, polarity, limiter — shared by offline sim and the real-time kernel. |
+| **Summary** | Digital filter blocks: biquads, crossovers, FIR, delay, gain, polarity, limiter, dynamic bass — shared by offline sim and the real-time kernel. |
 | **Code** | `engine/crates/seatlock-dsp/` |
 | **Spec** | README §7, §10 |
 | **Updated** | 2026-11-26 |
@@ -15,16 +15,17 @@ DSP blocks implement both frequency response (for graphs) and sample processing 
 
 ## Responsibilities
 
-- Owns filter math, crossover helpers, FIR kernels, and WAV packing for FIR export.
+- Owns filter math, crossover helpers, FIR kernels, dynamic-bass look-ahead limiting, and WAV packing for FIR export.
 - Does not own correction planning (`seatlock-correct`) or AudioWorklet glue (`seatlock-rt`).
 
 ## Modules and types
 
 | Module | Role |
 | --- | --- |
-| `lib` | Biquad, gain, delay, polarity, limiter, `fir` registration |
+| `lib` | Biquad, gain, delay, polarity, limiter, `fir` / `dynamic_bass` registration |
 | `crossover` | LR / Butterworth / linear-phase (`family` `linear-phase` or `fir`); IIR coeff export |
 | `fir` | Explicit-tap FIR; Hann-sinc complementary linear-phase crossover taps |
+| `dynamic_bass` | C6 look-ahead limiter from free-air `X/V` (bilinear IIR sidechain) |
 | `wav` | Mono IEEE float32 WAV encode/decode for FIR export |
 
 ## How it works
@@ -36,7 +37,7 @@ DSP blocks implement both frequency response (for graphs) and sample processing 
 
 ## Checks
 
-- CHK-DSP-*; `tests/fir.rs` (impulse vs reported H(f); linear-phase sum = delay); `wav` round-trip; listen FIR WAV + IIR crossover expand tests.
+- CHK-DSP-*; `tests/fir.rs` (impulse vs reported H(f); linear-phase sum = delay); `tests/dynamic_bass.rs` (look-ahead delay; loud tone held near xmax); `wav` round-trip; listen FIR WAV + IIR crossover expand tests.
 
 ## See also
 

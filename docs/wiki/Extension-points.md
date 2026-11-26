@@ -23,7 +23,7 @@ The lab is built to grow. Each **family** has a contract and a **registry**. Add
 | Enclosure model | Cabinet air load on drivers | `lumped`, `waveguide`, `fdtd` |
 | Radiation model | Pressure from surface sources | `point`, `baffle`, `exterior`, `bem` |
 | Room | In-room addition to direct sound | `free`, `simple` |
-| DSP block | Frequency + sample processing | biquad, crossover, fir, delay, … |
+| DSP block | Frequency + sample processing | biquad, crossover, fir, delay, dynamic_bass, … |
 
 ## How it works
 

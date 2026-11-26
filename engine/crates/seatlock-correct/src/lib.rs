@@ -1,8 +1,10 @@
 //! Target curves, auto EQ, and correction features that respect hardware limits.
 
+mod dynamic_bass;
 mod indirect;
 mod resonance;
 
+pub use dynamic_bass::{dynamic_bass_plan, DynamicBassPlan};
 pub use indirect::{indirect_tuning, midband_mean_db, IndirectTuning};
 pub use resonance::{find_cabinet_resonances, resonance_cuts, ResonancePeak};
 

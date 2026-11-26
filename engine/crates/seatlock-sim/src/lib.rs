@@ -3923,6 +3923,23 @@ fn correction_plan_for(
                 message
             );
         }
+        // C6: look-ahead limiter from free-air cone travel X/V (README §8).
+        if let Some(c6) = dynamic_bass_for_radiator(design, index) {
+            filters.push(serde_json::json!({
+                "kind": "dynamic_bass",
+                "xmax_m": c6.xmax_m,
+                "re_ohm": c6.re_ohm,
+                "le_h": c6.le_h,
+                "mms_kg": c6.mms_kg,
+                "cms_m_per_n": c6.cms_m_per_n,
+                "rms_ns_per_m": c6.rms_ns_per_m,
+                "bl_tm": c6.bl_tm,
+                "look_ahead_ms": c6.look_ahead_ms,
+                "reason": c6.reason,
+                "correction": true
+            }));
+            message = format!("{} {}", c6.message, message);
+        }
         let mut delay_s = 0.0;
         let mut gain_db: Option<f64> = None;
         if let Some((wall_behind, wall_refl)) = simple_room {
@@ -4202,6 +4219,39 @@ fn first_driver_limits(design: &DesignFile) -> (f64, f64, f64) {
         number("xmax_m", 0.004),
         number("re_ohm", 6.0),
         number("pe_w", 30.0),
+    )
+}
+
+/// C6 plan for one cone radiator, or `None` when travel / Thiele–Small params are missing.
+fn dynamic_bass_for_radiator(
+    design: &DesignFile,
+    index: usize,
+) -> Option<seatlock_correct::DynamicBassPlan> {
+    let part = design.speaker.radiators.get(index)?;
+    if part.kind != "cone" {
+        return None;
+    }
+    let id = part.fields.get("driver_id").and_then(Value::as_str)?;
+    let record = catalog::driver(id)?;
+    let (record, _) = seatlock_acoustics::with_independent(&record);
+    let has_xmax = record
+        .pointer("/published/xmax_m")
+        .and_then(Value::as_f64)
+        .is_some();
+    if !has_xmax {
+        return None;
+    }
+    let published = seatlock_acoustics::published_from_catalog(&record).ok()?;
+    let mech = seatlock_acoustics::derive_mechanical(&published);
+    seatlock_correct::dynamic_bass_plan(
+        published.xmax_m,
+        published.re_ohm,
+        published.le_h,
+        mech.mms,
+        mech.cms,
+        mech.rms,
+        mech.bl,
+        5.0,
     )
 }
 
@@ -4668,6 +4718,23 @@ fn append_parts(
                     };
                 *delay += samples;
                 lines.push(format!("Delay of {samples} samples."));
+            }
+            "dynamic_bass" => {
+                let xmax_mm = part
+                    .fields
+                    .get("xmax_m")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0)
+                    * 1_000.0;
+                let look_ms = part
+                    .fields
+                    .get("look_ahead_ms")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(5.0);
+                lines.push(format!(
+                    "Level-aware bass (C6) left out of Play: look-ahead {look_ms:.0} ms from \
+                     cone travel (xmax {xmax_mm:.1} mm) needs the offline process path."
+                ));
             }
             other => lines.push(format!("A {other} block was left out of playback.")),
         }

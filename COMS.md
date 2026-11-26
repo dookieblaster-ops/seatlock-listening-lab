@@ -45,25 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C6
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after #51. Level 3.
+- **Context:** branch `cursor/c6-dynamic-bass-da03` (PR onto `main`). Level 3. #51 on `main`.
 
-**Done this session:** Merged #48–#51. **C5** on `main`: sealed one-chamber Apply correction runs coarse FDTD (20 mm); peaking cuts on `fdtd−everyday` SPL peaks; names damping fill / Shape the inside.
+**Done this session:** Merged #48–#51. **C6:** Apply correction adds `dynamic_bass` per cone with `xmax_m` — free-air `X/V` bilinear IIR, 5 ms look-ahead, gain holds predicted peak travel at xmax. Linear graphs = pure delay (latency named). Play leaves C6 out of the worklet (named). Enclosure load omitted (conservative for sealed deep bass).
 
 **Open, in order:**
-1. C6 level-aware bass (look-ahead from cone travel `X/V`) / Level 3 optimizer / …
-2. Optional BEM high-ka lit-gap only if it blocks.
-3. Criton leftovers only if a source appears.
-4. Optional: second backup remote / Pro protect-`main`.
+1. Merge this PR when Check is green.
+2. Level 3 optimizer / …
+3. Optional BEM high-ka lit-gap only if it blocks.
+4. Criton leftovers only if a source appears.
+5. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD.
 
-**Last check:** #51 Check green; merge `69607c5`.
+**Last check:** `cargo test -p seatlock-dsp --test dynamic_bass`; `cargo test -p seatlock-sim --test c6`; page_grid / baffle_scores; clippy `-D warnings` on dsp/correct/sim.
 
-**Next step:** implement C6 (or Level 3 optimizer).
+**Next step:** merge when green; then Level 3 optimizer (or next remainder item).
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #51. Level 3. Superseded by C6 above.
+
+**Done this session:** Merged #48–#51. **C5** on `main`.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C5 (superseded)
 

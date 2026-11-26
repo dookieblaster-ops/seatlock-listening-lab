@@ -1,4 +1,4 @@
-//! Filters, crossover blocks, delay, gain, limiter, and their frequency responses.
+//! Filters, crossover blocks, delay, gain, limiter, dynamic bass, and their frequency responses.
 
 use num_complex::Complex64;
 use seatlock_core::registry::{DspBlock, Registry};
@@ -6,10 +6,12 @@ use serde_json::{Map, Value};
 use std::f64::consts::PI;
 
 mod crossover;
+mod dynamic_bass;
 mod fir;
 pub mod wav;
 
 pub use crossover::{crossover_biquad_coefficients, crossover_block, prefer_inverted_high};
+pub use dynamic_bass::{dynamic_bass_block, parse_dynamic_bass, x_over_v_mag};
 pub use fir::{fir_block, linear_phase_crossover_block, linear_phase_crossover_taps};
 pub use wav::mono_f32_wav;
 
@@ -21,6 +23,7 @@ pub fn register(registry: &mut Registry) {
     registry.register_dsp("crossover", crossover::parse_crossover);
     registry.register_dsp("limiter", parse_limiter);
     registry.register_dsp("fir", fir::parse_fir);
+    registry.register_dsp("dynamic_bass", dynamic_bass::parse_dynamic_bass);
 }
 
 #[derive(Clone)]
