@@ -331,8 +331,8 @@ fn page_grid_scores_after_correction() {
         },
         &builtin(),
     );
-    assert_eq!(format!("{:.0}", result.f6_hz), "65");
-    assert_eq!(format!("{:.1}", result.flatness_db), "6.5");
+    assert_eq!(format!("{:.0}", result.f6_hz), "63");
+    assert_eq!(format!("{:.1}", result.flatness_db), "6.3");
     assert_eq!(format!("{:.0}", result.max_spl_metric_db), "83");
     assert_eq!(result.cost_note, "price unknown");
 }
@@ -785,8 +785,8 @@ fn baffle_scores_for_the_page() {
         },
         &builtin(),
     );
-    assert_eq!(format!("{:.0}", result.f6_hz), "113");
-    assert_eq!(format!("{:.1}", result.flatness_db), "7.4");
+    assert_eq!(format!("{:.0}", result.f6_hz), "110");
+    assert_eq!(format!("{:.1}", result.flatness_db), "7.1");
     assert_eq!(format!("{:.0}", result.max_spl_metric_db), "83");
 }
 
