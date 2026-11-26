@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after imported-damping Cap
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after damping-chamber Caps
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/imported-damping-cap-da03` (PR onto `main`). Level 3. #47 on `main`.
+- **Context:** branch `cursor/imported-damping-chambers-da03` (PR onto `main`). Level 3. #48 on `main`.
 
-**Done this session:** Merged #46–#47. **Imported damping Caps:** parts with known `σ` → parallel Delany–Bazley Caps beside empty air in everyday nets (no listed chambers); FDTD unchanged (Rayleigh); fidelity names both.
+**Done this session:** Merged #48. **Imported damping Caps per chamber:** each part with known `σ` → Cap on the chamber that holds its centroid (listed chambers or air spaces); empty air loses that volume; FDTD Rayleigh unchanged.
 
 **Open, in order:**
 1. Merge this PR when Check is green.
-2. Assign imported damping into listed chambers / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+2. PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / Level 3 optimizer / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`.
 
-**Last check:** `imported_damping_adds_lossy_cap_in_the_everyday_models`; seatlock-acoustics fill parts test.
+**Last check:** `imported_damping_caps_follow_listed_chambers`; `imported_damping_adds_lossy_cap_in_the_everyday_models`.
 
 **Next step:** merge when green; then remainder queue.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after imported-damping Cap (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #48. Superseded by damping-chamber Caps above.
+
+**Done this session:** #48 merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR merge (superseded)
 

@@ -121,9 +121,19 @@ pub trait OuterShape: Send + Sync {
     }
 
     /// Imported damping blocks with a known flow resistivity: `(volume_m3, σ in Pa·s/m²)`.
-    /// Everyday networks put each as a parallel Delany–Bazley Cap beside the empty air
-    /// (placement ignored). Empty when the shape has no such parts.
+    /// Everyday networks put each as a parallel Delany–Bazley Cap beside the empty air.
+    /// Empty when the shape has no such parts. Prefer [`damping_fills_placed_m3`] when
+    /// assigning parts into chambers.
     fn damping_fills_m3(&self) -> Vec<(f64, f64)> {
+        self.damping_fills_placed_m3()
+            .into_iter()
+            .map(|(_, v, s)| (v, s))
+            .collect()
+    }
+
+    /// Like [`damping_fills_m3`], with a sample point inside each part (vertex centroid) so
+    /// a multi-chamber mesh can put the Cap on the chamber that holds the part.
+    fn damping_fills_placed_m3(&self) -> Vec<([f64; 3], f64, f64)> {
         Vec::new()
     }
 

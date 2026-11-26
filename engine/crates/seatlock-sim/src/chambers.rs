@@ -369,6 +369,10 @@ pub struct AirNetwork {
     /// Duct id → tap fraction along the duct from the closed/`from` end (0 = closed end).
     /// Absent ducts are closed-end mounts. King / Augspurger offset driver (README §6.2).
     pub duct_taps: Vec<(String, f64)>,
+    /// Imported damping parts per chamber: parallel Delany–Bazley Caps `(volume_m3, σ)`
+    /// beside that chamber's empty air (README §5.4). Empty when none or when the chamber
+    /// already has a whole-chamber `fill`.
+    pub fill_parts: Vec<Vec<(f64, f64)>>,
     pub notes: Vec<String>,
 }
 
@@ -766,6 +770,25 @@ fn build(
         ducts.push(duct);
         moulded.push((opening, node));
     }
+    // Imported damping parts: Cap on the chamber that holds each part's centroid; empty air
+    // loses that volume (region volumes count damping cells as air).
+    let mut fill_parts: Vec<Vec<(f64, f64)>> = vec![Vec::new(); chambers.len()];
+    for (point, vol, sigma) in shape.damping_fills_placed_m3() {
+        let Some(i) = chambers.iter().position(|c| c.contains(point)) else {
+            notes.push(format!(
+                "An imported damping part ({:.2} L) sits outside every chamber; the everyday \
+                 models leave it out of the air network.",
+                vol * 1000.0
+            ));
+            continue;
+        };
+        if chambers[i].fill_sigma.is_some() {
+            continue;
+        }
+        volumes[i] = (volumes[i] - vol).max(1e-9);
+        fill_parts[i].push((vol, sigma));
+    }
+
     if let Some((index, _)) = volumes.iter().enumerate().find(|(_, v)| **v <= 0.0) {
         return Err(format!(
             "Chamber {} has no air left after its drivers and tubes.",
@@ -782,6 +805,7 @@ fn build(
         moulded,
         duct_from_override,
         duct_taps,
+        fill_parts,
         notes,
     })
 }

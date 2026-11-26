@@ -51,7 +51,8 @@ pub fn chamber_admittance(volume_m3: f64, freq_hz: f64, fill_sigma: Option<f64>)
 
 /// Parallel Caps: empty air volume plus one Delany–Bazley Cap per filled part
 /// `(volume_m3, σ)`. Used for imported damping blocks that only pack part of the air
-/// (README §5.4 / §6.2); placement is ignored — only volumes and σ enter the everyday model.
+/// (README §5.4 / §6.2). The caller assigns each part to a chamber; only volumes and σ
+/// enter this sum.
 pub fn chamber_admittance_with_parts(
     air_volume_m3: f64,
     filled_parts: &[(f64, f64)],
