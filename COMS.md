@@ -45,28 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after build/stock
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after #56 review
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` @ `719b47b` after build/stock. Level 3. Open PR #56 overlaps.
+- **Context:** branch `cursor/l3-optimizer-combo-cap-9ae2` (PR onto `main`). Level 3. Build/stock already on `main`.
 
-**Done this session:** Reviewed PR #55 (build/stock). Ported onto `main` (free proportions already landed; PR conflicted). **Build/stock on `main`:** each sealed/vented combo also tries current build + one alternate (printed ↔ sourced sheet ≥ 9 mm; tubes stay current only; foam board skipped). Free proportions keep `height/width` + `depth/width`. Driver choice unchanged. Page concurrency 2. Closed #55.
-
-**Also open:** PR #56 (`cursor/l3-optimizer-build-9ae2`) — another build/stock slice (budget sheet incl. foam board; alt drivers stay on current body → ≤6 combos). Overlaps what is already on `main`. **First job:** review #56 against README / `main` — take any combo-cap or CostQuality tweak worth keeping, otherwise close as superseded. Do not merge foam-board as a whole-box stock alt (catalog note).
+**Done this session:** Reviewed overlapping PR #56 against `main`. Kept ≥9 mm sheet rule (no foam board). Cherry-picked combo cap: nearby drivers only on the current body; multi-way keeps the user's build (two-way back to 4 combos; sealed-test ≤6). CostQuality tooltip names build method. Closed #56 as superseded (foam-board alt rejected).
 
 **Open, in order:**
-1. Review / close or cherry-pick from PR #56 (combo cap vs `main`).
-2. Level 3 remainder: internal elements / deeper generator / …
+1. Merge this PR when Check is green.
+2. Level 3 remainder: internal elements / deeper generator / … (do not invent damping/fill).
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap combo count — page concurrency 2; foam-board (~3 mm) is not an optimizer stock alt.
 
-**Last check:** `the_level_3_optimizer_tries_another_build_and_free_proportions`; proportions + driver-choice + seed-repeat; clippy `-D warnings` on seatlock-sim. Actions Check on `main` @ `719b47b` was still running at handoff.
+**Last check:** `the_level_3_optimizer_tries_another_build_and_free_proportions` (≤6; no komatex; multi-way 4); driver + proportions + seed-repeat; clippy `-D warnings`.
 
-**Next step:** review PR #56 first; then internal elements.
+**Next step:** merge when green; then internal elements.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after build/stock (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` @ `719b47b`. Superseded by #56 review above.
+
+**Done this session:** Build/stock on `main`. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after free proportions (superseded)
 
@@ -802,6 +810,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-26: PR #56 reviewed — combo cap kept; foam-board alt rejected; PR closed superseded.
 - 2026-11-26: Level 3 optimizer build/stock (printed ↔ sheet ≥ 9 mm; tubes current-only) ported onto `main` after PR #55 review; free proportions API kept.
 - 2026-11-26: PR #53 Level 3 optimizer driver choice reviewed and merged to `main` (Check green).
 - 2026-11-26: Level 3 optimizer free proportions for box/sheet_box (height/width, depth/width); tubes locked.

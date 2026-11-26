@@ -103,8 +103,15 @@ pub fn combos(design: &DesignFile) -> Vec<Combo> {
     let drivers = driver_choices(design);
     let builds = build_choices(design);
     let mut out = Vec::new();
-    for driver in &drivers {
-        for body in &builds {
+    // Cap workers (from PR #56 review): nearby drivers only with the design's current body;
+    // alternate build keeps the current driver only. Sealed-test stays ≤6 combos.
+    for (body_i, body) in builds.iter().enumerate() {
+        let drivers_here: Vec<_> = if body_i == 0 {
+            drivers.clone()
+        } else {
+            drivers.iter().take(1).cloned().collect()
+        };
+        for driver in &drivers_here {
             for vented in [false, true] {
                 // Tubes take no port in the rebuild path.
                 if vented && matches!(body, Body::Tube { .. }) {
@@ -151,11 +158,14 @@ pub fn combos(design: &DesignFile) -> Vec<Combo> {
 }
 
 /// Discrete build / stock choices for Level 3: the design's current body plus one nearby
-/// sourced alternative (printed ↔ sheet with wall thickness ≥ 9 mm). Tubes stay as the
-/// current body only. Capped like driver choice so the page stays within Check's wall time.
+/// sourced alternative (printed ↔ sheet with wall thickness ≥ 9 mm). Multi-way and tubes
+/// stay as the current body only. Foam board (~3 mm) is not an optimizer stock alt.
 fn build_choices(design: &DesignFile) -> Vec<Body> {
     let current = Body::of(design);
     let mut out = vec![current.clone()];
+    if multi_way(design) {
+        return out;
+    }
     let alternative = match &current {
         Body::Printed { .. } => thickest_cheap_sheet(None),
         Body::Sheet { .. } => Some(Body::Printed {

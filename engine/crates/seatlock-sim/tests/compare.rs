@@ -231,7 +231,7 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let all = combos(&design);
     // Sealed + vented × current/alt driver × current/alt build (printed + thick sheet).
     assert!(
-        all.len() >= 4 && all.len() <= 8 && all.len().is_multiple_of(2),
+        all.len() >= 4 && all.len() <= 6 && all.len().is_multiple_of(2),
         "unexpected combo count {}",
         all.len()
     );
@@ -292,6 +292,13 @@ fn the_level_3_optimizer_tries_another_build_and_free_proportions() {
     let registry = builtin();
     let design = example("sealed-test");
     let all = combos(&design);
+    // Current body × (current + nearby driver) × sealed/vented + alt body × current driver
+    // × sealed/vented ≤ 6. Foam board is not an alt (≥ 9 mm sheets only).
+    assert!(
+        all.len() >= 4 && all.len() <= 6 && all.len().is_multiple_of(2),
+        "unexpected combo count {}",
+        all.len()
+    );
     let sheet = all
         .iter()
         .find(|c| {
@@ -300,6 +307,17 @@ fn the_level_3_optimizer_tries_another_build_and_free_proportions() {
                 && matches!(c.body, Some(Body::Sheet { .. }))
         })
         .expect("a sealed sheet-stock combo for the current driver");
+    let sheet_stock = match &sheet.body {
+        Some(Body::Sheet { stock_id }) => stock_id.as_str(),
+        _ => panic!("expected sheet body"),
+    };
+    assert_ne!(sheet_stock, "komatex-foam-board");
+    let sheet_drivers: std::collections::BTreeSet<_> = all
+        .iter()
+        .filter(|c| matches!(c.body, Some(Body::Sheet { .. })))
+        .filter_map(|c| c.driver_id.as_deref())
+        .collect();
+    assert_eq!(sheet_drivers, ["test-woofer-a"].into());
     let result = optimize_combo(
         &design,
         &OptimizeRequest {
@@ -336,6 +354,12 @@ fn the_level_3_optimizer_tries_another_build_and_free_proportions() {
         "{:?}",
         best.variables
     );
+    // Multi-way keeps the user's build method (no stock expansion).
+    let two_way = combos(&example("two-way-vented"));
+    assert_eq!(two_way.len(), 4);
+    assert!(two_way
+        .iter()
+        .all(|c| matches!(c.body, Some(Body::Printed { .. }))));
 }
 
 #[test]
@@ -343,8 +367,8 @@ fn the_optimizer_repeats_from_its_seed_and_improves_on_the_start() {
     let registry = builtin();
     let design = example("two-way-vented");
     let all = combos(&design);
-    // Sealed/vented × LR4/LR2 × current build + one alternate stock/print.
-    assert_eq!(all.len(), 8);
+    // Multi-way: sealed/vented × LR4/LR2 on the current build only.
+    assert_eq!(all.len(), 4);
     let vented = all
         .iter()
         .find(|c| {
