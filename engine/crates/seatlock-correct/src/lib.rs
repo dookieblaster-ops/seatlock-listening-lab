@@ -1,5 +1,9 @@
 //! Target curves, auto EQ, and correction features that respect hardware limits.
 
+mod indirect;
+
+pub use indirect::{indirect_tuning, midband_mean_db, IndirectTuning};
+
 use seatlock_dsp::{biquad_block, response_db};
 
 #[derive(Clone, Debug)]

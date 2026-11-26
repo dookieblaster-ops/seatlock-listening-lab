@@ -80,7 +80,12 @@ export function useEngine() {
       return JSON.parse(json) as {
         message: string;
         filters: Array<Record<string, unknown>>;
-        per_radiator?: Array<{ message: string; filters: Array<Record<string, unknown>> }>;
+        per_radiator?: Array<{
+          message: string;
+          filters: Array<Record<string, unknown>>;
+          delay_s?: number;
+          gain_db?: number;
+        }>;
         error?: string;
       };
     },
