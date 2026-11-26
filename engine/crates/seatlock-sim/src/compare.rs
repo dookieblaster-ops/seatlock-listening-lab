@@ -192,7 +192,8 @@ fn face_size(surface: &str, size: [f64; 3]) -> Option<[f64; 2]> {
 }
 
 /// A new outer shape for the same layout: `box` (printed), `sheet_box`, or `tube`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Body {
     Printed { wall_m: f64 },
     Sheet { stock_id: String },
@@ -200,7 +201,7 @@ pub enum Body {
 }
 
 impl Body {
-    fn label(&self) -> String {
+    pub fn label(&self) -> String {
         match self {
             Body::Printed { .. } => "Printed box (PLA)".to_string(),
             Body::Sheet { stock_id } | Body::Tube { stock_id } => {
@@ -281,11 +282,23 @@ impl Body {
     }
 }
 
-/// Like [`rebuild`], to a given net air volume.
+/// Like [`rebuild`], to a given net air volume, keeping the design's proportions.
 pub fn rebuild_to(
     design: &DesignFile,
     body: &Body,
     target_volume: f64,
+    registry: &Registry,
+) -> Result<(DesignFile, Vec<String>), String> {
+    rebuild_to_aspect(design, body, target_volume, None, registry)
+}
+
+/// Like [`rebuild_to`], with optional free inner proportions `[width/depth, height/depth]`.
+/// `None` keeps the design's proportions. Tubes ignore aspect (pipe diameter is fixed).
+pub fn rebuild_to_aspect(
+    design: &DesignFile,
+    body: &Body,
+    target_volume: f64,
+    aspect: Option<[f64; 2]>,
     registry: &Registry,
 ) -> Result<(DesignFile, Vec<String>), String> {
     let enclosure = &design.speaker.enclosure;
@@ -298,13 +311,26 @@ pub fn rebuild_to(
         .map_err(|err| err.to_string())?;
     let old_size = shape.outer_size_m()?;
     let mut notes = Vec::new();
-    // Inside proportions from the old cabinet's outside.
+    // Inside proportions from the old cabinet's outside, or from free aspect ratios.
     let old_wall = number(&outer.fields, "wall_m").unwrap_or(0.0);
     let mut inner = [
         (old_size[0] - 2.0 * old_wall).max(0.01),
         (old_size[1] - 2.0 * old_wall).max(0.01),
         (old_size[2] - 2.0 * old_wall).max(0.01),
     ];
+    if let (
+        Some([width_over_depth, height_over_depth]),
+        Body::Printed { .. } | Body::Sheet { .. },
+    ) = (aspect, body)
+    {
+        let width_over_depth = width_over_depth.max(0.2);
+        let height_over_depth = height_over_depth.max(0.2);
+        // Unit depth, then scale so w·d·h matches the target before wall iteration.
+        let depth = (target_volume / (width_over_depth * height_over_depth))
+            .cbrt()
+            .max(0.01);
+        inner = [width_over_depth * depth, depth, height_over_depth * depth];
+    }
     let mut candidate = design.clone();
     for _ in 0..4 {
         candidate = place(design, body, inner, old_size)?;
