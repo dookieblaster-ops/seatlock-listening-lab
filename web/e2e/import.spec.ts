@@ -60,7 +60,10 @@ test("an imported speaker takes a damping part and a driver placed by clicking, 
   const box = await canvasBox(view);
   await view.click({ position: { x: box.width * 0.45, y: box.height * 0.55 } });
   await expect(page.getByTestId("imported-cabinet")).toContainText("Sound source 1 (test-woofer-a): at", { timeout: 15_000 });
-  await expect(page.getByTestId("response-graph-fidelity")).toContainText("Damping parts are modeled only by the full 3D model", { timeout: 30_000 });
+  await expect(page.getByTestId("response-graph-fidelity")).toContainText(
+    "Imported damping parts: the everyday models use a Delany–Bazley Cap",
+    { timeout: 30_000 },
+  );
   await expect(page.getByRole("cell", { name: /^Damping, wool/ })).toBeVisible();
 
   // The print: the shell with the driver's hole, closed and outward (CHK-GEO-2's edge test).

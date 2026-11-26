@@ -961,6 +961,17 @@ impl OuterShape for MeshShape {
             .reduce(f64::max)
     }
 
+    fn damping_fills_m3(&self) -> Vec<(f64, f64)> {
+        self.parts
+            .iter()
+            .filter(|part| part.damping && part.volume_m3 > 0.0)
+            .filter_map(|part| {
+                let sigma = part.resistivity.filter(|s| *s > 0.0)?;
+                Some((part.volume_m3, sigma))
+            })
+            .collect()
+    }
+
     fn contains_air(&self, point_m: [f64; 3]) -> Result<bool, String> {
         Ok(matches!(self.cell(point_m), AIR | DAMPING))
     }

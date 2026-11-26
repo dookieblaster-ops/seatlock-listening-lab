@@ -54,8 +54,10 @@ pub fn lumped_network(
 /// admittances: `walls[i]` is the outward volume velocity of chamber `i`'s outer walls per
 /// pascal inside; each `partitions` entry `(a, b, Y)` is volume velocity from `a` into `b`
 /// per pascal of `(P_a - P_b)` (README 5.11). Missing wall entries are rigid.
-/// `fill_sigma[i]` is the chamber's fibrous flow resistivity (Pa·s/m²) when filled; Delany–
-/// Bazley complex bulk modulus then replaces `ρ₀ c₀²` in that chamber's compliance.
+/// `fill_sigma[i]` is the chamber's fibrous flow resistivity (Pa·s/m²) when the whole
+/// chamber is packed; Delany–Bazley then replaces `ρ₀ c₀²` for that volume. When that is
+/// unset, `fill_parts[i]` may list imported damping blocks as parallel Caps
+/// `(volume_m3, σ)` beside the empty air volume.
 pub fn lumped_network_with_walls(
     volumes_m3: &[f64],
     ducts: &[Duct],
@@ -65,13 +67,44 @@ pub fn lumped_network_with_walls(
     partitions: &[(usize, usize, Complex64)],
     fill_sigma: &[Option<f64>],
 ) -> NetworkSample {
+    lumped_network_with_walls_and_parts(
+        volumes_m3,
+        ducts,
+        driver,
+        freq_hz,
+        walls,
+        partitions,
+        fill_sigma,
+        &[],
+    )
+}
+
+/// Like [`lumped_network_with_walls`], with optional parallel filled Caps per chamber.
+#[allow(clippy::too_many_arguments)]
+pub fn lumped_network_with_walls_and_parts(
+    volumes_m3: &[f64],
+    ducts: &[Duct],
+    driver: usize,
+    freq_hz: f64,
+    walls: &[Complex64],
+    partitions: &[(usize, usize, Complex64)],
+    fill_sigma: &[Option<f64>],
+    fill_parts: &[Vec<(f64, f64)>],
+) -> NetworkSample {
     let n = volumes_m3.len();
     let omega = 2.0 * PI * freq_hz.max(1e-6);
     let zero = Complex64::new(0.0, 0.0);
     let mut matrix = vec![vec![zero; n]; n];
     for (i, volume) in volumes_m3.iter().enumerate() {
         let sigma = fill_sigma.get(i).copied().flatten();
-        matrix[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, sigma);
+        let parts = fill_parts.get(i).map(|p| p.as_slice()).unwrap_or(&[]);
+        if sigma.is_some() {
+            matrix[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, sigma);
+        } else if parts.is_empty() {
+            matrix[i][i] += crate::fill::chamber_admittance(*volume, freq_hz, None);
+        } else {
+            matrix[i][i] += crate::fill::chamber_admittance_with_parts(*volume, parts, freq_hz);
+        }
         matrix[i][i] += walls.get(i).copied().unwrap_or_default();
     }
     for &(a, b, y) in partitions {

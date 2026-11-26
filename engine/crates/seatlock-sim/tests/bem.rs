@@ -178,6 +178,7 @@ fn fixed_radiation_loads_match_the_analytic_leaf() {
         AcousticNode::Compliance {
             volume_m3: 0.02,
             fill_sigma: None,
+            extra_fills: Vec::new(),
         },
         AcousticNode::Duct {
             length_m: 0.12,
@@ -314,6 +315,7 @@ fn chk_bem_9_mutual_mouth_impedance_is_reciprocal_and_joins_the_network() {
         AcousticNode::Compliance {
             volume_m3: 0.03,
             fill_sigma: None,
+            extra_fills: Vec::new(),
         },
         duct(AcousticNode::Radiation {
             area_m2: area,

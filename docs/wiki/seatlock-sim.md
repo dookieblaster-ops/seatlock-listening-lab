@@ -25,7 +25,7 @@ Front door of the engine after Wasm unwraps JSON. `simulate` wires geometry, aco
 | `lib` | `simulate`, `builtin` registry, listen package |
 | `bem` | Wire `bem` radiation + mouth Z into waveguide |
 | `walls` | Build vibrating wall stacks from catalog materials |
-| `chambers` / `ports` | Multi-chamber, chamber `fill` (Delany–Bazley Cap in everyday nets; Rayleigh in FDTD), moulded openings, passive-radiator ducts (lumped + waveguide Map/Cap/Rap), duct-mounted drivers (closed end or `tap_fraction` offset) |
+| `chambers` / `ports` | Multi-chamber, chamber `fill` (Delany–Bazley Cap in everyday nets; Rayleigh in FDTD), imported damping parts as parallel Caps when no listed chambers, moulded openings, passive-radiator ducts (lumped + waveguide Map/Cap/Rap), duct-mounted drivers (closed end or `tap_fraction` offset) |
 | `preference` | CTA-2034 / Olive preference |
 | `cost` | Line-item build cost |
 | `optimize` / `generate` | Search and cabinet proposals |

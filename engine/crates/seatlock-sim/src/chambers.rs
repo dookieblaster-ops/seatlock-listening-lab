@@ -896,6 +896,32 @@ pub fn waveguide_network(
     duct_from_override: &[(String, String)],
     duct_taps: &[(String, f64)],
 ) -> Result<WaveguideNetwork, String> {
+    waveguide_network_with_parts(
+        design,
+        names,
+        volumes_m3,
+        fill_sigma,
+        &[],
+        driver,
+        moulded,
+        duct_from_override,
+        duct_taps,
+    )
+}
+
+/// Like [`waveguide_network`], with optional parallel Caps per chamber for imported damping.
+#[allow(clippy::too_many_arguments)]
+pub fn waveguide_network_with_parts(
+    design: &DesignFile,
+    names: &[String],
+    volumes_m3: &[f64],
+    fill_sigma: &[Option<f64>],
+    fill_parts: &[Vec<(f64, f64)>],
+    driver: usize,
+    moulded: &[(MouldedOpening, usize)],
+    duct_from_override: &[(String, String)],
+    duct_taps: &[(String, f64)],
+) -> Result<WaveguideNetwork, String> {
     use seatlock_acoustics::AcousticNode;
     struct Edge {
         a: Option<usize>,
@@ -1092,6 +1118,7 @@ pub fn waveguide_network(
         at: usize,
         volumes: &[f64],
         fills: &[Option<f64>],
+        parts: &[Vec<(f64, f64)>],
         edges: &[Edge],
         stubs: &[RigidStub],
         seen: &mut Vec<bool>,
@@ -1103,6 +1130,7 @@ pub fn waveguide_network(
             volume_m3: volumes[at],
             slot: at,
             fill_sigma: fills.get(at).copied().flatten(),
+            extra_fills: parts.get(at).cloned().unwrap_or_default(),
         }];
         for stub in stubs.iter().filter(|s| s.at == at) {
             let a_near = stub.section.area(stub.s1, 0.0); // tap end toward the chamber
@@ -1159,7 +1187,9 @@ pub fn waveguide_network(
                         return Err("loop".into());
                     }
                     (
-                        chamber_node(other, volumes, fills, edges, stubs, seen, used, order)?,
+                        chamber_node(
+                            other, volumes, fills, parts, edges, stubs, seen, used, order,
+                        )?,
                         0.849 * r_far,
                     )
                 }
@@ -1197,10 +1227,13 @@ pub fn waveguide_network(
     let mut notes = Vec::new();
     let mut wave_fills: Vec<Option<f64>> = fill_sigma.to_vec();
     wave_fills.resize(wave_volumes.len(), None);
+    let mut wave_parts: Vec<Vec<(f64, f64)>> = fill_parts.to_vec();
+    wave_parts.resize(wave_volumes.len(), Vec::new());
     let body = match chamber_node(
         driver,
         &wave_volumes,
         &wave_fills,
+        &wave_parts,
         &edges,
         &rigid_stubs,
         &mut seen,
@@ -1213,12 +1246,14 @@ pub fn waveguide_network(
             // Rigid stubs become ducts into a near-zero volume chamber (closed terminus).
             let mut mesh_volumes = wave_volumes.clone();
             let mut mesh_fills = wave_fills.clone();
+            let mut mesh_parts = wave_parts.clone();
             let mut mesh_edges = Vec::with_capacity(edges.len() + rigid_stubs.len());
             let mut mesh_order = Vec::new();
             for stub in &rigid_stubs {
                 let stub_node = mesh_volumes.len();
                 mesh_volumes.push(1e-12);
                 mesh_fills.push(None);
+                mesh_parts.push(Vec::new());
                 let a_near = stub.section.area(stub.s1, 0.0);
                 let a_far = stub.section.area(stub.s0, 0.0);
                 let r_near = (a_near / std::f64::consts::PI).sqrt();
@@ -1278,6 +1313,7 @@ pub fn waveguide_network(
             WaveguideBody::Mesh(WaveguideMesh {
                 volumes_m3: mesh_volumes,
                 fill_sigma: mesh_fills,
+                fill_parts: mesh_parts,
                 edges: mesh_edges,
                 driver,
             })

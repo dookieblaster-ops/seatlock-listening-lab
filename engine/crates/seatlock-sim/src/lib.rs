@@ -416,12 +416,34 @@ pub fn simulate_with_progress(
             return fail(issues, fidelity);
         }
     };
+    let imported_damping_fills = outer.damping_fills_m3();
     if outer.part_materials().iter().any(|part| part.3) && !full_3d {
-        fidelity.ignored.push(
-            "Damping parts are modeled only by the full 3D model; this model treats them as \
-             air."
-                .into(),
-        );
+        if imported_damping_fills.is_empty() {
+            fidelity.ignored.push(
+                "Damping parts without a flow resistivity are treated as air in the everyday \
+                 models; the full 3D model still needs a resistivity to apply Rayleigh damping."
+                    .into(),
+            );
+        } else {
+            fidelity.ignored.push(
+                "Imported damping parts: the everyday models use a Delany–Bazley Cap for each \
+                 part's volume and flow resistivity in parallel with the empty air (placement \
+                 ignored); the full 3D model uses a Rayleigh update with the same resistivity \
+                 on those cells."
+                    .into(),
+            );
+            let band = imported_damping_fills.iter().any(|&(_, sigma)| {
+                seatlock_acoustics::delany_bazley_out_of_band(sigma, 20.0)
+                    || seatlock_acoustics::delany_bazley_out_of_band(sigma, 20_000.0)
+            });
+            if band {
+                fidelity.ignored.push(
+                    "Delany–Bazley's quoted band is 0.01 < f/σ < 1 (σ in SI); some frequencies \
+                     in the audio band sit outside that band for an imported damping part."
+                        .into(),
+                );
+            }
+        }
     }
     let chamber_fill_named = design
         .speaker
@@ -730,21 +752,46 @@ pub fn simulate_with_progress(
                 let in_air = |p: [f64; 3]| outer.contains_air(p).unwrap_or(false);
                 displacement += placed.plastic_m3(&in_air);
             }
-            let volume = (gross - displacement).max(0.0);
+            let damping_fill_vol: f64 = imported_damping_fills.iter().map(|(v, _)| *v).sum();
+            let volume = (gross - displacement - damping_fill_vol).max(0.0);
+            let fill_parts = if imported_damping_fills.is_empty() {
+                vec![]
+            } else {
+                vec![imported_damping_fills.clone()]
+            };
             let ports = design_ports(design);
             let opening_ducts = design_opening_ducts(design);
             let has_passive_radiator = opening_ducts.iter().any(|d| d.passive.is_some());
             let (z_ab, vented) = if opening_ducts.is_empty() {
-                (enclosure.z_ab(volume, &freqs), None)
-            } else if has_passive_radiator {
+                if imported_damping_fills.is_empty() {
+                    (enclosure.z_ab(volume, &freqs), None)
+                } else {
+                    let impedance = freqs
+                        .iter()
+                        .map(|freq| {
+                            let y = seatlock_acoustics::chamber_admittance_with_parts(
+                                volume,
+                                &imported_damping_fills,
+                                *freq,
+                            );
+                            1.0 / y
+                        })
+                        .collect();
+                    (impedance, None)
+                }
+            } else if has_passive_radiator || !imported_damping_fills.is_empty() {
                 let mut impedance = Vec::with_capacity(freqs.len());
                 let mut samples = Vec::with_capacity(freqs.len());
                 for freq in &freqs {
-                    let solved = seatlock_acoustics::network::lumped_network(
+                    let solved = seatlock_acoustics::network::lumped_network_with_walls_and_parts(
                         &[volume],
                         &opening_ducts,
                         0,
                         *freq,
+                        &[],
+                        &[],
+                        &[None],
+                        &fill_parts,
                     );
                     let mut sample = seatlock_acoustics::VentedSample {
                         z_ab: solved.z_ab,
@@ -759,11 +806,18 @@ pub fn simulate_with_progress(
                     impedance.push(sample.z_ab);
                     samples.push(sample);
                 }
-                fidelity.ignored.push(
-                    "Passive radiator: Small Map, Cap, and Rap (quick network). The full 3D \
-                     model still sees only the short wall hole."
-                        .into(),
-                );
+                if has_passive_radiator {
+                    fidelity.ignored.push(
+                        "Passive radiator: Small Map, Cap, and Rap (quick network). The full 3D \
+                         model still sees only the short wall hole."
+                            .into(),
+                    );
+                } else {
+                    fidelity.ignored.push(
+                        "The quick model ignores resonances inside the port, and treats a bend as a straight tube."
+                            .into(),
+                    );
+                }
                 (impedance, Some(samples))
             } else {
                 let mut impedance = Vec::with_capacity(freqs.len());
@@ -780,11 +834,12 @@ pub fn simulate_with_progress(
                 (impedance, Some(samples))
             };
             let wave = if base == "waveguide" && !opening_ducts.is_empty() {
-                Some(chambers::waveguide_network(
+                Some(chambers::waveguide_network_with_parts(
                     design,
                     &["main".to_string()],
                     &[volume],
                     &[None],
+                    &fill_parts,
                     0,
                     &[],
                     &[],

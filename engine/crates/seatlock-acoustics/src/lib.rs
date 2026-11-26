@@ -4,7 +4,10 @@ mod baffle;
 mod cone;
 pub mod dml;
 pub mod fill;
-pub use fill::{chamber_admittance, delany_bazley_bulk_modulus, delany_bazley_out_of_band};
+pub use fill::{
+    chamber_admittance, chamber_admittance_with_parts, delany_bazley_bulk_modulus,
+    delany_bazley_out_of_band,
+};
 pub mod laminate;
 pub mod network;
 pub use network::{lumped_network, lumped_network_with_walls, Duct, NetworkSample};

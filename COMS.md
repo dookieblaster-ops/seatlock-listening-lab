@@ -45,25 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after imported-damping Cap
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after #47. Level 3.
+- **Context:** branch `cursor/imported-damping-cap-da03` (PR onto `main`). Level 3. #47 on `main`.
 
-**Done this session:** Merged #46 (C7) and #47 (Play FIR in AudioWorklet: `channels[].firs`, `seatlock-rt` 4×512, worklet message).
+**Done this session:** Merged #46–#47. **Imported damping Caps:** parts with known `σ` → parallel Delany–Bazley Caps beside empty air in everyday nets (no listed chambers); FDTD unchanged (Rayleigh); fidelity names both.
 
 **Open, in order:**
-1. Imported damping parts in everyday nets / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
-2. Optional BEM high-ka lit-gap only if it blocks.
-3. Criton leftovers only if a source appears.
-4. Optional: second backup remote / Pro protect-`main`.
+1. Merge this PR when Check is green.
+2. Assign imported damping into listed chambers / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+3. Optional BEM high-ka lit-gap only if it blocks.
+4. Criton leftovers only if a source appears.
+5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2.
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`.
 
-**Last check:** GitHub Check green on #47 (`6d62dad`).
+**Last check:** `imported_damping_adds_lossy_cap_in_the_everyday_models`; seatlock-acoustics fill parts test.
 
-**Next step:** remainder queue (imported damping / PR-FDTD label / C5·C6·C10).
+**Next step:** merge when green; then remainder queue.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR merge (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #47. Superseded by imported-damping Cap above.
+
+**Done this session:** #46–#47 merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR (superseded)
 

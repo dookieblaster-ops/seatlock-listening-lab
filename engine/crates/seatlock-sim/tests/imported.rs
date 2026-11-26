@@ -226,6 +226,65 @@ fn each_part_is_priced_by_its_own_material_and_damping_is_bought_by_volume() {
 }
 
 #[test]
+fn imported_damping_adds_lossy_cap_in_the_everyday_models() {
+    let mut design = imported_sealed_test();
+    let mut wool = part(
+        "wool",
+        "damping",
+        &[box_mesh([0.008, 0.09, 0.008], [0.152, 0.172, 0.242], true)],
+    );
+    wool["flow_resistivity_pa_s_m2"] = json!(11_000.0);
+    wool["material"] = json!("isover-akustic-ssp2");
+    design["speaker"]["enclosure"]["outer"]["parts"]
+        .as_array_mut()
+        .unwrap()
+        .push(wool);
+    let design: seatlock_core::DesignFile = serde_json::from_value(design).unwrap();
+    let request = SimulateRequest {
+        enclosure: "lumped".into(),
+        radiation: "point".into(),
+        ..Default::default()
+    };
+    let filled = simulate(&design, &request, &builtin());
+    assert!(
+        filled
+            .issues
+            .iter()
+            .all(|i| i.severity != seatlock_core::issue::Severity::Error),
+        "{:?}",
+        filled.issues
+    );
+    assert!(
+        filled
+            .fidelity
+            .ignored
+            .iter()
+            .any(|l| l.contains("Imported damping parts") && l.contains("Delany–Bazley")),
+        "{:?}",
+        filled.fidelity.ignored
+    );
+    let bare_design: seatlock_core::DesignFile =
+        serde_json::from_value(imported_sealed_test()).unwrap();
+    let bare = simulate(&bare_design, &request, &builtin());
+    // Lossy Cap moves |Z_ab| vs empty air of the same shell (Re(Z) from driver still dominates;
+    // compare midband impedance magnitude).
+    let near = |r: &seatlock_sim::SimulateResult, want: f64| {
+        r.frequencies_hz
+            .iter()
+            .zip(&r.radiators[0].impedance_ohm)
+            .min_by(|(a, _), (b, _)| (*a - want).abs().total_cmp(&(*b - want).abs()))
+            .map(|(_, z)| *z)
+            .unwrap()
+    };
+    let z_filled = near(&filled, 100.0);
+    let z_bare = near(&bare, 100.0);
+    assert!(
+        (z_filled - z_bare).abs() > 0.05,
+        "expected everyday damping Cap to move Z at 100 Hz: filled {z_filled} bare {z_bare}"
+    );
+}
+
+#[test]
 fn a_damping_part_calms_the_cabinets_resonances_in_the_3d_model() {
     let run = |sigma: Option<f64>| {
         let mut design = imported_sealed_test();

@@ -101,6 +101,7 @@ mod tests {
             AcousticNode::Compliance {
                 volume_m3: volume,
                 fill_sigma: None,
+                extra_fills: Vec::new(),
             },
             AcousticNode::PassiveRadiator {
                 mech: pr,
