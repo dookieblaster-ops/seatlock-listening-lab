@@ -28,7 +28,7 @@ Front door of the engine after Wasm unwraps JSON. `simulate` wires geometry, aco
 | `chambers` / `ports` | Multi-chamber, chamber `fill` (Delany–Bazley Cap in everyday nets; Rayleigh in FDTD), imported damping parts as parallel Caps on the chamber that holds each part, moulded openings, passive-radiator ducts (lumped + waveguide Map/Cap/Rap), duct-mounted drivers (closed end or `tap_fraction` offset) |
 | `preference` | CTA-2034 / Olive preference |
 | `cost` | Line-item build cost |
-| `optimize` / `generate` | Search and cabinet proposals; Level 3 optimizer adds catalog driver choice for single-cone designs |
+| `optimize` / `generate` | Search and cabinet proposals; Level 3 optimizer adds catalog driver choice for single-cone designs (current + one nearby; page concurrency 2) |
 | `exterior` / `shape` / `voxels` | 3D exterior and inside-shaping hooks |
 | `wavefield` | Inside / outside / room pressure fields for the page |
 | `compare` | Kit copies vs published curves |

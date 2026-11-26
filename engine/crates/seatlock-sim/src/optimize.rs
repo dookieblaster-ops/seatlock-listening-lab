@@ -195,9 +195,10 @@ fn driver_choices(design: &DesignFile) -> Vec<Option<(String, String)>> {
         })
         .collect();
     alts.sort_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-    // Current first, then up to three nearest by cone area (keeps the page's combo count small).
+    // Current first, then one nearest by cone area. More alternatives multiply sealed×vented
+    // workers on the page; keep the first-results budget near Level 2's.
     let mut out = vec![Some((current_id.to_string(), current_name))];
-    for (_, id, name) in alts.into_iter().take(3) {
+    if let Some((_, id, name)) = alts.into_iter().next() {
         out.push(Some((id, name)));
     }
     out

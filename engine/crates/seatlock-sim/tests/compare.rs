@@ -126,16 +126,16 @@ fn the_level_3_optimizer_lists_nearby_catalog_drivers_for_a_single_cone() {
     let registry = builtin();
     let design = example("sealed-test");
     let all = combos(&design);
-    // Sealed + vented for the current driver and up to three nearby budget drivers.
+    // Sealed + vented for the current driver and one nearby budget driver.
     assert!(
-        all.len() >= 2 && all.len() <= 8 && all.len().is_multiple_of(2),
+        all.len() >= 2 && all.len() <= 4 && all.len().is_multiple_of(2),
         "unexpected combo count {}",
         all.len()
     );
     let ids: std::collections::BTreeSet<_> =
         all.iter().filter_map(|c| c.driver_id.as_deref()).collect();
     assert!(ids.contains("test-woofer-a"), "{ids:?}");
-    assert!(ids.len() >= 2, "expected catalog alternatives, got {ids:?}");
+    assert_eq!(ids.len(), 2, "expected one catalog alternative, got {ids:?}");
     // Multi-way still keeps the user's pair (no driver expansion).
     let two_way = combos(&example("two-way-vented"));
     assert_eq!(two_way.len(), 4);

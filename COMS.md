@@ -51,7 +51,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 - **Status:** handoff
 - **Context:** branch `cursor/l3-optimizer-drivers-da03` (PR onto `main`). Level 3. #52 on `main`.
 
-**Done this session:** Merged #48–#52. **Level 3 optimizer driver choice:** single-cone designs expand sealed/vented combos across the current driver plus up to three nearby sourced budget drivers (by Sd; mounting sizes required; never `test-*` as alternatives). Multi-way keeps the user's pair.
+**Done this session:** Merged #48–#52. **Level 3 optimizer driver choice:** single-cone designs expand sealed/vented combos across the current driver plus one nearby sourced budget driver (by Sd; mounting sizes required; never `test-*` as an alternative). Multi-way keeps the user's pair. Page runs two combo workers at a time (Check had timed out with eight parallel Wasm jobs).
 
 **Open, in order:**
 1. Merge this PR when Check is green.

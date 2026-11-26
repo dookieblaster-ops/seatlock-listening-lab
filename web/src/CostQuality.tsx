@@ -215,7 +215,7 @@ export function CostQuality({
           title={
             hasPassive
               ? "Keeps the cabinet and board wiring fixed, and searches resistor, inductor, and capacitor values toward the quality target."
-              : "Searches box volume, port tuning, crossover, and levels — and for a one-driver cabinet, nearby catalog drivers — sealed and vented, and ranks the results: the cheapest that meets the target first."
+              : "Searches box volume, port tuning, crossover, and levels — and for a one-driver cabinet, one nearby catalog driver — sealed and vented, and ranks the results: the cheapest that meets the target first."
           }
           onClick={() => {
             if (!text) {
@@ -238,32 +238,50 @@ export function CostQuality({
                 return;
               }
               const finished: ComboResult[] = [];
-              const evaluations = hasPassive ? 60 : 30;
-              await Promise.all(
-                combos.map((combo) =>
-                  runJob(
-                    "optimize.combo",
-                    { text, combo: combo.index, seed: 1, evaluations },
-                    (done, total) =>
-                      setProgress((old) => ({ ...old, [combo.index]: `${combo.label}: ${done} of ${total}` })),
-                    workers.current,
-                  )
-                    .then((json) => {
-                      const value = JSON.parse(json) as ComboResult & { error?: string };
-                      if (value.error) {
-                        setProgress((old) => ({ ...old, [combo.index]: `${combo.label}: ${value.error}` }));
-                        return;
-                      }
-                      finished.push(value);
-                      setResults([...finished]);
+              // Cap parallel Wasm workers: each combo scores dozens of corrected designs.
+              const evaluations = hasPassive
+                ? 60
+                : Math.max(12, Math.min(30, Math.floor(48 / Math.max(1, combos.length))));
+              const concurrency = Math.min(2, combos.length);
+              let next = 0;
+              const runOne = async (): Promise<void> => {
+                while (next < combos.length) {
+                  const combo = combos[next];
+                  next += 1;
+                  try {
+                    const json = await runJob(
+                      "optimize.combo",
+                      { text, combo: combo.index, seed: 1, evaluations },
+                      (done, total) =>
+                        setProgress((old) => ({
+                          ...old,
+                          [combo.index]: `${combo.label}: ${done} of ${total}`,
+                        })),
+                      workers.current,
+                    );
+                    const value = JSON.parse(json) as ComboResult & { error?: string };
+                    if (value.error) {
                       setProgress((old) => ({
                         ...old,
-                        [combo.index]: `${combo.label}: done, ${value.evaluations} designs scored.`,
+                        [combo.index]: `${combo.label}: ${value.error}`,
                       }));
-                    })
-                    .catch(() => {}),
-                ),
-              );
+                      continue;
+                    }
+                    finished.push(value);
+                    setResults([...finished]);
+                    setProgress((old) => ({
+                      ...old,
+                      [combo.index]: `${combo.label}: done, ${value.evaluations} designs scored.`,
+                    }));
+                  } catch (error) {
+                    setProgress((old) => ({
+                      ...old,
+                      [combo.index]: `${combo.label}: ${(error as Error).message}`,
+                    }));
+                  }
+                }
+              };
+              await Promise.all(Array.from({ length: concurrency }, () => runOne()));
               const top = finished
                 .flatMap((result) => result.best)
                 .sort((a, b) => rank(a.score) - rank(b.score))[0];
