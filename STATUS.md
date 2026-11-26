@@ -1,6 +1,6 @@
 # Status
 
-Updated: 2026-11-26 (duct-mounted drivers; passive radiators; loft; waveguide loops; FIR; chamber fill; exciters)
+Updated: 2026-11-26 (C5; C10; imported damping Caps; duct-mounted drivers; PRs; loft; waveguide loops; FIR; chamber fill)
 
 Keep this file true. Update it at the end of every session (README section 1.2).
 
