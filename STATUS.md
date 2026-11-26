@@ -109,6 +109,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 
 The full history is in `docs/status-history.md`. The latest state:
 
+- 2026-11-26, Cursor cloud: FIR mono WAV export (IEEE float) + IIR crossover → biquad stages in Play/`filters.txt`. PR #45 merged to `main`.
 - 2026-11-26, Cursor cloud: chamber fill Cap (Delany–Bazley) in quick + detailed networks; FDTD Rayleigh unchanged. PR #44 merged to `main`. Cloud-check 313/44.
 - 2026-11-26, Cursor cloud: PR Map/Cap/Rap on the waveguide tree/mesh (`AcousticNode::PassiveRadiator`); `pr-box` waveguide ≡ lumped within 0.1 dB. FDTD still wall-hole only. PR #42 offset tap merged to `main`.
 - 2026-11-26, Cursor cloud: duct-mount offset tap (`tap_fraction`). King/Augspurger: closed stub ‖ open section in waveguide; lumped merges stub air into the coupling volume. Examples `duct-mount-offset`; `duct_mount` 4 tests. CHK-E2E-2 golden moved earlier (evenness 6.0 / clean 99; regression only). PR #41 duct-mount closed-end merged to `main`.
