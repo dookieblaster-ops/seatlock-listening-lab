@@ -45,26 +45,36 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 FIR correction
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/fir-correction-c7-da03` (PR onto `main`). Level 3. #45 on `main`.
+- **Context:** `main` after #46. Level 3.
 
-**Done this session:** Merged #44–#45. **C7:** `correction.linear_phase` → midband C1 as 257-tap linear-phase FIR; C2 stays IIR; page checkbox; latency named. FIR still not convolved in the AudioWorklet.
+**Done this session:** Merged #46 (C7 linear-phase FIR auto-EQ). Round-trip fix: `linear_phase: false` omitted on serialize.
 
 **Open, in order:**
-1. Merge this PR when Check is green.
-2. FIR in AudioWorklet; imported damping parts / PR in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
+1. FIR convolution in the AudioWorklet (`seatlock-rt` + listen package `firs` + worklet message).
+2. Imported damping parts in everyday nets / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. C7 must keep §8 rules (C1 already applied before FIR fold).
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. RT FIR must not allocate in `process`; keep fixed tap/stage budgets. Play must match graphs for LTI chains (biquads + FIRs).
 
-**Last check:** seatlock-correct 7 tests; clippy `-D warnings` on correct/sim; PR Actions for full check.
+**Last check:** GitHub Check green on #46 (`2ae3445`).
 
-**Next step:** merge when green; then FIR worklet or remainder queue.
+**Next step:** FIR in AudioWorklet, then remainder queue.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 FIR correction (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/fir-correction-c7-da03`. Superseded by C7 merge above.
+
+**Done this session:** C7 implemented; superseded by merge handoff.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: Level 3 remainder after FIR WAV merge (superseded)
 
