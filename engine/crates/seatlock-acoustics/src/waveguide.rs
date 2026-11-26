@@ -1,5 +1,6 @@
 //! One-dimensional acoustic network: ducts, chambers, and radiation loads.
 
+use crate::passive_radiator::PassiveRadiatorMech;
 use num_complex::Complex64;
 use seatlock_core::constants::{C0, RHO0};
 use std::f64::consts::PI;
@@ -13,6 +14,14 @@ pub enum AcousticNode {
     /// Opening whose radiation load is given (for example from a BEM solve). Still reports
     /// one unit volume velocity out, like [`AcousticNode::Radiation`].
     FixedRadiation { z: Complex64 },
+    /// Passive radiator (Small Map/Cap/Rap) from a chamber to the outside (README §5). Reports
+    /// one opening. `radiation` is an optional added radiation load (BEM); when `None` the
+    /// branch is Map/Cap/Rap alone, matching the quick network (far-field radiation is applied
+    /// to the opening afterward).
+    PassiveRadiator {
+        mech: PassiveRadiatorMech,
+        radiation: Option<Complex64>,
+    },
     /// A chamber small enough to be a shunt compliance.
     Compliance { volume_m3: f64 },
     /// A chamber that reports its pressure under `slot`, and whose walls take the admittance
@@ -100,6 +109,15 @@ fn solve_at(
             openings: vec![Complex64::new(1.0, 0.0)],
             pressures: Vec::new(),
         },
+        AcousticNode::PassiveRadiator { mech, radiation } => {
+            let freq = omega / (2.0 * PI);
+            let z = mech.acoustic_impedance(freq) + radiation.unwrap_or_default();
+            WaveguideResult {
+                z_in: z,
+                openings: vec![Complex64::new(1.0, 0.0)],
+                pressures: Vec::new(),
+            }
+        }
         AcousticNode::Compliance { volume_m3 } => {
             let admit = Complex64::new(0.0, omega * volume_m3 / (RHO0 * C0 * C0));
             WaveguideResult {
@@ -322,6 +340,20 @@ fn replace_radiation(node: &AcousticNode, loads: &[Complex64], index: &mut usize
                 },
             }
         }
+        AcousticNode::PassiveRadiator { mech, radiation } => {
+            let slot = *index;
+            *index += 1;
+            match loads.get(slot) {
+                Some(z) => AcousticNode::PassiveRadiator {
+                    mech: *mech,
+                    radiation: Some(*z),
+                },
+                None => AcousticNode::PassiveRadiator {
+                    mech: *mech,
+                    radiation: *radiation,
+                },
+            }
+        }
         AcousticNode::FixedRadiation { z } => AcousticNode::FixedRadiation { z: *z },
         AcousticNode::Rigid => AcousticNode::Rigid,
         AcousticNode::Compliance { volume_m3 } => AcousticNode::Compliance {
@@ -367,6 +399,8 @@ pub struct MeshDuct {
     pub slices: Option<Vec<(f64, f64)>>,
     pub outside_slot: Option<usize>,
     pub mouth_area_m2: f64,
+    /// When set on an outside branch, Small Map/Cap/Rap instead of a duct to radiation.
+    pub passive: Option<PassiveRadiatorMech>,
 }
 
 /// Chambers plus ducts that may form loops (README 5.4 Level 3).
@@ -429,19 +463,26 @@ pub fn solve_mesh(
     outs.sort_by_key(|(slot, _, _)| *slot);
     for (out_i, (_slot, chamber, edge_i)) in outs.iter().enumerate() {
         let edge = &mesh.edges[*edge_i];
-        let z_rad = match radiation_loads.and_then(|loads| loads.get(out_i)) {
-            Some(z) => *z,
-            None => radiation_impedance(edge.mouth_area_m2, false, k),
+        let z_in = if let Some(pr) = edge.passive {
+            let z_rad = radiation_loads
+                .and_then(|loads| loads.get(out_i).copied())
+                .unwrap_or_default();
+            pr.acoustic_impedance(freq_hz) + z_rad
+        } else {
+            let z_rad = match radiation_loads.and_then(|loads| loads.get(out_i)) {
+                Some(z) => *z,
+                None => radiation_impedance(edge.mouth_area_m2, false, k),
+            };
+            duct_input_impedance(
+                edge.length_m + edge.added_length_m,
+                edge.area_in_m2,
+                edge.area_out_m2,
+                edge.slices.as_deref(),
+                z_rad,
+                k,
+                loss,
+            )
         };
-        let z_in = duct_input_impedance(
-            edge.length_m + edge.added_length_m,
-            edge.area_in_m2,
-            edge.area_out_m2,
-            edge.slices.as_deref(),
-            z_rad,
-            k,
-            loss,
-        );
         y[*chamber][*chamber] += 1.0 / z_in;
     }
     let mut rhs = vec![zero; n];
@@ -451,6 +492,14 @@ pub fn solve_mesh(
     let mut openings = Vec::with_capacity(outs.len());
     for (out_i, (_slot, chamber, edge_i)) in outs.iter().enumerate() {
         let edge = &mesh.edges[*edge_i];
+        if let Some(pr) = edge.passive {
+            let z_rad = radiation_loads
+                .and_then(|loads| loads.get(out_i).copied())
+                .unwrap_or_default();
+            let z_in = pr.acoustic_impedance(freq_hz) + z_rad;
+            openings.push(pressure[*chamber] / z_in);
+            continue;
+        }
         let z_rad = match radiation_loads.and_then(|loads| loads.get(out_i)) {
             Some(z) => *z,
             None => radiation_impedance(edge.mouth_area_m2, false, k),

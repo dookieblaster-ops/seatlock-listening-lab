@@ -100,3 +100,63 @@ fn example_pr_box_runs_and_prices_the_radiator() {
         "expected PR motion near fs, got port_speed {speed} at bin {near}"
     );
 }
+
+#[test]
+fn waveguide_pr_box_matches_lumped_within_a_tenth_db() {
+    let path = format!(
+        "{}/../../../designs/examples/pr-box.seatlock.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let design: seatlock_core::DesignFile =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let freqs: Vec<f64> = (20..=200).step_by(10).map(|f| f as f64).collect();
+    let lumped = simulate(
+        &design,
+        &SimulateRequest {
+            enclosure: "lumped".into(),
+            radiation: "baffle".into(),
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    let wave = simulate(
+        &design,
+        &SimulateRequest {
+            enclosure: "waveguide".into(),
+            radiation: "baffle".into(),
+            frequencies_hz: Some(freqs.clone()),
+            ..SimulateRequest::default()
+        },
+        &builtin(),
+    );
+    assert!(
+        lumped
+            .issues
+            .iter()
+            .chain(wave.issues.iter())
+            .all(|i| i.severity != Severity::Error),
+        "lumped {:?} waveguide {:?}",
+        lumped.issues,
+        wave.issues
+    );
+    // Waveguide should not fall back with the old "detailed duct model has no PR" note.
+    assert!(
+        !wave
+            .fidelity
+            .ignored
+            .iter()
+            .any(|n| n.contains("detailed duct model has no PR")
+                || n.contains("keeps the quick network")),
+        "{:?}",
+        wave.fidelity.ignored
+    );
+    for (i, f) in freqs.iter().enumerate() {
+        let da = lumped.radiators[0].spl_db[i];
+        let db = wave.radiators[0].spl_db[i];
+        assert!(
+            (da - db).abs() < 0.1,
+            "at {f} Hz lumped {da:.2} vs waveguide {db:.2}"
+        );
+    }
+}

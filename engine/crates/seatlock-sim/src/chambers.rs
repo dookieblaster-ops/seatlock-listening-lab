@@ -907,6 +907,8 @@ pub fn waveguide_network(
         outside_slot: Option<usize>,
         /// A moulded duct's slices from the chamber to the mouth: `(length, area)`.
         slices: Option<Vec<(f64, f64)>>,
+        /// Small Map/Cap/Rap outside branch (README §5); length/section unused then.
+        passive: Option<PassiveRadiatorMech>,
     }
     /// Closed stub behind an offset tap: duct from chamber `at` to a rigid end.
     struct RigidStub {
@@ -948,6 +950,34 @@ pub fn waveguide_network(
         if a.is_none() && b.is_none() {
             return Err(format!("duct {id} runs from outside to outside."));
         }
+        if raw.get("kind").and_then(Value::as_str) == Some("passive_radiator") {
+            if b.is_some() {
+                return Err(format!(
+                    "duct {id}: a passive radiator must open to the outside."
+                ));
+            }
+            let pr = passive_radiator_of(raw).map_err(|e| format!("duct {id}: {e}"))?;
+            let chamber =
+                a.ok_or_else(|| format!("duct {id}: a passive radiator must leave a chamber."))?;
+            outside_count += 1;
+            edges.push(Edge {
+                a: Some(chamber),
+                b: None,
+                section: Section {
+                    round: true,
+                    start: vec![(4.0 * pr.sd_m2 / std::f64::consts::PI).sqrt()],
+                    end: vec![(4.0 * pr.sd_m2 / std::f64::consts::PI).sqrt()],
+                    tube_m: 0.0,
+                },
+                length: 0.0,
+                s0: 0.0,
+                s1: 1.0,
+                outside_slot: Some(outside_count - 1),
+                slices: None,
+                passive: Some(pr),
+            });
+            continue;
+        }
         let section = Section::of(raw).map_err(|e| format!("duct {id}: {e}"))?;
         let length = path_length(&path(raw));
         if length <= 0.0 {
@@ -972,6 +1002,7 @@ pub fn waveguide_network(
                 s1: 1.0,
                 outside_slot: Some(outside_count - 1),
                 slices: None,
+                passive: None,
             });
             rigid_stubs.push(RigidStub {
                 at: couple,
@@ -997,6 +1028,7 @@ pub fn waveguide_network(
             s1: 1.0,
             outside_slot,
             slices: None,
+            passive: None,
         });
     }
     // Moulded ducts, from their chamber to the mouth, in slices of about 10 mm (README 5.4).
@@ -1037,6 +1069,7 @@ pub fn waveguide_network(
             s1: 1.0,
             outside_slot: Some(outside_count - 1),
             slices: Some(merged),
+            passive: None,
         });
     }
     // Lumped merges closed-stub air into the coupling volume; the detailed model carries that
@@ -1083,6 +1116,14 @@ pub fn waveguide_network(
                 continue;
             }
             used[index] = true;
+            if let Some(pr) = edge.passive {
+                order.push(edge.outside_slot.unwrap_or(0));
+                branches.push(AcousticNode::PassiveRadiator {
+                    mech: pr,
+                    radiation: None,
+                });
+                continue;
+            }
             // Orient the duct from this chamber.
             let forward = edge.a == Some(at);
             let far = if forward { edge.b } else { edge.a };
@@ -1181,6 +1222,7 @@ pub fn waveguide_network(
                     slices: None,
                     outside_slot: None,
                     mouth_area_m2: a_far,
+                    passive: None,
                 });
             }
             for edge in &edges {
@@ -1205,10 +1247,15 @@ pub fn waveguide_network(
                     length_m: edge.length,
                     area_in_m2: if edge.a.is_some() { a_near } else { a_far },
                     area_out_m2: if edge.a.is_some() { a_far } else { a_near },
-                    added_length_m: if edge.slices.is_some() { 0.0 } else { added },
+                    added_length_m: if edge.slices.is_some() || edge.passive.is_some() {
+                        0.0
+                    } else {
+                        added
+                    },
                     slices: edge.slices.clone(),
                     outside_slot: edge.outside_slot,
                     mouth_area_m2: mouth,
+                    passive: edge.passive,
                 });
             }
             mesh_order.sort_unstable();

@@ -86,4 +86,32 @@ mod tests {
             "at fs {fs}: {z}, want {rap}"
         );
     }
+
+    #[test]
+    fn waveguide_passive_radiator_matches_sealed_with_pr() {
+        use crate::{solve, AcousticNode};
+        let volume = 0.022;
+        let pr = PassiveRadiatorMech {
+            mms_kg: 0.05,
+            cms_m_n: 1.0 / ((2.0 * PI * 40.0).powi(2) * 0.05),
+            rms_ns_m: 2.0,
+            sd_m2: 0.025,
+        };
+        let tree = AcousticNode::Parallel(vec![
+            AcousticNode::Compliance { volume_m3: volume },
+            AcousticNode::PassiveRadiator {
+                mech: pr,
+                radiation: None,
+            },
+        ]);
+        for freq in [20.0, 40.0, 63.0, 100.0, 200.0] {
+            let (z_ref, h_ref) = sealed_with_pr(volume, pr, freq);
+            let wave = solve(&tree, freq);
+            let z_err = (wave.z_in - z_ref).norm() / z_ref.norm();
+            let h = wave.openings[0];
+            let h_err = (h - h_ref).norm();
+            assert!(z_err < 1e-9, "at {freq} Hz Z rel {z_err}");
+            assert!(h_err < 1e-9, "at {freq} Hz H err {h_err}: {h} vs {h_ref}");
+        }
+    }
 }

@@ -556,7 +556,6 @@ pub fn simulate_with_progress(
                 (empty_walls, empty_parts)
             };
             let partitions_active = part_y.iter().any(|p| !p.is_empty());
-            let has_passive_radiator = net.ducts.iter().any(|d| d.passive.is_some());
             // The load each chamber a driver pushes into presents: the first driver's first,
             // then any other chamber a driver pushes into (README 5.2). Chambers that are not
             // joined by a duct do not affect each other, so each is exact on its own.
@@ -588,9 +587,10 @@ pub fn simulate_with_progress(
                     samples.push(sample);
                 }
                 let names: Vec<String> = net.chambers.iter().map(|c| c.id.clone()).collect();
-                // Partition mutual admittance and passive-radiator Map/Cap/Rap need the lumped
-                // nodal network; the waveguide tree has neither.
-                let wave = if base == "waveguide" && !partitions_active && !has_passive_radiator {
+                // Partition mutual admittance needs the lumped nodal network; the waveguide
+                // tree has no partition plates. Passive radiators are Small Map/Cap/Rap leaves
+                // on the waveguide tree (and mesh).
+                let wave = if base == "waveguide" && !partitions_active {
                     Some(chambers::waveguide_network(
                         design,
                         &names,
@@ -608,13 +608,6 @@ pub fn simulate_with_progress(
                         "Partition vibration is solved with the quick network (each duct one air \
                          mass), because the detailed tree cannot couple two chambers through a \
                          plate."
-                            .into(),
-                    );
-                }
-                if has_passive_radiator && base == "waveguide" && notes {
-                    fidelity.ignored.push(
-                        "A passive radiator is solved with the quick network (Small Map, Cap, \
-                         and Rap), because the detailed duct model has no PR branch."
                             .into(),
                     );
                 }
@@ -756,8 +749,8 @@ pub fn simulate_with_progress(
                     samples.push(sample);
                 }
                 fidelity.ignored.push(
-                    "Passive radiator: Small Map, Cap, and Rap on the quick network; the \
-                     detailed duct model and the full 3D model do not carry that branch."
+                    "Passive radiator: Small Map, Cap, and Rap (quick network). The full 3D \
+                     model still sees only the short wall hole."
                         .into(),
                 );
                 (impedance, Some(samples))
@@ -775,7 +768,7 @@ pub fn simulate_with_progress(
                 );
                 (impedance, Some(samples))
             };
-            let wave = if base == "waveguide" && !ports.is_empty() && !has_passive_radiator {
+            let wave = if base == "waveguide" && !opening_ducts.is_empty() {
                 Some(chambers::waveguide_network(
                     design,
                     &["main".to_string()],

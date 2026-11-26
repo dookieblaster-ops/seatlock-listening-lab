@@ -37,6 +37,7 @@ fn mesh_matches_tree_on_a_ported_box() {
             slices: None,
             outside_slot: Some(0),
             mouth_area_m2: area,
+            passive: None,
         }],
         driver: 0,
     };
@@ -82,6 +83,7 @@ fn a_loop_of_two_identical_ducts_matches_one_duct_of_double_area() {
                 slices: None,
                 outside_slot: None,
                 mouth_area_m2: area,
+                passive: None,
             },
             MeshDuct {
                 from: 0,
@@ -93,6 +95,7 @@ fn a_loop_of_two_identical_ducts_matches_one_duct_of_double_area() {
                 slices: None,
                 outside_slot: None,
                 mouth_area_m2: area,
+                passive: None,
             },
         ],
         driver: 0,
@@ -110,6 +113,7 @@ fn a_loop_of_two_identical_ducts_matches_one_duct_of_double_area() {
             slices: None,
             outside_slot: None,
             mouth_area_m2: 2.0 * area,
+            passive: None,
         }],
         driver: 0,
     };
@@ -162,6 +166,7 @@ fn mesh_matches_tree_on_two_chambers_joined_by_one_duct() {
             slices: None,
             outside_slot: None,
             mouth_area_m2: area,
+            passive: None,
         }],
         driver: 0,
     };
