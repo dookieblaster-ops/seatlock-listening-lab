@@ -598,6 +598,7 @@ pub fn simulate_with_progress(
                         node,
                         &net.moulded,
                         &net.duct_from_override,
+                        &net.duct_taps,
                     ))
                 } else {
                     None
@@ -780,6 +781,7 @@ pub fn simulate_with_progress(
                     &["main".to_string()],
                     &[volume],
                     0,
+                    &[],
                     &[],
                     &[],
                 ))

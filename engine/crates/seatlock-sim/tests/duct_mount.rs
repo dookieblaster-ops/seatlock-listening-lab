@@ -115,3 +115,90 @@ fn same_coupling_volume_matches_a_listed_chamber_on_the_same_line() {
         );
     }
 }
+
+#[test]
+fn offset_tap_notes_and_differs_from_closed_end() {
+    // King / Augspurger: driver part-way down the line (tap_fraction from the closed end).
+    let closed: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/../../../designs/examples/duct-mount-line.seatlock.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut offset = closed.clone();
+    offset["name"] = json!("duct-mount-offset");
+    offset["speaker"]["enclosure"]["mounts"][0]["tap_fraction"] = json!(0.2);
+
+    let closed: seatlock_core::DesignFile = serde_json::from_value(closed).unwrap();
+    let offset: seatlock_core::DesignFile = serde_json::from_value(offset).unwrap();
+    let freqs: Vec<f64> = (30..=300).step_by(5).map(|f| f as f64).collect();
+    let req = SimulateRequest {
+        enclosure: "waveguide".into(),
+        radiation: "baffle".into(),
+        frequencies_hz: Some(freqs.clone()),
+        ..SimulateRequest::default()
+    };
+    let a = simulate(&closed, &req, &builtin());
+    let b = simulate(&offset, &req, &builtin());
+    assert!(
+        a.issues
+            .iter()
+            .chain(b.issues.iter())
+            .all(|i| i.severity != Severity::Error),
+        "closed {:?} offset {:?}",
+        a.issues,
+        b.issues
+    );
+    assert!(
+        b.fidelity
+            .ignored
+            .iter()
+            .any(|n| n.contains("offset") || n.contains("closed stub")),
+        "{:?}",
+        b.fidelity.ignored
+    );
+    // Offset must change the mouth output: max |ΔSPL| over the band is not tiny.
+    let mut max_delta = 0.0_f64;
+    for i in 0..freqs.len() {
+        max_delta = max_delta.max((a.radiators[0].spl_db[i] - b.radiators[0].spl_db[i]).abs());
+    }
+    assert!(
+        max_delta > 1.0,
+        "expected offset tap to move SPL by >1 dB somewhere, max Δ={max_delta:.2}"
+    );
+}
+
+#[test]
+fn tap_zero_matches_omitted_tap_fraction() {
+    let mut with: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(format!(
+            "{}/../../../designs/examples/duct-mount-line.seatlock.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let without = with.clone();
+    with["speaker"]["enclosure"]["mounts"][0]["tap_fraction"] = json!(0.0);
+    let with: seatlock_core::DesignFile = serde_json::from_value(with).unwrap();
+    let without: seatlock_core::DesignFile = serde_json::from_value(without).unwrap();
+    let freqs: Vec<f64> = (20..=120).step_by(10).map(|f| f as f64).collect();
+    let req = SimulateRequest {
+        enclosure: "waveguide".into(),
+        radiation: "baffle".into(),
+        frequencies_hz: Some(freqs.clone()),
+        ..SimulateRequest::default()
+    };
+    let a = simulate(&with, &req, &builtin());
+    let b = simulate(&without, &req, &builtin());
+    for (i, f) in freqs.iter().enumerate() {
+        let da = a.radiators[0].spl_db[i];
+        let db = b.radiators[0].spl_db[i];
+        assert!(
+            (da - db).abs() < 0.05,
+            "at {f} Hz tap=0 {da:.3} vs omitted {db:.3}"
+        );
+    }
+}

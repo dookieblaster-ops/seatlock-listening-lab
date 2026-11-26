@@ -227,6 +227,7 @@ pub fn air_intervals(a: [f64; 3], b: [f64; 3], chambers: &[Chamber]) -> Vec<(f64
 
 /// A duct's cross-section: its area at a fraction `s` of the way along, and the outside
 /// area of its printed tube.
+#[derive(Clone, Debug)]
 pub struct Section {
     pub round: bool,
     pub start: Vec<f64>,
@@ -299,10 +300,24 @@ impl Section {
     /// The air mass length over area, `integral of dx / S(x)`, for the lumped model. Exact for
     /// a round taper (`L / (pi * r0 * r1)`); a slot keeps one size.
     pub fn inertance_length_over_area(&self, length: f64) -> f64 {
+        self.inertance_length_over_area_between(length, 0.0, 1.0)
+    }
+
+    /// Same integral over the fraction range `[s0, s1]` of a duct `length` long.
+    pub fn inertance_length_over_area_between(&self, length: f64, s0: f64, s1: f64) -> f64 {
+        let (a, b) = if s1 >= s0 { (s0, s1) } else { (s1, s0) };
+        let span = (b - a).max(0.0);
+        if span <= 0.0 {
+            return 0.0;
+        }
         if self.round {
-            length / (std::f64::consts::PI * self.start[0] / 2.0 * self.end[0] / 2.0)
+            let r0 = self.dims(a, 0.0)[0] / 2.0;
+            let r1 = self.dims(b, 0.0)[0] / 2.0;
+            length * span / (std::f64::consts::PI * r0.max(1e-9) * r1.max(1e-9))
         } else {
-            length / self.area(0.0, 0.0)
+            // Slot: area is linear in s; use the trapezoid mean.
+            let mean = 0.5 * (self.area(a, 0.0) + self.area(b, 0.0)).max(1e-12);
+            length * span / mean
         }
     }
 
@@ -351,6 +366,9 @@ pub struct AirNetwork {
     pub moulded: Vec<(MouldedOpening, usize)>,
     /// Duct id → chamber name for a driver mounted on that duct (README §6.2).
     pub duct_from_override: Vec<(String, String)>,
+    /// Duct id → tap fraction along the duct from the closed/`from` end (0 = closed end).
+    /// Absent ducts are closed-end mounts. King / Augspurger offset driver (README §6.2).
+    pub duct_taps: Vec<(String, f64)>,
     pub notes: Vec<String>,
 }
 
@@ -378,9 +396,10 @@ pub fn air_network(
     Some(build(design, shape, list, displacement_of, loads_box))
 }
 
-/// Mounts whose `rear_into` names a duct id (not a chamber): the driver sits at that duct's
-/// closed end (README §6.2).
-pub fn duct_mounted_drivers(design: &DesignFile) -> Vec<(String, String, f64)> {
+/// Mounts whose `rear_into` names a duct id (not a chamber): `(mount_id, duct_id,
+/// coupling_volume_m3, tap_fraction)`. `tap_fraction` is 0 at the closed/`from` end and
+/// approaches 1 at the mouth (README §6.2; King offset driver).
+pub fn duct_mounted_drivers(design: &DesignFile) -> Vec<(String, String, f64, f64)> {
     let chamber_ids: Vec<&str> = design
         .speaker
         .enclosure
@@ -410,7 +429,13 @@ pub fn duct_mounted_drivers(design: &DesignFile) -> Vec<(String, String, f64)> {
             .and_then(Value::as_f64)
             .filter(|v| *v > 0.0)
             .unwrap_or(DUCT_COUPLING_M3);
-        out.push((mount.id.clone(), target.to_string(), coupling));
+        let tap = mount
+            .extra
+            .get("tap_fraction")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0)
+            .clamp(0.0, 0.95);
+        out.push((mount.id.clone(), target.to_string(), coupling, tap));
     }
     out
 }
@@ -467,10 +492,13 @@ fn build(
     let mut notes = Vec::new();
     let mut duct_from_override: Vec<(String, String)> = Vec::new();
 
-    // Drivers mounted on a duct: a small coupling volume at the duct's closed end (README 6.2).
+    // Drivers mounted on a duct: a small coupling volume at the tap (closed end when
+    // tap_fraction is 0). King / Augspurger offset: closed stub behind the tap in parallel
+    // with the open section to the mouth (README 6.2).
     let duct_mounts = duct_mounted_drivers(design);
     let mut duct_claim: Vec<(String, usize)> = Vec::new();
-    for (mount_id, duct_id, coupling) in &duct_mounts {
+    let mut duct_taps: Vec<(String, f64)> = Vec::new();
+    for (mount_id, duct_id, coupling, tap) in &duct_mounts {
         if duct_claim.iter().any(|(d, _)| d == duct_id) {
             return Err(format!(
                 "Two mounts claim duct {duct_id}; only one driver may sit on a duct in this build."
@@ -495,11 +523,22 @@ fn build(
         let node = chambers.len() - 1;
         duct_claim.push((duct_id.clone(), node));
         duct_from_override.push((duct_id.clone(), couple_id));
-        notes.push(format!(
-            "Mount {mount_id} sits on duct {duct_id}: the everyday models use a {:.2} L coupling \
-             volume at the duct's closed end (not the whole cabinet air).",
-            coupling * 1000.0
-        ));
+        duct_taps.push((duct_id.clone(), *tap));
+        if *tap > 1e-9 {
+            notes.push(format!(
+                "Mount {mount_id} sits on duct {duct_id} at {:.0}% of its length from the closed \
+                 end: the everyday models use a {:.2} L coupling volume there, a closed stub \
+                 behind the tap, and the open section to the mouth (King / Augspurger offset).",
+                tap * 100.0,
+                coupling * 1000.0
+            ));
+        } else {
+            notes.push(format!(
+                "Mount {mount_id} sits on duct {duct_id}: the everyday models use a {:.2} L \
+                 coupling volume at the duct's closed end (not the whole cabinet air).",
+                coupling * 1000.0
+            ));
+        }
     }
 
     let index_of = |id: &str| chambers.iter().position(|chamber| chamber.id == id);
@@ -526,8 +565,8 @@ fn build(
         };
         let duct_node = duct_mounts
             .iter()
-            .find(|(id, _, _)| id == &mount.id)
-            .and_then(|(_, duct_id, _)| {
+            .find(|(id, _, _, _)| id == &mount.id)
+            .and_then(|(_, duct_id, _, _)| {
                 duct_claim
                     .iter()
                     .find(|(d, _)| d == duct_id)
@@ -651,23 +690,45 @@ fn build(
             }
             done += seg;
         }
+        let tap = duct_taps
+            .iter()
+            .find(|(d, _)| d == id)
+            .map(|(_, t)| *t)
+            .unwrap_or(0.0);
+        // Offset tap (King): lumped merges the closed stub's air into the coupling volume and
+        // keeps only the open section as the air-mass duct to the outside. Waveguide splits
+        // properly (closed stub ‖ open section).
+        let (s_open0, open_length) = if claimed.is_some() && tap > 1e-9 {
+            let stub_vol = section.volume(length, 0.0, tap, 0.0);
+            volumes[inside] += stub_vol;
+            notes.push(format!(
+                "Quick network: the closed stub's {:.2} L of air is added to the coupling \
+                 volume; the detailed model keeps the stub as a closed transmission line.",
+                stub_vol * 1000.0
+            ));
+            (tap, length * (1.0 - tap))
+        } else {
+            (0.0, length)
+        };
         let ends = match other {
             Some(_) => {
                 end_correction_m(section.end_radius(false), true)
                     + end_correction_m(section.end_radius(true), true)
             }
             None => {
-                end_correction_m(section.end_radius(from == "outside"), true)
-                    + end_correction_m(section.end_radius(from != "outside"), false)
+                let r_in = (section.area(s_open0, 0.0) / std::f64::consts::PI).sqrt();
+                let r_out = section.end_radius(from != "outside");
+                end_correction_m(r_in, true) + end_correction_m(r_out, false)
             }
         };
         // The lumped mass uses `rho * L_eff / S`; carry the taper in an equivalent area.
-        let area = length / section.inertance_length_over_area(length);
+        let lo_a = section.inertance_length_over_area_between(length, s_open0, 1.0);
+        let area = open_length / lo_a.max(1e-12);
         let duct = Duct {
             from: inside,
             to: other,
             area_m2: area,
-            length_eff_m: length + ends,
+            length_eff_m: open_length + ends,
             passive: None,
         };
         if other.is_none() {
@@ -720,6 +781,7 @@ fn build(
         driver_nodes,
         moulded,
         duct_from_override,
+        duct_taps,
         notes,
     })
 }
@@ -820,7 +882,9 @@ impl WaveguideNetwork {
 
 /// `names` and `volumes_m3` are the chambers (one called `main` when the design lists none),
 /// `driver` the chamber the driver pushes into. `duct_from_override` remaps a duct's chamber
-/// end when a driver mounts on that duct.
+/// end when a driver mounts on that duct. `duct_taps` is the tap fraction from the closed end
+/// (King offset); the closed stub is a rigid-terminated branch in parallel with the open
+/// section.
 pub fn waveguide_network(
     design: &DesignFile,
     names: &[String],
@@ -828,6 +892,7 @@ pub fn waveguide_network(
     driver: usize,
     moulded: &[(MouldedOpening, usize)],
     duct_from_override: &[(String, String)],
+    duct_taps: &[(String, f64)],
 ) -> Result<WaveguideNetwork, String> {
     use seatlock_acoustics::AcousticNode;
     struct Edge {
@@ -835,9 +900,21 @@ pub fn waveguide_network(
         b: Option<usize>,
         section: Section,
         length: f64,
+        /// Fraction along the full design duct for the near and far ends of this edge
+        /// (0 = closed/`from`, 1 = mouth/`to`). Used for tapers on offset-tap splits.
+        s0: f64,
+        s1: f64,
         outside_slot: Option<usize>,
         /// A moulded duct's slices from the chamber to the mouth: `(length, area)`.
         slices: Option<Vec<(f64, f64)>>,
+    }
+    /// Closed stub behind an offset tap: duct from chamber `at` to a rigid end.
+    struct RigidStub {
+        at: usize,
+        section: Section,
+        length: f64,
+        s0: f64,
+        s1: f64,
     }
     let index_of = |name: &str| -> Result<Option<usize>, String> {
         if name == "outside" {
@@ -852,6 +929,7 @@ pub fn waveguide_network(
             ))
     };
     let mut edges = Vec::new();
+    let mut rigid_stubs = Vec::new();
     let mut outside_count = 0;
     for raw in &design.speaker.enclosure.ducts {
         let id = raw.get("id").and_then(Value::as_str).unwrap_or("duct");
@@ -875,6 +953,35 @@ pub fn waveguide_network(
         if length <= 0.0 {
             return Err(format!("duct {id} has no path."));
         }
+        let tap = duct_taps
+            .iter()
+            .find(|(d, _)| d == id)
+            .map(|(_, t)| *t)
+            .unwrap_or(0.0);
+        // Offset tap: open section from tap → mouth, plus a rigid closed stub tap → closed end.
+        if duct_from_override.iter().any(|(d, _)| d == id) && tap > 1e-9 {
+            let couple = a.expect("duct mount remaps to a coupling chamber");
+            let open_len = length * (1.0 - tap);
+            outside_count += 1;
+            edges.push(Edge {
+                a: Some(couple),
+                b: None,
+                section: section.clone(),
+                length: open_len,
+                s0: tap,
+                s1: 1.0,
+                outside_slot: Some(outside_count - 1),
+                slices: None,
+            });
+            rigid_stubs.push(RigidStub {
+                at: couple,
+                section,
+                length: length * tap,
+                s0: 0.0,
+                s1: tap,
+            });
+            continue;
+        }
         let outside_slot = if a.is_none() || b.is_none() {
             outside_count += 1;
             Some(outside_count - 1)
@@ -886,6 +993,8 @@ pub fn waveguide_network(
             b,
             section,
             length,
+            s0: 0.0,
+            s1: 1.0,
             outside_slot,
             slices: None,
         });
@@ -924,9 +1033,21 @@ pub fn waveguide_network(
                 tube_m: 0.0,
             },
             length: total,
+            s0: 0.0,
+            s1: 1.0,
             outside_slot: Some(outside_count - 1),
             slices: Some(merged),
         });
+    }
+    // Lumped merges closed-stub air into the coupling volume; the detailed model carries that
+    // air in the rigid stub branch, so strip it from the chamber volumes here.
+    let mut wave_volumes = volumes_m3.to_vec();
+    for stub in &rigid_stubs {
+        let full = stub.length / (stub.s1 - stub.s0).max(1e-15);
+        let stub_vol = stub.section.volume(full, stub.s0, stub.s1, 0.0);
+        if stub.at < wave_volumes.len() {
+            wave_volumes[stub.at] = (wave_volumes[stub.at] - stub_vol).max(1e-9);
+        }
     }
     let mut order = Vec::new();
     let mut seen = vec![false; names.len()];
@@ -935,6 +1056,7 @@ pub fn waveguide_network(
         at: usize,
         volumes: &[f64],
         edges: &[Edge],
+        stubs: &[RigidStub],
         seen: &mut Vec<bool>,
         used: &mut Vec<bool>,
         order: &mut Vec<usize>,
@@ -944,6 +1066,18 @@ pub fn waveguide_network(
             volume_m3: volumes[at],
             slot: at,
         }];
+        for stub in stubs.iter().filter(|s| s.at == at) {
+            let a_near = stub.section.area(stub.s1, 0.0); // tap end toward the chamber
+            let a_far = stub.section.area(stub.s0, 0.0); // closed end
+            let r_near = (a_near / std::f64::consts::PI).sqrt();
+            branches.push(AcousticNode::Duct {
+                length_m: stub.length,
+                area_in_m2: a_near,
+                area_out_m2: a_far,
+                added_length_m: 0.849 * r_near,
+                load: Box::new(AcousticNode::Rigid),
+            });
+        }
         for (index, edge) in edges.iter().enumerate() {
             if used[index] || (edge.a != Some(at) && edge.b != Some(at)) {
                 continue;
@@ -952,7 +1086,11 @@ pub fn waveguide_network(
             // Orient the duct from this chamber.
             let forward = edge.a == Some(at);
             let far = if forward { edge.b } else { edge.a };
-            let (s_near, s_far) = if forward { (0.0, 1.0) } else { (1.0, 0.0) };
+            let (s_near, s_far) = if forward {
+                (edge.s0, edge.s1)
+            } else {
+                (edge.s1, edge.s0)
+            };
             let (a_near, a_far) = (
                 edge.section.area(s_near, 0.0),
                 edge.section.area(s_far, 0.0),
@@ -975,7 +1113,7 @@ pub fn waveguide_network(
                         return Err("loop".into());
                     }
                     (
-                        chamber_node(other, volumes, edges, seen, used, order)?,
+                        chamber_node(other, volumes, edges, stubs, seen, used, order)?,
                         0.849 * r_far,
                     )
                 }
@@ -1011,18 +1149,44 @@ pub fn waveguide_network(
         Ok(AcousticNode::Parallel(branches))
     }
     let mut notes = Vec::new();
-    let body = match chamber_node(driver, volumes_m3, &edges, &mut seen, &mut used, &mut order) {
+    let body = match chamber_node(
+        driver,
+        &wave_volumes,
+        &edges,
+        &rigid_stubs,
+        &mut seen,
+        &mut used,
+        &mut order,
+    ) {
         Ok(root) => WaveguideBody::Tree(root),
         Err(err) if err == "loop" => {
             // Same ducts as Y-parameter branches on a chamber nodal matrix (README 5.4).
-            let mut mesh_edges = Vec::with_capacity(edges.len());
+            // Rigid stubs become ducts into a near-zero volume chamber (closed terminus).
+            let mut mesh_volumes = wave_volumes.clone();
+            let mut mesh_edges = Vec::with_capacity(edges.len() + rigid_stubs.len());
             let mut mesh_order = Vec::new();
+            for stub in &rigid_stubs {
+                let stub_node = mesh_volumes.len();
+                mesh_volumes.push(1e-12);
+                let a_near = stub.section.area(stub.s1, 0.0);
+                let a_far = stub.section.area(stub.s0, 0.0);
+                let r_near = (a_near / std::f64::consts::PI).sqrt();
+                mesh_edges.push(MeshDuct {
+                    from: stub.at,
+                    to: Some(stub_node),
+                    length_m: stub.length,
+                    area_in_m2: a_near,
+                    area_out_m2: a_far,
+                    added_length_m: 0.849 * r_near,
+                    slices: None,
+                    outside_slot: None,
+                    mouth_area_m2: a_far,
+                });
+            }
             for edge in &edges {
-                let forward = true;
-                let (s_near, s_far) = if forward { (0.0, 1.0) } else { (1.0, 0.0) };
                 let (a_near, a_far) = (
-                    edge.section.area(s_near, 0.0),
-                    edge.section.area(s_far, 0.0),
+                    edge.section.area(edge.s0, 0.0),
+                    edge.section.area(edge.s1, 0.0),
                 );
                 let r_near = (a_near / std::f64::consts::PI).sqrt();
                 let r_far = (a_far / std::f64::consts::PI).sqrt();
@@ -1055,7 +1219,7 @@ pub fn waveguide_network(
                     .into(),
             );
             WaveguideBody::Mesh(WaveguideMesh {
-                volumes_m3: volumes_m3.to_vec(),
+                volumes_m3: mesh_volumes,
                 edges: mesh_edges,
                 driver,
             })
