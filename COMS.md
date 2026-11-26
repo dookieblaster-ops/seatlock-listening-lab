@@ -45,26 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after #56 review
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after combo-cap merge
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/l3-optimizer-combo-cap-9ae2` (PR onto `main`). Level 3. Build/stock already on `main`.
+- **Context:** `main` after #57. Level 3.
 
-**Done this session:** Reviewed overlapping PR #56 against `main`. Kept ≥9 mm sheet rule (no foam board). Cherry-picked combo cap: nearby drivers only on the current body; multi-way keeps the user's build (two-way back to 4 combos; sealed-test ≤6). CostQuality tooltip names build method. Closed #56 as superseded (foam-board alt rejected).
+**Done this session:** Merged #53 (driver), #54 (proportions). Reviewed overlapping #56 vs `main` build/stock — kept ≥9 mm sheets (no foam), cherry-picked combo cap onto `main` as #57 (nearby drivers on current body only; multi-way build fixed; sealed-test ≤6). Closed #56 superseded.
 
 **Open, in order:**
-1. Merge this PR when Check is green.
-2. Level 3 remainder: internal elements / deeper generator / … (do not invent damping/fill).
-3. Optional BEM high-ka lit-gap only if it blocks.
-4. Criton leftovers only if a source appears.
-5. Optional: second backup remote / Pro protect-`main`.
+1. Level 3 optimizer: internal elements (braces / partitions / chamber fill — only with sourced catalog models; do not invent; cap discrete combo count).
+2. Optional BEM high-ka lit-gap only if it blocks.
+3. Criton leftovers only if a source appears.
+4. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. Do not treat partial pack as full-chamber `fill`. PR Map/Cap/Rap stay labeled in FDTD. Optimizer never proposes `test-*` parts. Cap combo count — page concurrency 2; foam-board (~3 mm) is not an optimizer stock alt.
 
-**Last check:** `the_level_3_optimizer_tries_another_build_and_free_proportions` (≤6; no komatex; multi-way 4); driver + proportions + seed-repeat; clippy `-D warnings`.
+**Last check:** #57 Check green; merge `af3783f`.
 
-**Next step:** merge when green; then internal elements.
+**Next step:** Level 3 optimizer internal elements (sourced only), or optional BEM/Criton/backup.
+
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after #56 review (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** `main` after #57. Superseded by merge above.
+
+**Done this session:** #57 merged. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after build/stock (superseded)
 
@@ -810,6 +819,7 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Resolved
 
+- 2026-11-26: PR #57 combo-cap merged to `main` (Check green); PR #56 closed superseded.
 - 2026-11-26: PR #56 reviewed — combo cap kept; foam-board alt rejected; PR closed superseded.
 - 2026-11-26: Level 3 optimizer build/stock (printed ↔ sheet ≥ 9 mm; tubes current-only) ported onto `main` after PR #55 review; free proportions API kept.
 - 2026-11-26: PR #53 Level 3 optimizer driver choice reviewed and merged to `main` (Check green).

@@ -31,11 +31,11 @@ Same as Cursor. Lead sessions push to `main` (README 1.4).
 
 After **Check COMS.md** / **Go**, the newest handoff says to continue from the first open item:
 
-1. Level 3 remainder (internal elements / deeper generator / …) after combo-cap PR merges
+1. Level 3 optimizer: internal elements (sourced catalog only; cap combos) or deeper generator
 2. Optional high-ka lit-gap only if it blocks; Criton leftovers only if a source appears
 3. Optional: second backup remote URL / protect `main` (GitHub Pro on this private repo — skip is fine)
 
-Already in on `main`: L3 optimizer driver choice / build-stock (≥9 mm sheet; foam skipped; combo-capped) / free proportions; C6; C5; C10; duct-mounted drivers; passive radiators; loft; waveguide loops; FIR; 3D wave views; Dayton exciters; chamber `fill`; printed PLA η = 0.075; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
+Already in on `main`: L3 optimizer driver choice / build-stock (≥9 mm sheet; foam skipped; combo-capped #57) / free proportions; C6; C5; C10; duct-mounted drivers; passive radiators; loft; waveguide loops; FIR; 3D wave views; Dayton exciters; chamber `fill`; printed PLA η = 0.075; soft TPU loss still Irvine 0.10; preference score; BEM CHK-BEM-1…10; Criton / C-Note; living wiki.
 
 ## What “done” looks like for a lead turn
 

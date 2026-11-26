@@ -94,7 +94,7 @@ Keep this file true. Update it at the end of every session (README section 1.2).
 The work queue, with files and pitfalls, is the newest handoff at the top of `COMS.md` (also summarized in `docs/new-chat.md`). In short:
 
 0p. Helper stack #12–#19 merged; CHK-BEM-2 and CHK-BEM-3 on `main` 2026-11-16. High-ka rigid-sphere vs smooth series placed as a constant-element limit.
-0. **Next:** Level 3 remainder after #56 combo-cap review (internal elements / …). PR Map/Cap/Rap stays labeled in FDTD; do not invent added PR mass. Soft-TPU loss skipped. Optional BEM lit-gap / Criton / backup.
+0. **Next:** Level 3 remainder after #57 combo-cap merge (internal elements / …). PR Map/Cap/Rap stays labeled in FDTD; do not invent added PR mass. Soft-TPU loss skipped. Optional BEM lit-gap / Criton / backup.
 1. Research plan details as above.
 1a. Inside-shaping earn more: stronger-fault cabinets, listener-through-baffle objective, real 3D losses.
 2. Fast 3D leftovers: smaller exterior block; WebGPU on the owner's laptop.
@@ -109,6 +109,7 @@ The work queue, with files and pitfalls, is the newest handoff at the top of `CO
 
 The full history is in `docs/status-history.md`. The latest state:
 
+- 2026-11-26, Cursor cloud (lead Check COMS): #57 Check green; fast-forwarded combo-cap onto `main` (`af3783f`). Reviewed overlapping PR #56 vs `main` build/stock: kept ≥9 mm sheet rule (no foam board); cherry-picked combo cap; closed #56 superseded.
 - 2026-11-26, Cursor cloud (lead Check COMS): reviewed overlapping PR #56 vs `main` build/stock. Kept ≥9 mm sheet rule (no foam board). Cherry-picked combo cap (nearby drivers on current body only; multi-way no stock expand → 4 combos; sealed-test ≤6). Closed #56 superseded. CostQuality tooltip updated.
 - 2026-11-26, Cursor cloud (lead Check COMS): reviewed PR #55 (build/stock) against README §11.3; ported onto `main`'s free-proportions API (PR was based before proportions landed and conflicted). Tubes stay current-only (PR code had offered a printed alternate against its own README). Foam board (~3 mm) not an optimizer stock alt. Tests: build/stock + proportions + driver + seed-repeat; clippy `-D warnings`.
 - 2026-11-26, Cursor cloud (lead Check COMS): reviewed and merged PR #53 (driver choice) to `main` after Check green. Free proportions: `rebuild_to_proportions` + Nelder–Mead height/width and depth/width for box/sheet_box; tubes locked. Tests: `the_level_3_optimizer_searches_free_cabinet_proportions` + driver + seed-repeat; clippy `-D warnings`.
