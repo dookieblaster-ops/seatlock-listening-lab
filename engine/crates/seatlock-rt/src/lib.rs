@@ -1,5 +1,6 @@
 //! Real-time kernel. `seatlock_rt_process` does not allocate.
-//! It runs the same biquad step as `seatlock-dsp` and writes one channel per radiator.
+//! It runs the same biquad step as `seatlock-dsp`, plus fixed-budget FIR
+//! convolution, and writes one channel per radiator.
 
 #![allow(static_mut_refs, clippy::missing_safety_doc)]
 
@@ -10,6 +11,10 @@ const FRAMES: usize = 128;
 const CHANNELS: usize = 16;
 const STAGES: usize = 16;
 const DELAY: usize = 512;
+/// Max taps per FIR stage (covers 257-tap linear-phase / C7 with headroom).
+pub const FIR_LEN: usize = 512;
+/// Max FIR stages per channel (e.g. whole-speaker correction + per-radiator XO).
+pub const FIR_STAGES: usize = 4;
 
 #[derive(Clone, Copy)]
 struct Stage {
@@ -50,9 +55,59 @@ impl Stage {
 }
 
 #[derive(Clone, Copy)]
+struct Fir {
+    taps: [f64; FIR_LEN],
+    hist: [f64; FIR_LEN],
+    n: usize,
+    i: usize,
+}
+
+impl Fir {
+    const fn empty() -> Self {
+        Self {
+            taps: [0.0; FIR_LEN],
+            hist: [0.0; FIR_LEN],
+            n: 0,
+            i: 0,
+        }
+    }
+
+    fn from_taps(src: &[f64; FIR_LEN], n: usize) -> Self {
+        let n = n.min(FIR_LEN);
+        let mut fir = Self::empty();
+        fir.n = n;
+        fir.taps[..n].copy_from_slice(&src[..n]);
+        fir
+    }
+
+    fn tick(&mut self, x: f64) -> f64 {
+        if self.n == 0 {
+            return x;
+        }
+        if self.n == 1 {
+            return self.taps[0] * x;
+        }
+        self.hist[self.i] = x;
+        let mut y = 0.0;
+        let mut j = self.i;
+        for tap in self.taps.iter().take(self.n) {
+            y += tap * self.hist[j];
+            j = if j == 0 { self.n - 1 } else { j - 1 };
+        }
+        self.i += 1;
+        if self.i >= self.n {
+            self.i = 0;
+        }
+        y
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Chain {
     stages: [Stage; STAGES],
     count: usize,
+    firs: [Fir; FIR_STAGES],
+    fir_count: usize,
     gain: f64,
     delay: [f64; DELAY],
     delay_n: usize,
@@ -64,6 +119,8 @@ impl Chain {
         Self {
             stages: [Stage::wire(); STAGES],
             count: 0,
+            firs: [Fir::empty(); FIR_STAGES],
+            fir_count: 0,
             gain: 1.0,
             delay: [0.0; DELAY],
             delay_n: 0,
@@ -86,6 +143,9 @@ impl Chain {
         for stage in self.stages.iter_mut().take(self.count) {
             y = stage.tick(y);
         }
+        for fir in self.firs.iter_mut().take(self.fir_count) {
+            y = fir.tick(y);
+        }
         y
     }
 }
@@ -94,6 +154,9 @@ impl Chain {
 struct Staged {
     coeffs: [[f64; 5]; STAGES],
     count: usize,
+    firs: [[f64; FIR_LEN]; FIR_STAGES],
+    fir_lens: [usize; FIR_STAGES],
+    fir_count: usize,
     gain: f64,
     delay_n: usize,
 }
@@ -103,6 +166,9 @@ impl Staged {
         Self {
             coeffs: [[0.0; 5]; STAGES],
             count: 0,
+            firs: [[0.0; FIR_LEN]; FIR_STAGES],
+            fir_lens: [0; FIR_STAGES],
+            fir_count: 0,
             gain: 1.0,
             delay_n: 0,
         }
@@ -153,6 +219,7 @@ static mut STATE: RtState = RtState {
 
 static mut OUTPUT: [[f32; FRAMES]; CHANNELS] = [[0.0; FRAMES]; CHANNELS];
 static mut INPUT: [f32; FRAMES] = [0.0; FRAMES];
+static mut FIR_SCRATCH: [f64; FIR_LEN] = [0.0; FIR_LEN];
 
 #[no_mangle]
 pub extern "C" fn seatlock_rt_init(sample_rate: f64) {
@@ -270,6 +337,44 @@ pub extern "C" fn seatlock_rt_add_biquad(
     }
 }
 
+#[no_mangle]
+pub extern "C" fn seatlock_rt_fir_scratch_ptr() -> *mut f64 {
+    unsafe { FIR_SCRATCH.as_mut_ptr() }
+}
+
+#[no_mangle]
+pub extern "C" fn seatlock_rt_fir_scratch_capacity() -> usize {
+    FIR_LEN
+}
+
+/// Copy `n` taps from the FIR scratch buffer into the next FIR stage on `channel`.
+/// Returns the number of FIR stages on the channel after the add (0 if refused).
+#[no_mangle]
+pub extern "C" fn seatlock_rt_add_fir(channel: u32, n: u32) -> u32 {
+    let index = channel as usize;
+    if index >= CHANNELS {
+        return 0;
+    }
+    let n = (n as usize).min(FIR_LEN);
+    if n == 0 {
+        return unsafe { STATE.staged[index].fir_count as u32 };
+    }
+    unsafe {
+        let staged = &mut STATE.staged[index];
+        if staged.fir_count >= FIR_STAGES {
+            return staged.fir_count as u32;
+        }
+        let slot = staged.fir_count;
+        staged.firs[slot][..n].copy_from_slice(&FIR_SCRATCH[..n]);
+        if n < FIR_LEN {
+            staged.firs[slot][n..].fill(0.0);
+        }
+        staged.fir_lens[slot] = n;
+        staged.fir_count += 1;
+        staged.fir_count as u32
+    }
+}
+
 /// Start a 20 ms crossfade from the filters that are playing to the staged ones.
 #[no_mangle]
 pub extern "C" fn seatlock_rt_commit() {
@@ -301,6 +406,15 @@ pub extern "C" fn seatlock_rt_commit() {
                     s1: 0.0,
                     s2: 0.0,
                 };
+            }
+            chain.fir_count = staged.fir_count.min(FIR_STAGES);
+            for (fir, (taps, &n)) in chain
+                .firs
+                .iter_mut()
+                .zip(staged.firs.iter().zip(staged.fir_lens.iter()))
+                .take(chain.fir_count)
+            {
+                *fir = Fir::from_taps(taps, n);
             }
         }
         STATE.fade = 0.0;
@@ -402,9 +516,13 @@ fn sweep_sample(sample_rate: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn a_staged_gain_is_heard_after_the_crossfade() {
+        let _guard = LOCK.lock().unwrap();
         unsafe {
             seatlock_rt_init(48_000.0);
             seatlock_rt_set_tone(1_000.0, 0.5);
@@ -427,6 +545,85 @@ mod tests {
                 (rms - expected).abs() < 0.03,
                 "rms {rms} expected {expected}"
             );
+        }
+    }
+
+    /// Owns the static kernel for the duration of all FIR cases.
+    #[test]
+    fn fir_convolution_cases() {
+        let _guard = LOCK.lock().unwrap();
+        unsafe {
+            // Unit FIR passes the tone.
+            seatlock_rt_init(48_000.0);
+            seatlock_rt_set_tone(1_000.0, 0.5);
+            seatlock_rt_set_voltage(2.83);
+            seatlock_rt_set_channels(1);
+            seatlock_rt_clear_channel(0);
+            seatlock_rt_set_channel_gain(0, 1.0);
+            FIR_SCRATCH[0] = 1.0;
+            assert_eq!(seatlock_rt_add_fir(0, 1), 1);
+            seatlock_rt_commit();
+            for _ in 0..40 {
+                seatlock_rt_process(FRAMES);
+            }
+            seatlock_rt_process(FRAMES);
+            let mut energy = 0.0;
+            for sample in &OUTPUT[0] {
+                energy += f64::from(*sample) * f64::from(*sample);
+            }
+            let rms = (energy / FRAMES as f64).sqrt();
+            let expected = 0.5 / std::f64::consts::SQRT_2;
+            assert!(
+                (rms - expected).abs() < 0.03,
+                "unit fir rms {rms} expected {expected}"
+            );
+
+            // Half-gain FIR halves the RMS.
+            seatlock_rt_clear_channel(0);
+            seatlock_rt_set_channel_gain(0, 1.0);
+            FIR_SCRATCH[0] = 0.5;
+            assert_eq!(seatlock_rt_add_fir(0, 1), 1);
+            seatlock_rt_commit();
+            for _ in 0..40 {
+                seatlock_rt_process(FRAMES);
+            }
+            seatlock_rt_process(FRAMES);
+            energy = 0.0;
+            for sample in &OUTPUT[0] {
+                energy += f64::from(*sample) * f64::from(*sample);
+            }
+            let rms = (energy / FRAMES as f64).sqrt();
+            let expected = 0.5 * 0.5 / std::f64::consts::SQRT_2;
+            assert!(
+                (rms - expected).abs() < 0.03,
+                "half fir rms {rms} expected {expected}"
+            );
+
+            // taps = [0, 0, 1] → output is input delayed by 2 samples.
+            seatlock_rt_set_source(3, 0.0, 1.0);
+            seatlock_rt_clear_channel(0);
+            seatlock_rt_set_channel_gain(0, 1.0);
+            FIR_SCRATCH[0] = 0.0;
+            FIR_SCRATCH[1] = 0.0;
+            FIR_SCRATCH[2] = 1.0;
+            assert_eq!(seatlock_rt_add_fir(0, 3), 1);
+            seatlock_rt_commit();
+            STATE.fade = 1.0;
+            STATE.from = [Chain::unity(); CHANNELS];
+            INPUT.fill(0.0);
+            INPUT[0] = 1.0;
+            seatlock_rt_process(8);
+            assert!(
+                OUTPUT[0][0].abs() < 1e-6 && OUTPUT[0][1].abs() < 1e-6,
+                "early samples {:?}",
+                &OUTPUT[0][..3]
+            );
+            assert!(
+                (OUTPUT[0][2] - 1.0).abs() < 1e-5,
+                "delayed sample {}",
+                OUTPUT[0][2]
+            );
+            assert!(OUTPUT[0][3].abs() < 1e-6);
         }
     }
 }

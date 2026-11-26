@@ -4076,6 +4076,7 @@ pub fn listen_package(
     let radiators = design.speaker.radiators.len().max(1);
     for index in 0..radiators {
         let mut stages = Vec::new();
+        let mut firs = Vec::new();
         let mut gain = 1.0;
         let mut delay = 0usize;
         let fir_before = fir_wavs.len();
@@ -4087,6 +4088,7 @@ pub fn listen_package(
             index,
             "whole",
             &mut stages,
+            &mut firs,
             &mut gain,
             &mut delay,
             &mut lines,
@@ -4103,6 +4105,7 @@ pub fn listen_package(
                     index,
                     "radiator",
                     &mut stages,
+                    &mut firs,
                     &mut gain,
                     &mut delay,
                     &mut lines,
@@ -4130,6 +4133,7 @@ pub fn listen_package(
             }
         }
         if stages.is_empty()
+            && firs.is_empty()
             && fir_wavs.len() == fir_before
             && (gain - 1.0).abs() < 1e-9
             && delay == 0
@@ -4148,6 +4152,7 @@ pub fn listen_package(
         }
         channels.push(serde_json::json!({
             "coeffs": stages,
+            "firs": firs,
             "gain": gain,
             "delay_samples": delay,
         }));
@@ -4195,6 +4200,10 @@ pub fn listen_package(
     })
 }
 
+/// Must match `seatlock_rt::FIR_LEN` / `FIR_STAGES` (Play kernel budget).
+const LISTEN_FIR_LEN: usize = 512;
+const LISTEN_FIR_STAGES: usize = 4;
+
 #[allow(clippy::too_many_arguments)]
 fn append_parts(
     parts: &[KindPart],
@@ -4203,6 +4212,7 @@ fn append_parts(
     radiator: usize,
     scope: &str,
     stages: &mut Vec<[f64; 5]>,
+    firs: &mut Vec<Vec<f64>>,
     gain: &mut f64,
     delay: &mut usize,
     lines: &mut Vec<String>,
@@ -4316,18 +4326,20 @@ fn append_parts(
                                 band,
                                 block_i + 1
                             );
-                            push_fir_wav(
+                            let label = format!(
+                                "FIR linear-phase crossover {band} at {freq:.1} Hz, order \
+                                 {order} ({} taps).",
+                                taps.len()
+                            );
+                            push_listen_fir(
+                                firs,
                                 fir_wavs,
                                 lines,
                                 radiator,
                                 &name,
                                 sample_rate_hz,
-                                &taps,
-                                &format!(
-                                    "FIR linear-phase crossover {band} at {freq:.1} Hz, order \
-                                     {order} ({n} taps).",
-                                    n = taps.len()
-                                ),
+                                taps,
+                                &label,
                             );
                         }
                         Err(err) => lines.push(format!(
@@ -4373,14 +4385,16 @@ fn append_parts(
                     lines.push("An FIR block with no taps was left out.".into());
                 } else {
                     let name = format!("radiator{}-{}-fir{}.wav", radiator + 1, scope, block_i + 1);
-                    push_fir_wav(
+                    let label = format!("FIR block ({} taps).", taps.len());
+                    push_listen_fir(
+                        firs,
                         fir_wavs,
                         lines,
                         radiator,
                         &name,
                         sample_rate_hz,
-                        &taps,
-                        &format!("FIR block ({} taps).", taps.len()),
+                        taps,
+                        &label,
                     );
                 }
             }
@@ -4424,25 +4438,21 @@ fn append_parts(
     }
 }
 
-fn push_fir_wav(
+#[allow(clippy::too_many_arguments)]
+fn push_listen_fir(
+    firs: &mut Vec<Vec<f64>>,
     fir_wavs: &mut Vec<Value>,
     lines: &mut Vec<String>,
     radiator: usize,
     filename: &str,
     sample_rate_hz: f64,
-    taps: &[f64],
+    taps: Vec<f64>,
     label: &str,
 ) {
     let rate = sample_rate_hz.round().max(1.0) as u32;
-    let wav = seatlock_dsp::mono_f32_wav(rate, taps);
+    let wav = seatlock_dsp::mono_f32_wav(rate, &taps);
     let b64 = base64_encode(&wav);
     lines.push(format!("{label} Export file: {filename}."));
-    // Play still leaves FIR out of the worklet (STATUS); export is for hardware.
-    lines.push(
-        "FIR is exported as a mono IEEE float WAV; Play still applies IIR stages only \
-         (FIR convolution in the worklet is later)."
-            .into(),
-    );
     fir_wavs.push(serde_json::json!({
         "radiator": radiator,
         "filename": filename,
@@ -4450,6 +4460,25 @@ fn push_fir_wav(
         "taps": taps.len(),
         "wav_base64": b64,
     }));
+    if taps.len() > LISTEN_FIR_LEN {
+        lines.push(format!(
+            "FIR left out of Play: {} taps exceeds the worklet budget of {LISTEN_FIR_LEN}.",
+            taps.len()
+        ));
+        return;
+    }
+    if firs.len() >= LISTEN_FIR_STAGES {
+        lines.push(format!(
+            "FIR left out of Play: already {LISTEN_FIR_STAGES} FIR stages on this radiator \
+             (worklet budget)."
+        ));
+        return;
+    }
+    lines.push(format!(
+        "Play convolves this FIR ({} taps) in the AudioWorklet.",
+        taps.len()
+    ));
+    firs.push(taps);
 }
 
 fn base64_encode(bytes: &[u8]) -> String {

@@ -2,6 +2,8 @@ import { useCallback, useRef, useState } from "react";
 
 export type ListenChannel = {
   coeffs: number[][];
+  /** FIR tap arrays for the worklet (after biquads). */
+  firs?: number[][];
   gain: number;
   delay_samples: number;
 };
@@ -12,6 +14,14 @@ export function coefficientMessage(channels: ListenChannel[]): Float64Array {
     values.push(channel.coeffs.length, channel.gain, channel.delay_samples);
     for (const row of channel.coeffs) {
       values.push(row[0] ?? 1, row[1] ?? 0, row[2] ?? 0, row[3] ?? 0, row[4] ?? 0);
+    }
+    const firs = channel.firs ?? [];
+    values.push(firs.length);
+    for (const taps of firs) {
+      values.push(taps.length);
+      for (const tap of taps) {
+        values.push(tap);
+      }
     }
   }
   return new Float64Array(values);

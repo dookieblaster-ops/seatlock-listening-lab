@@ -17,6 +17,7 @@ class SeatlockRtProcessor extends AudioWorkletProcessor {
     this.boundBuffer = null;
     this.views = [];
     this.inView = null;
+    this.firScratch = null;
     this.useInput = false;
     this.bindOutput();
     const preset = options.processorOptions?.coeffs;
@@ -50,6 +51,13 @@ class SeatlockRtProcessor extends AudioWorkletProcessor {
       );
     }
     this.inView = new Float32Array(memory.buffer, this.inPtr, this.capacity);
+    if (typeof this.exports.seatlock_rt_fir_scratch_ptr === "function") {
+      const firPtr = this.exports.seatlock_rt_fir_scratch_ptr();
+      const firCap = this.exports.seatlock_rt_fir_scratch_capacity();
+      this.firScratch = new Float64Array(memory.buffer, firPtr, firCap);
+    } else {
+      this.firScratch = null;
+    }
     this.boundBuffer = memory.buffer;
   }
 
@@ -76,6 +84,28 @@ class SeatlockRtProcessor extends AudioWorkletProcessor {
           data[index + 4],
         );
         index += 5;
+      }
+      const firCount = data[index] || 0;
+      index += 1;
+      for (let fir = 0; fir < firCount; fir += 1) {
+        const n = data[index] || 0;
+        index += 1;
+        if (
+          this.firScratch &&
+          typeof this.exports.seatlock_rt_add_fir === "function" &&
+          n > 0
+        ) {
+          if (this.boundBuffer !== this.exports.memory.buffer) {
+            this.bindOutput();
+          }
+          const cap = this.firScratch.length;
+          const take = Math.min(n, cap);
+          for (let t = 0; t < take; t += 1) {
+            this.firScratch[t] = data[index + t];
+          }
+          this.exports.seatlock_rt_add_fir(channel, take);
+        }
+        index += n;
       }
     }
     this.exports.seatlock_rt_commit();

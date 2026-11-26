@@ -166,7 +166,12 @@ export type FirWavExport = {
 
 export type ListenPackage = {
   sample_rate_hz: number;
-  channels: Array<{ coeffs: number[][]; gain: number; delay_samples: number }>;
+  channels: Array<{
+    coeffs: number[][];
+    firs?: number[][];
+    gain: number;
+    delay_samples: number;
+  }>;
   impulses: number[][];
   filter_text: string;
   fir_wavs?: FirWavExport[];

@@ -45,26 +45,26 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 merge
+### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after Play FIR
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** `main` after #46. Level 3.
+- **Context:** branch `cursor/fir-worklet-da03` (PR onto `main`). Level 3. #46 on `main`.
 
-**Done this session:** Merged #46 (C7 linear-phase FIR auto-EQ). Round-trip fix: `linear_phase: false` omitted on serialize.
+**Done this session:** Merged #46. **Play FIR:** `channels[].firs` in listen package; `seatlock-rt` convolves ≤4×512 taps (scratch + `add_fir`); worklet + `coefficientMessage` encode FIRs; e2e tone FIR test.
 
 **Open, in order:**
-1. FIR convolution in the AudioWorklet (`seatlock-rt` + listen package `firs` + worklet message).
+1. Merge this PR when Check is green.
 2. Imported damping parts in everyday nets / PR Map/Cap/Rap in FDTD or leave labeled / added PR mass / C5·C6·C10 / …
 3. Optional BEM high-ka lit-gap only if it blocks.
 4. Criton leftovers only if a source appears.
 5. Optional: second backup remote / Pro protect-`main`.
 
-**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. RT FIR must not allocate in `process`; keep fixed tap/stage budgets. Play must match graphs for LTI chains (biquads + FIRs).
+**Pitfalls:** Do not invent damping. Do not invent lined-duct DB without Cap passivity note. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU stays Irvine rubber. Do not invent added PR mass. Hardware-specific DSP formats wait on STATUS Q2. RT FIR must not allocate in `process`; keep 4×512 budget. Oversized FIRs are exported as WAV but left out of Play with a note.
 
-**Last check:** GitHub Check green on #46 (`2ae3445`).
+**Last check:** seatlock-rt 2 tests; listen_package FIR channel firs; clippy on rt/sim.
 
-**Next step:** FIR in AudioWorklet, then remainder queue.
+**Next step:** merge when green; then remainder queue.
 
 ### 2026-11-26 — Cursor — Handoff: start here. Level 3 remainder after C7 FIR correction (superseded)
 

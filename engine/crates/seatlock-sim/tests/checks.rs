@@ -374,6 +374,13 @@ fn listen_package_exports_fir_as_mono_wav() {
         .as_str()
         .unwrap()
         .contains("Export file:"));
+    let channel_firs = value["channels"][0]["firs"].as_array().expect("channel firs");
+    assert_eq!(channel_firs.len(), 1);
+    assert_eq!(channel_firs[0].as_array().unwrap().len(), 5);
+    assert!(value["filter_text"]
+        .as_str()
+        .unwrap()
+        .contains("Play convolves this FIR"));
 }
 
 #[test]

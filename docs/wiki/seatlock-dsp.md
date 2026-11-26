@@ -32,7 +32,7 @@ DSP blocks implement both frequency response (for graphs) and sample processing 
 1. Design lists DSP blocks per radiator (and whole-speaker).
 2. Sim injects `sample_rate_hz` into each block's fields, evaluates the complex chain response, and notes total FIR/delay latency on the fidelity label.
 3. `listen_package` expands IIR crossovers to biquad stages for Play/`filters.txt`, and packs FIR / linear-phase taps as mono WAVs.
-4. `seatlock-rt` runs the same biquad step on audio samples (FIR convolution in the worklet is later).
+4. `seatlock-rt` runs the same biquad step and fixed-budget FIR convolution on audio samples.
 
 ## Checks
 
