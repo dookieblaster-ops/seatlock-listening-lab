@@ -1,5 +1,5 @@
 /** Editable outer-shape fields for each built kind (README 6.2). Boxes keep width/height/depth;
- * tubes, revolved shapes, sloped baffles, and prisms get their own fields instead of fake box ones. */
+ * tubes, revolved shapes, lofts, sloped baffles, and prisms get their own fields instead of fake box ones. */
 
 function mm(value: number) {
   return value * 1000;
@@ -198,6 +198,31 @@ export function OuterFields({
               rows={6}
               value={JSON.stringify(outer.outline_m ?? [], null, 2)}
               onChange={(event) => onJson("outline_m", event.target.value)}
+            />
+          </label>
+        </>
+      )}
+      {kind === "loft" && (
+        <>
+          <NumberField
+            label="Depth (mm)"
+            testId="loft-depth-mm"
+            value={mm(Number(outer.depth_m))}
+            onChange={(value) => onNumber("depth_m", value / 1000)}
+          />
+          <NumberField
+            label="Wall thickness (mm)"
+            testId="loft-wall-mm"
+            value={mm(Number(outer.wall_m))}
+            onChange={(value) => onNumber("wall_m", value / 1000)}
+          />
+          <label className="wide">
+            Cross-sections along the depth (at 0…1, width and height in meters)
+            <textarea
+              data-testid="loft-sections"
+              rows={8}
+              value={JSON.stringify(outer.sections ?? [], null, 2)}
+              onChange={(event) => onJson("sections", event.target.value)}
             />
           </label>
         </>

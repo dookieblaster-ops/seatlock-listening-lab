@@ -698,7 +698,20 @@ The Level 3 curved shape, `revolved`: a body of revolution about the front-to-ba
   "widest_at": 0.4, "wall_m": 0.008 }   // an egg; equal diameters make a cylinder, zero flats and widest_at 0.5 a spheroid
 ```
 
-The outside radius runs from the front's rim to the widest point, `widest_at` of the way back, along a quarter ellipse, and from there to the back's rim along another. The inside is every point at least `wall_m` from the outer surface, found numerically as a profile of 96 steps; volumes are those of the stepped profiles, and the print solid revolves the same profiles in 96 segments. Its surfaces are `front` and `back`; `[u, v]` is measured from the lower-left corner of the square the body fits in, so the middle of a flat face is `[diameter/2, diameter/2]`, and a mount must sit on the flat. The everyday radiation model takes the flat front's rim as the baffle edge, though the skin curves away gently there, and the cabinet's notes say so. `loft` is not built.
+The outside radius runs from the front's rim to the widest point, `widest_at` of the way back, along a quarter ellipse, and from there to the back's rim along another. The inside is every point at least `wall_m` from the outer surface, found numerically as a profile of 96 steps; volumes are those of the stepped profiles, and the print solid revolves the same profiles in 96 segments. Its surfaces are `front` and `back`; `[u, v]` is measured from the lower-left corner of the square the body fits in, so the middle of a flat face is `[diameter/2, diameter/2]`, and a mount must sit on the flat. The everyday radiation model takes the flat front's rim as the baffle edge, though the skin curves away gently there, and the cabinet's notes say so.
+
+**`loft`** (as built, Level 3): rectangular cross-sections along a front-to-back spine.
+
+```jsonc
+{ "kind": "loft", "depth_m": 0.22, "wall_m": 0.008,
+  "sections": [
+    { "at": 0.0, "width_m": 0.18, "height_m": 0.28 },
+    { "at": 0.4, "width_m": 0.22, "height_m": 0.32 },
+    { "at": 1.0, "width_m": 0.14, "height_m": 0.24 }
+  ] }
+```
+
+`at` is the fraction of `depth_m` from the front (0) to the back (1); the first section must be at 0 and the last at 1. Each section is centred in the bounding box of the widest and tallest stations. The wall insets every section; volumes integrate the linearly interpolated rectangles; the print solid is a union of hulls between consecutive outer sections minus the same for the inside. Surfaces are `front` and `back` (the end rectangles). Example `tapered-loft`.
 
 **Imported speakers, `mesh`** (as built, Level 3; owner, 2026-11-12: import a whole speaker with internal baffles and damping, give each part a material, place drivers in any orientation). The page reads a 3MF file (one part per object the build places, with its units, components, and transforms) or STL files (one part each, in millimeters). STEP is not read yet; it can be added later as another importer that produces the same parts.
 
@@ -1042,7 +1055,7 @@ G  Correction and auto EQ         H  Listen mode                I  Score and opt
 - B: exciters and panel materials, damping materials, wall fills, and foaming filaments; stale-price warnings; alternative vendors per part.
 - C: folded and tapered lines, coupled chambers (including loops in the detailed model, as built), drivers mounted on ducts, damping fill (as built for the full 3D model via a chamber's `fill` or imported damping parts; quick/detailed still treat filled chambers as empty air), several drivers sharing a chamber, passive radiators; the `dml_panel` radiator with open and sealed backing, layered and direction-dependent panels; the `simple` room; a model of wall vibration, so filled and two-material walls are heard (built for printed cabinets with one or several chambers, including braces that split wall spans and partitions between chambers; imported mesh cabinets' axis-aligned flat outer walls; sheet boxes whose sheet publishes stiffness and density; and tubes' end caps; section 5.11). CHK-PLATE-1, CHK-PLATE-2, CHK-ROOM-1, CHK-WALL-1, CHK-WALL-2.
 - D: any internal geometry the builder can make; fill and wall losses; the time budgets of section 5.5 met; `exterior` radiation for any outer shape and any facing; a boundary-element model of the air around (and then inside) the cabinet, joined to the driver network, giving every direction from one solve per frequency (section 2.6); a 3D grid that follows curved surfaces instead of stair-stepping them (tried, section 5.6; no clear gain yet); the pressure field inside the cabinet shown in the 3D view, as a pulse in slow motion and as the standing-wave pattern at a chosen frequency; a bass-only 3D wave model of the room (below about 300 Hz, coarse cells), shown the same way, beside the `simple` room estimate.
-- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes; mounts on any surface.
+- E: editor for ducts with bends and tapers, partitions, braces, and fill regions; printability warnings; `revolved` and `loft` outer shapes (as built); mounts on any surface.
 - F: FIR blocks and linear-phase crossovers, with latency shown (as built: `fir` taps and crossover `family` `linear-phase` / `fir`; fidelity labels the total latency). FIR WAV export and C7 auto FIR correction are still open.
 - G: C5, C6, C7, C10.
 - H: audible limit behavior and the room estimate in the virtual speaker.

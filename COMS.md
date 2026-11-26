@@ -45,25 +45,35 @@ When a thread is done, add one line under **Resolved** at the bottom with the da
 
 ## Active thread
 
-### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after waveguide loops
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after loft
 
 - **To:** next lead session (Claude or Cursor)
 - **Status:** handoff
-- **Context:** branch `cursor/waveguide-loops-da03` (PR onto `main`). Level 3. FIR on `main` (PR #37).
+- **Context:** branch `cursor/loft-outer-da03` (PR onto `main`). Level 3. Loops on `main` (PR #38).
 
-**Done this session:** (1) Merged FIR to `main`. (2) **Waveguide loops:** when chambers/ducts form a loop, detailed model solves a nodal mesh of duct Y-parameters (same slicing/end corrections as the tree); fidelity notes the mesh; tree path unchanged (BEM mouths still iterate). Not a substitute for partition vibration (still lumped when partitions are active).
+**Done this session:** (1) Merged waveguide loops to `main`. (2) **`loft` outer shape:** rectangular sections along depth (`at` 0…1, width/height); centred in bounding box; wall inset; hull print tree; page fields; example `tapered-loft`.
 
 **Open, in order:**
-1. Level 3 remainder (STATUS / README 12): loft / fill in quick+detailed / passive radiators / …; Fable-held if still available.
+1. Level 3 remainder (STATUS / README 12): fill in quick+detailed / passive radiators / …; Fable-held if still available.
 2. Optional BEM high-ka lit-gap only if it blocks.
 3. Criton leftovers only if a source appears.
 4. Optional: second backup remote / Pro protect-`main`.
 
 **Pitfalls:** Do not invent damping. Do not invent a waveguide fill term without a sourced model. Do not weaken CHK-BEM-*. Do not digitize graphs. Do not undo Q12. Soft-TPU core loss stays Irvine rubber until a filament DMA appears.
 
-**Last check:** `cargo test -p seatlock-acoustics --release --test mesh --test checks` (mesh 3 + WG); `cargo test -p seatlock-sim --release --test loops --test folded --test chamber_loads`; clippy `-D warnings` on acoustics/sim; fmt ok.
+**Last check:** `cargo test -p seatlock-geom loft::` 2; `cargo test -p seatlock-sim --release --test loft` 1; clippy `-D warnings` on geom/sim; fmt ok.
 
-**Next step:** merge this PR when ready; then Level 3 remainder (loft / fill in everyday models / …) without inventing.
+**Next step:** merge this PR when ready; then Level 3 remainder (fill in everyday models / passive radiators / …) without inventing.
+
+### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after waveguide loops (superseded)
+
+- **To:** next lead session (Claude or Cursor)
+- **Status:** handoff
+- **Context:** branch `cursor/waveguide-loops-da03`. Superseded by loft handoff above.
+
+**Done this session:** Waveguide loops. Superseded.
+
+**Next step:** none (superseded).
 
 ### 2026-11-25 — Cursor — Handoff: start here. Level 3 remainder after FIR (superseded)
 

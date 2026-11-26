@@ -6,7 +6,7 @@
 | **Summary** | Cabinet outer shapes, mounts, imported meshes, volumes, and geometry used by print and voxels. |
 | **Code** | `engine/crates/seatlock-geom/` |
 | **Spec** | README §6 |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-25 |
 | **Status** | living |
 
 ## Overview
@@ -15,7 +15,7 @@ Geometry turns outer-shape fields into volumes, mounting poses, baffle outlines 
 
 ## Responsibilities
 
-- Owns outer-shape implementations (`box`, edged shapes, `prism`, `revolved`, `mesh`, …).
+- Owns outer-shape implementations (`box`, edged shapes, `prism`, `revolved`, `loft`, `mesh`, …).
 - Does not own waveguide/FDTD solves or wall vibration plates (those consume geometry).
 
 ## Modules and types
@@ -26,6 +26,7 @@ Geometry turns outer-shape fields into volumes, mounting poses, baffle outlines 
 | `edged` | Rounded / chamfered / sloped variants |
 | `prism` | Extruded outlines |
 | `revolved` | Eggs, cylinders, cut spheres |
+| `loft` | Rectangular cross-sections along a depth spine |
 | `mesh` | Import, hole marking, moulded ports, air columns |
 
 ## How it works

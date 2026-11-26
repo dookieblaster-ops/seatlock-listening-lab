@@ -1,6 +1,7 @@
 //! Cabinet geometry: air network, solid primitives, voxel grid, and volumes.
 
 pub mod edged;
+pub mod loft;
 pub mod mesh;
 pub mod prism;
 pub mod revolved;
@@ -319,6 +320,7 @@ pub fn register(registry: &mut Registry) {
     registry.register_outer("tube", parse_tube);
     registry.register_outer("sheet_box", parse_sheet_box);
     registry.register_outer("revolved", revolved::parse);
+    registry.register_outer("loft", loft::parse);
     mesh::register(registry);
 }
 
